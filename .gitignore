@@ -1,0 +1,25 @@
+# Local/generated AI-agent memory and runtime noise
+tools/project-memory/*.sqlite
+tools/project-memory/*.sqlite-*
+tools/project-memory/*.db
+tools/project-memory/*.db-*
+tools/project-memory/vector-index/
+tools/project-memory/chroma/
+tools/project-memory/embedding-cache/
+tools/project-memory/semantic-corpus*.jsonl
+tools/summary/*.tmp
+tools/deploy/ftp.local.json
+*.log
+*.err
+.mini_orchestrator/
+tools/codex-dispatcher/runs/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+dist/
+build/

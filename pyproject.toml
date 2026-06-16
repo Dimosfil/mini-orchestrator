@@ -1,0 +1,9 @@
+[project]
+name = "mini-orchestrator"
+version = "0.1.0"
+description = "MVP plan->execute->validate orchestrator prototype"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+mini-orchestrator = "mini_orchestrator.cli:run_from_args"

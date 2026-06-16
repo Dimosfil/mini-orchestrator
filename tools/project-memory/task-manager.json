@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "service_id": "worknest",
+  "service_name": "WorkNest Task Manager",
+  "configured_at": "2026-06-16",
+  "notes": "Project-local task-manager selection. Resolve runtime URL through GI config-service before task-manager operations."
+}

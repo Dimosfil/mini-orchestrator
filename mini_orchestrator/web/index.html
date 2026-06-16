@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaign Concept Studio</title>
+  <style>
+    :root {
+      --bg: radial-gradient(1200px 800px at 20% 10%, #fef2f2 0%, transparent 45%), radial-gradient(900px 600px at 85% 0%, #f4e8ff 0%, transparent 55%), #070b1a;
+      --panel: rgba(10, 16, 36, 0.78);
+      --panel-soft: rgba(255, 255, 255, 0.06);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #eff3ff;
+      --muted: #aeb7d4;
+      --accent: #9f7bff;
+      --accent-soft: rgba(159, 123, 255, 0.16);
+      --success: #5ad2a0;
+      --warn: #f8c255;
+      --danger: #fca5a5;
+      --font-main: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-main);
+      display: grid;
+      place-items: center;
+      padding: 28px 16px;
+    }
+
+    .shell {
+      width: min(1120px, 100%);
++      backdrop-filter: blur(16px);
+      background: linear-gradient(155deg, rgba(11, 16, 39, 0.94), rgba(11, 16, 39, 0.82));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: -0.015em;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 1.1fr) 1.2fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .row {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 14px;
+      color: #d7def7;
+    }
+
+    .helper {
+      margin-top: -8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(2, 8, 20, 0.65);
+      color: var(--text);
+      font: inherit;
+      outline: none;
+      transition: border-color 150ms ease;
+    }
+
+    textarea {
+      min-height: 92px;
+      resize: vertical;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: rgba(159, 123, 255, 0.7);
+      box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.16);
+    }
+
+    .channels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      border: 0;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 140ms ease, filter 140ms ease;
+    }
+
+    button:active {
+      transform: scale(0.99);
+    }
+
+    .btn-primary {
+      background: linear-gradient(120deg, #8a6dff 0%, #3f6dff 100%);
+      color: #f6f7ff;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #cad4ff;
+      border: 1px solid var(--line);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .state {
+      margin-top: 16px;
+      border-radius: 12px;
+      padding: 12px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid transparent;
+      min-height: 44px;
+    }
+
+    .state-idle {
+      color: #c5cee8;
+      background: rgba(132, 146, 209, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .state-loading {
+      color: #d8def0;
+      background: rgba(126, 154, 255, 0.14);
+      border-color: rgba(126, 154, 255, 0.34);
+    }
+
+    .state-success {
+      color: #cdf5dd;
+      background: rgba(64, 175, 124, 0.15);
+      border-color: rgba(90, 210, 160, 0.34);
+    }
+
+    .state-error {
+      color: #ffd0d0;
+      background: rgba(255, 84, 84, 0.16);
+      border-color: rgba(255, 84, 84, 0.35);
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result-header {
+      margin: 0 0 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .result-section {
+      border: 1px dashed transparent;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
+      background: rgba(4, 8, 22, 0.45);
+      animation: rise 220ms ease;
+    }
+
+    .result-section:last-child {
+      margin-bottom: 0;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-section h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: #f3f7ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-section h2::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      background: var(--accent);
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .result-section pre {
+      margin: 0;
+      white-space: pre-wrap;
+      line-height: 1.55;
+      color: #e2e8ff;
+      font-size: 14px;
+    }
+
+    .result-section ul, .result-section ol {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.55;
+    }
+
+    .result-section li {
+      margin-bottom: 8px;
+    }
+
+    .img-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .image-card {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(3, 7, 21, 0.6);
+    }
+
+    .image-card img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .img-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin: 0;
+      word-break: break-word;
+    }
+
+    .meta-row {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+    }
+
+    .meta-row span {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 3px 8px;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .img-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <h1>Campaign Concept Studio</h1>
+    <p class="subtitle">Fill in the campaign brief and generate a concise concept, three copy variants, a launch checklist, plus image prompts and generated assets.</p>
+
+    <section class="grid">
+      <form id="campaign-form" class="card" autocomplete="off">
+        <div class="row">
+          <label for="brief">Campaign brief</label>
+          <textarea id="brief" name="brief" required placeholder="Example: launch a subscription-based productivity app for creators."></textarea>
+          <p class="helper">Capture the campaign goal and business objective in 1-4 short sentences.</p>
+        </div>
+        <div class="row">
+          <label for="audience">Target audience</label>
+          <input id="audience" name="audience" required placeholder="Example: independent creators, 20-35" />
+        </div>
+        <div class="row">
+          <label for="product">Product details</label>
+          <textarea id="product" name="product" required placeholder="Example: SaaS tool with recurring billing, onboarding in-app onboarding, mobile + web."></textarea>
+        </div>
+        <div class="row">
+          <label for="tone">Tone</label>
+          <select id="tone" name="tone">
+            <option>Bold</option>
+            <option>Friendly</option>
+            <option>Premium</option>
+            <option>Playful</option>
+            <option>Urgent</option>
+            <option>Minimal</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Channels</label>
+          <div class="channels" role="group" aria-label="Channel selection">
+            <label class="chip"><input type="checkbox" name="channels" value="Instagram" checked /> Instagram</label>
+            <label class="chip"><input type="checkbox" name="channels" value="Meta Ads" checked /> Meta Ads</label>
+            <label class="chip"><input type="checkbox" name="channels" value="TikTok" /> TikTok</label>
+            <label class="chip"><input type="checkbox" name="channels" value="YouTube Shorts" /> YouTube Shorts</label>
+            <label class="chip"><input type="checkbox" name="channels" value="Email" /> Email</label>
+            <label class="chip"><input type="checkbox" name="channels" value="Landing page" /> Landing page</label>
+          </div>
+          <p class="helper">Select at least one channel to align text and visual suggestions.</p>
+        </div>
+        <div class="buttons">
+          <button class="btn-primary" type="submit" id="generate">Generate campaign</button>
+          <button class="btn-secondary" type="button" id="reset">Reset</button>
+        </div>
+        <p class="meta-row">
+          <span>Server uses OpenAI Responses API only</span>
+          <span>Image generation is done on the backend</span>
+        </p>
+      </form>
+
+      <section class="card">
+        <div id="empty-state" class="state state-idle">Ready — complete the form and generate a concept.</div>
+        <div id="loading-state" class="state state-loading hidden">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Generating concept, copy variants, checklist, prompts, and visuals...</span>
+        </div>
+        <div id="error-state" class="state state-error hidden"></div>
+        <div id="result-state" class="hidden">
+          <div class="result-header">
+            <h2 style="margin:0; font-size:18px;">Campaign output</h2>
+            <span id="result-title" style="font-size:12px;color:#a8b6ff;"></span>
+          </div>
+
+          <div class="result-section">
+            <h2>Concept</h2>
+            <pre id="concept"></pre>
+          </div>
+
+          <div class="result-section">
+            <h2>3 headline/body variants</h2>
+            <ol id="variants"></ol>
+          </div>
+
+          <div class="result-section">
+            <h2>Launch checklist</h2>
+            <ul id="checklist"></ul>
+          </div>
+
+          <div class="result-section">
+            <h2>Image prompts</h2>
+            <ol id="image-prompts"></ol>
+          </div>
+
+          <div class="result-section">
+            <h2>Generated images</h2>
+            <div id="image-grid" class="img-grid"></div>
+          </div>
+
+          <p class="meta-row" id="meta"></p>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("campaign-form");
+    const generateBtn = document.getElementById("generate");
+    const resetBtn = document.getElementById("reset");
+
+    const emptyState = document.getElementById("empty-state");
+    const loadingState = document.getElementById("loading-state");
+    const errorState = document.getElementById("error-state");
+    const resultState = document.getElementById("result-state");
+    const resultTitle = document.getElementById("result-title");
+
+    const concept = document.getElementById("concept");
+    const variants = document.getElementById("variants");
+    const checklist = document.getElementById("checklist");
+    const imagePrompts = document.getElementById("image-prompts");
+    const imageGrid = document.getElementById("image-grid");
+    const metaInfo = document.getElementById("meta");
+
+    function setState(mode, message = "") {
+      emptyState.classList.add("hidden");
+      loadingState.classList.add("hidden");
+      errorState.classList.add("hidden");
+      resultState.classList.add("hidden");
+      generateBtn.disabled = mode === "loading";
+
+      if (mode === "loading") {
+        loadingState.classList.remove("hidden");
+      } else if (mode === "error") {
+        errorState.textContent = message;
+        errorState.classList.remove("hidden");
+      } else if (mode === "success") {
+        resultState.classList.remove("hidden");
+      } else {
+        emptyState.classList.remove("hidden");
+      }
+    }
+
+    function clearOutput() {
+      concept.textContent = "";
+      variants.innerHTML = "";
+      checklist.innerHTML = "";
+      imagePrompts.innerHTML = "";
+      imageGrid.innerHTML = "";
+      metaInfo.textContent = "";
+      resultTitle.textContent = "";
+      errorState.classList.add("hidden");
+      resultState.classList.add("hidden");
+      setState("idle");
+    }
+
+    function createChipList(container, values) {
+      values.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        container.appendChild(li);
+      });
+    }
+
+    function renderImages(images) {
+      imageGrid.innerHTML = "";
+      images.forEach((img) => {
+        const card = document.createElement("article");
+        card.className = "image-card";
+
+        const imageTag = document.createElement("img");
+        imageTag.src = "data:image/png;base64," + img.image_base64;
+        imageTag.alt = img.revised_prompt || img.prompt || "Generated campaign visual";
+        card.appendChild(imageTag);
+
+        const promptMeta = document.createElement("p");
+        promptMeta.className = "img-meta";
+        promptMeta.innerHTML = `<strong>Prompt:</strong> ${escapeHtml(img.prompt || "")}`;
+        card.appendChild(promptMeta);
+
+        if (img.revised_prompt) {
+          const revisedMeta = document.createElement("p");
+          revisedMeta.className = "img-meta";
+          revisedMeta.innerHTML = `<strong>Revised:</strong> ${escapeHtml(img.revised_prompt)}`;
+          card.appendChild(revisedMeta);
+        }
+        imageGrid.appendChild(card);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const payload = {
+        brief: document.getElementById("brief").value.trim(),
+        target_audience: document.getElementById("audience").value.trim(),
+        product_details: document.getElementById("product").value.trim(),
+        tone: document.getElementById("tone").value.trim(),
+        channels: Array.from(document.querySelectorAll('input[name="channels"]:checked')).map((el) => el.value),
+      };
+
+      if (!payload.brief || !payload.target_audience || !payload.product_details) {
+        setState("error", "Please fill brief, audience, and product details.");
+        return;
+      }
+      if (!payload.channels.length) {
+        setState("error", "Select at least one channel.");
+        return;
+      }
+
+      setState("loading");
+      try {
+        const response = await fetch("/api/campaign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result?.error || `Request failed with status ${response.status}`);
+        }
+
+        concept.textContent = result.campaign_concept || "No concept provided.";
+        variants.innerHTML = "";
+        createChipList(variants, (result.headline_body_variants || []).map((item, index) => `${index + 1}. ${item.headline} — ${item.body}`));
+        createChipList(checklist, result.launch_checklist || []);
+        createChipList(imagePrompts, result.image_prompts || []);
+        renderImages(result.generated_images || []);
+
+        metaInfo.textContent = `Text model: ${result.meta?.text_model || "n/a"} • Image model: ${result.meta?.image_model || "n/a"} • Images: ${result.meta?.image_count || "n/a"} • Size: ${result.meta?.image_size || "n/a"} • Quality: ${result.meta?.image_quality || "n/a"}`;
+        resultTitle.textContent = `Generated ${result.generated_images?.length || 0} image asset(s).`;
+        setState("success");
+      } catch (error) {
+        setState("error", error.message || "Unexpected error.");
+      }
+    });
+
+    resetBtn.addEventListener("click", () => {
+      form.reset();
+      clearOutput();
+      setState("idle");
+    });
+
+    clearOutput();
+  </script>
+</body>
+</html>
