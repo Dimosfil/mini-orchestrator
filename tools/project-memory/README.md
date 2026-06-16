@@ -14,6 +14,20 @@ Use it for verified findings that should survive chat resets:
 
 Do not store secrets or credentials here.
 
+`tools/summary/` is compact handoff state for the current or recent chat.
+`tools/project-memory/` is long-lived product and project knowledge.
+
+Write project-memory documents so another agent could rebuild the project on a
+different language, framework, platform, or UI stack and preserve the same
+behavior. Code is the current implementation; project-memory specifications are
+the durable description of important behavior, business rules, algorithms,
+state transitions, data rules, workflow contracts, verification guarantees, and
+architecture decisions.
+
+Split durable knowledge by meaning instead of one giant file. Use feature
+specs, business-rule docs, data-model docs, integration contracts, and
+architecture migration history as needed.
+
 ## Reusable Experience For GI
 
 When this project reveals a reusable workflow, failure pattern, token-saving
@@ -66,16 +80,26 @@ paths. Do not store secrets, credentials, private user data, or production data.
 Do not dump the database into chat. Query it by symbol, path, topic, error, or
 feature name with small limits.
 
+Use structured memory for deterministic project facts and graphs: exact paths,
+symbols, references, generated identifiers, asset links, reverse dependencies,
+commands, failures, and evidence-backed notes. Exact identifiers and dependency
+edges belong in structured memory or keyword search, not only embeddings.
+
 ## Two Memory Layers
 
 - Markdown is the human-reviewable layer. Keep summaries, decisions,
   architecture notes, and curated exports concise.
 - SQLite is the searchable agent-memory layer for detailed findings,
   file/symbol indexes, references, commands, failures, and evidence-backed notes.
+- Vector retrieval is a second semantic layer for conceptual questions over
+  curated notes, summaries, architecture docs, and selected chunks.
 
 Do not blindly migrate all Markdown into SQLite. When Markdown memory becomes
 too large to read cheaply, introduce or rebuild the SQLite memory/index and keep
 Markdown as the concise reviewable export.
+
+Always verify current source files before editing because memory indexes can be
+stale.
 
 ## RAG System Structure
 
@@ -94,6 +118,17 @@ agent workflows do not depend on one storage backend.
 Before enabling vector retrieval, prepare semantic-ready chunks and embedding
 metadata with `patterns/SEMANTIC_RAG_RETRIEVAL.md`. Keep generated files such as
 `tools/project-memory/semantic-corpus.jsonl` ignored.
+
+Use the activation limits in `rag-system.json` to decide when SQLite or vector
+retrieval should be recommended, current, or stale. `gi sql` / `gi sqlite` and
+`gi vector` are diagnostic commands: they report counts, readiness, staleness,
+and recommendations without deploying external services, installing heavy
+dependencies, uploading data, or indexing private sources by default.
+
+Use `gi root rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
+the configured project-memory/RAG retrieval system. Scoped node rebuilds should
+use documented node commands such as SQL, chunks, vector, manifest, and evals.
+Do not mark rebuild state current until rebuild and status checks succeed.
 
 For a local semantic MVP, build Chroma from exported chunks:
 
@@ -117,6 +152,8 @@ uv run --with chromadb python .\tools\project-memory\build_chroma_index.py rebui
   retrieval is enabled.
 - `NOTES.md`: reviewable export of durable notes from local agent memory.
 - `architecture.md`: verified architecture notes.
+- `architecture-migrations.md`: durable history of architecture changes and
+  migrations.
 - `decisions.md`: durable decisions and rationale.
 - `known-issues.md`: recurring bugs, caveats, and workarounds.
 

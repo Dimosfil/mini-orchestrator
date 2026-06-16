@@ -41,6 +41,10 @@
   workflow contract, implementation plan, sprint breakdown, task breakdown,
   definitions of done, and verification connected. Tasks do not replace the
   feature contract.
+- For non-trivial business-rule, data-model, integration, algorithm, or
+  architecture work, update the relevant project-memory specification in the
+  same scoped change so behavior can be rebuilt on another language, framework,
+  or platform. A handoff summary is not a substitute.
 
 ## Git
 
@@ -192,9 +196,25 @@ or:
   the only short prefix; do not rename it to `GAI` or another alias.
   If a `gi` command is missing a needed parameter, ask one short clarification
   question instead of guessing.
+- Treat `gi help`, `gi хелп`, `ги help`, `ги хелп`, `gi commands`,
+  `gi команды`, and `ги команды` as informational requests for the local GI
+  command list. Show compact command names and short descriptions; do not run
+  startup restore, resume old tasks, call services, or execute the listed
+  commands.
 - Use the instruction kit as a token-economy and RAG-startup layer: restore only
   task-relevant context from local instructions, summaries, targeted searches,
   and project memory instead of broad repository reads or large outputs.
+- Use `gi sql` and `gi vector` as inspection commands for project-memory
+  retrieval metrics and activation limits. Report current counts, readiness,
+  staleness, and recommendations; do not deploy heavy databases or external
+  services by default.
+- Use `gi root rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
+  the current project's configured RAG/project-memory retrieval system. Use
+  node forms such as `gi root rebuild sql`, `gi root rebuild chunks`,
+  `gi root rebuild vector`, and `gi root rebuild evals` for scoped rebuilds.
+  During `gi обновить`, migrations that change RAG rules, indexers, chunking,
+  embedding metadata, or retrieval adapters must leave affected rebuild state
+  stale until the documented rebuild and status checks succeed.
 - Keep `gi` command responses scoped to the shared instruction-kit command. Do
   not resume an older product task after a `gi` command unless the user
   explicitly asks.
@@ -216,10 +236,26 @@ or:
   test commands and produce a compact verification plan for the current feature,
   bug fix, or release check. Plan first; run checks only when the user asks or
   when the current task already requires verification.
+- For verification plans and smoke checks, confirm exact CLI flags, ports,
+  routes, methods, JSON payload fields, and required environment variables from
+  current local instructions, manifests, config, or source code. Summaries and
+  old chat snippets are evidence, not authoritative command contracts.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and clear typo variants as
   build-and-installer requests. The task is complete only after the packaging
   command runs and a current installer artifact is produced or explicitly
   verified; restore/build/test alone are preliminary checks.
+- Treat `gi first test`, `gi первый тест`, and `ги первый тест` as first-launch
+  verification requests. Reset only documented project-owned app cache,
+  generated state, temporary first-run profiles, and rebuildable local settings;
+  do not delete user documents, production data, secrets, credentials, shared
+  system caches, sibling projects, or arbitrary user-home folders. If exact
+  reset paths or commands are missing, ask one concise question instead of
+  guessing.
+- Treat `init <source>`, `инит <source>`, `инициализируй <source>`, and
+  `инит правила <source>` as shared-instruction bootstrap/startup requests when
+  `<source>` points to a known `general-instructions` source. Never reinterpret
+  these forms as `git init`, folder creation, OpenCode setup, project creation,
+  `npm init`, or `python -m venv` unless the user explicitly names that action.
 - Treat a first message that points to a shared instruction library as an
   instruction bootstrap, not as a request to add that library as a dependency.
 - If the user asks to update from a shared instruction library and this project

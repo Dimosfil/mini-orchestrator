@@ -43,6 +43,23 @@ notes, old refactoring phases, or local commits ahead of a remote as the next
 action. Mention them only as compact context when relevant, then ask for the
 user's current task instead of offering to continue, run, push, or finish them.
 
+Treat `init <source>`, `инит <source>`, `инициализируй <source>`, and
+`инит правила <source>` as shared-instruction bootstrap/startup requests when
+`<source>` points to `https://github.com/Dimosfil/general-instructions.git`, the
+current shared-instruction checkout/cache, `GENERAL_INSTRUCTIONS_HOME`, or
+another known `general-instructions` source. Read existing instruction files and
+follow GI bootstrap rules; never reinterpret these forms as `git init`, folder
+creation, OpenCode setup, project creation, `npm init`, or `python -m venv`
+unless the user explicitly names that action.
+
+Treat `gi help`, `gi хелп`, `ги help`, `ги хелп`, `gi commands`,
+`gi команды`, and `ги команды` as requests to show a compact list of available
+GI chat commands with short descriptions. Read the local command index such as
+`COMMANDS.md` when present, prefer project-local command additions over the
+shared baseline, and keep the answer informational: do not run startup restore,
+resume old work, call task managers, mutate files, or execute the listed
+commands unless the user asks for a specific command next.
+
 The copied instruction kit is a token-economy and RAG-startup layer for this
 project. Use it to restore only the needed context from local instructions,
 handoff summaries, targeted searches, and project memory instead of reading the
@@ -58,6 +75,24 @@ Before enabling vector retrieval, prepare semantic-ready chunks, embedding
 metadata, and a small eval set. Use `patterns/SEMANTIC_RAG_RETRIEVAL.md`, keep
 generated embedding corpora and vector indexes ignored when rebuildable, and do
 not mix embeddings from different models in one collection version.
+
+Use structured memory such as SQLite for deterministic project facts and graphs:
+file paths, symbols, exact references, GUIDs, generated identifiers, asset links,
+reverse dependencies, commands, failures, and evidence-backed notes. Use vector
+retrieval only as a second semantic layer for conceptual questions over curated
+notes, summaries, architecture docs, and selected chunks. Do not replace exact
+graph queries with embeddings, and verify current source files before editing
+because memory indexes can be stale.
+
+Treat `tools/summary/` as compact handoff state for the current or recent chat.
+Treat `tools/project-memory/` as durable product and project knowledge. For every
+non-trivial feature, business workflow, or architecture decision, keep
+platform-neutral project-memory specifications that describe the behavior,
+business rules, algorithms, state transitions, failure handling, verification,
+and current implementation map. Write them so another agent could rebuild the
+project on a different language, platform, or framework and preserve the same
+behavior. Split specifications by meaning instead of one giant file. Keep major
+rewrites in `tools/project-memory/architecture-migrations.md`.
 
 Keep GI agent-runtime neutral. These instructions are for any compatible AI
 agent or assistant, not only Codex. Mention Codex only when a rule is about a
@@ -184,6 +219,9 @@ Inspect logs:
   definitions of done, and verification linked together. Tasks do not replace
   the feature contract: tasks say what to change, while the contract says what
   behavior must remain true.
+- For non-trivial business rules, data models, integrations, algorithms, or
+  architecture, update the relevant project-memory specification in the same
+  scoped change. A handoff summary does not replace durable project memory.
 - When preparing this project for a repository, publishing to GitHub, or
   removing "unneeded" files, do not classify `AGENTS.md`, `tools/`,
   `tools/project-memory/`, `skills/`, bootstrap scripts, update scripts, deploy
@@ -317,6 +355,17 @@ Inspect logs:
   start or restart the current application using project-local run instructions.
   If the app is running, restart it; if it is not running, start it. Launch in
   the background so focus does not jump away from the user's current window.
+- Treat `gi first test`, `gi первый тест`, and `ги первый тест` as requests to
+  verify the current application's first-launch experience by resetting only
+  documented project-owned app cache, generated state, temporary first-run
+  profiles, and rebuildable local app settings. Read project-local run, cleanup,
+  cache reset, and test instructions first. Do not delete user documents,
+  production data, secrets, credentials, external service data, shared system
+  caches, sibling projects, or arbitrary user-home folders. If exact reset
+  paths, keys, scripts, or commands are missing, ask one short clarification
+  question instead of guessing. After reset, start the app, run the documented
+  first-launch smoke/onboarding checks, and report what was cleared, what
+  passed, and what was intentionally left untouched.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and clear typo variants as
   requests to build the current project and produce an installer. Read local
   build/package instructions, resolve the application version from project
@@ -324,6 +373,47 @@ Inspect logs:
   artifact. `restore`, dependency install, build, and test checks are
   prerequisites only; do not report `gi install` complete or the project
   installed/restored when only those checks ran.
+- Treat `gi sql`, `gi sqlite`, `ги sql`, `ги sqlite`, `gi vector`,
+  `gi вектор`, and `ги вектор` as requests to inspect project-memory retrieval
+  readiness and current metrics. For SQL, read `tools/project-memory/rag-system.json`
+  when present, run the local index stats command when available, count
+  reviewable project-memory/spec files, compare the numbers with configured or
+  default SQLite activation limits, and report whether SQLite/FTS is absent,
+  current, stale, or recommended. For vector, read vector and embedding metadata,
+  check semantic corpus size and chunk count, run vector adapter status when
+  available, compare the numbers with vector activation limits, and report
+  collection, record count, index path, freshness caveats, and readiness. These
+  are inspection commands by default; do not create external services, install
+  heavy dependencies, upload data, or index private sources unless the user
+  explicitly asks and project-local rules allow it.
+- Treat `gi root rebuild`, `gi rag rebuild`, `ги рут ребилд`,
+  `ги раг ребилд`, and equivalent full-RAG rebuild wording as requests to
+  rebuild the current project's entire configured RAG/project-memory retrieval
+  system from approved sources. This is a heavy command and requires explicit
+  user confirmation immediately before running the full rebuild. Before asking,
+  read `tools/project-memory/rag-system.json`, list configured rebuild nodes,
+  generated paths that may be replaced, local scripts or adapters, and privacy
+  exclusions. After success, run configured stats/status/eval checks, update
+  local rebuild state such as `last_full_rebuild_migration` or per-node markers
+  when present, and report generated artifacts without committing rebuildable
+  indexes.
+- Treat `gi root rebuild sql`, `gi rag rebuild sql`, `gi root rebuild vector`,
+  `gi rag rebuild vector`, `gi root rebuild chunks`,
+  `gi root rebuild manifest`, `gi root rebuild evals`, and Russian equivalents
+  such as `ги рут ребилд sql`, `ги рут ребилд вектор`,
+  `ги рут ребилд чанки`, `ги рут ребилд манифест`, and
+  `ги рут ребилд тесты` as requests to rebuild only the named RAG node. Read
+  `rag-system.json`, run only the documented node command or local helper, then
+  verify that node's status. Ask one short clarification question if the node is
+  not configured.
+- During `gi обновить`, inspect each newly applied migration. If a migration
+  changes RAG source rules, chunking, embedding metadata, SQLite/vector schemas,
+  retrieval adapters, or project-memory index scripts, check `rag-system.json`
+  rebuild state. If the project has not rebuilt affected RAG nodes for that
+  migration, tell the user which nodes are stale and ask for confirmation before
+  running the full `gi root rebuild`; for narrow migrations, run or offer the
+  smallest documented node rebuild that satisfies the migration. Do not mark
+  RAG rebuild state current until rebuild and status checks succeed.
 - Treat nested checkouts, vendored repositories, cloned examples, and
   third-party source trees as separate scope. Do not inspect them as part of the
   main project unless the user explicitly asks, the task is about that nested
@@ -372,6 +462,13 @@ Inspect logs:
   config entry points before building a file map. Use recursive scans only after
   a targeted search fails or the task clearly requires repository-wide
   inventory.
+- When creating or running a test, smoke-check, or verification plan, verify
+  exact commands, CLI flags, ports, routes, health endpoints, request payload
+  fields, and environment variables from current project-local instructions,
+  runbooks, manifests, config entry points, or source code. Treat handoff
+  summaries, task notes, screenshots, and old chat examples as status evidence,
+  not as authoritative command contracts; do not reuse stale ports, payloads, or
+  flags without checking the current project.
 - Do not read large files in full by default, including large `index.html`,
   bundled JS/CSS, logs, lockfiles, generated files, and build artifacts. Prefer
   targeted searches, heads, tails, or small line ranges such as
