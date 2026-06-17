@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
-import errno
 import json
 import os
 import queue
@@ -14,11 +13,26 @@ import time
 import tempfile
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from protocol import validate_event_type
+from command_adapter import render_command_result as adapter_render_command_result
+from command_adapter import run_command as adapter_run_command
+from events import utc_now as event_utc_now
+from events import write_event as event_write_event
+from models import CommandResult as DispatcherCommandResult
+from models import DispatchDecision as DispatcherDispatchDecision
+from models import OrchestratorChatCommand as DispatcherOrchestratorChatCommand
+from models import Worker as DispatcherWorker
+from prompts import build_chain_prior as prompts_build_chain_prior
+from prompts import build_plan_only_prompt as prompts_build_plan_only_prompt
+from prompts import build_worker_prompt as prompts_build_worker_prompt
+from prompts import read_instructions as prompts_read_instructions
+from routing import decide_dispatch as routing_decide_dispatch
+from routing import find_worker as routing_find_worker
+from routing import ordered_chain_workers as routing_ordered_chain_workers
+from routing import parse_orchestrator_chat_command as routing_parse_orchestrator_chat_command
 from worknest import WorkNestClient, WorkNestTask
 
 
@@ -28,35 +42,10 @@ DEFAULT_TEST_PROJECTS_DIR = ROOT / "test-projects"
 DEMO_MARKER_NAME = ".mini-orchestrator-demo.json"
 
 
-@dataclass(frozen=True)
-class Worker:
-    name: str
-    model: str
-    reasoning: str
-    instructions_path: Path
-
-
-@dataclass(frozen=True)
-class DispatchDecision:
-    role: str
-    reason: str
-    confidence: float
-    next_input: str
-
-
-@dataclass(frozen=True)
-class OrchestratorChatCommand:
-    task: str
-    forced_role: str | None = None
-
-
-@dataclass(frozen=True)
-class CommandResult:
-    command: list[str]
-    cwd: Path
-    exit_code: int
-    stdout: str
-    stderr: str
+Worker = DispatcherWorker
+DispatchDecision = DispatcherDispatchDecision
+OrchestratorChatCommand = DispatcherOrchestratorChatCommand
+CommandResult = DispatcherCommandResult
 
 
 WORKERS = [
@@ -131,26 +120,11 @@ REVIEWER_TASK_MARKERS = (
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return event_utc_now()
 
 
 def write_event(log_path: Path, event_type: str, **payload: Any) -> None:
-    validate_event_type(event_type)
-    record = {
-        "time": utc_now(),
-        "type": event_type,
-        **payload,
-    }
-    try:
-        with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except OSError as exc:
-        if (
-            exc.errno == errno.ENOSPC
-            and os.environ.get("MINI_ORCHESTRATOR_DISPATCHER_BEST_EFFORT_LOGS") == "1"
-        ):
-            return
-        raise
+    event_write_event(log_path, event_type, **payload)
 
 
 def print_json(payload: dict[str, Any]) -> None:
@@ -198,77 +172,19 @@ def repair_text_encoding(text: str) -> str:
 
 
 def read_instructions(worker: Worker) -> str:
-    return worker.instructions_path.read_text(encoding="utf-8")
+    return prompts_read_instructions(worker)
 
 
 def find_worker(workers: list[Worker], role: str) -> Worker:
-    for worker in workers:
-        if worker.name == role:
-            return worker
-    available = ", ".join(worker.name for worker in workers)
-    raise ValueError(f"Dispatch selected unknown role {role!r}. Available roles: {available}")
+    return routing_find_worker(workers, role)
 
 
 def parse_orchestrator_chat_command(task: str) -> OrchestratorChatCommand | None:
-    stripped = task.strip()
-    if not stripped:
-        return None
-    parts = stripped.split(maxsplit=2)
-    prefix = parts[0].casefold()
-    if prefix not in ORCHESTRATOR_CHAT_PREFIXES:
-        return None
-    if len(parts) == 1:
-        return OrchestratorChatCommand(task="")
-    second = parts[1].casefold()
-    forced_role = ORCHESTRATOR_ROLE_ALIASES.get(second)
-    if forced_role:
-        next_input = parts[2].strip() if len(parts) > 2 else ""
-        return OrchestratorChatCommand(task=next_input, forced_role=forced_role)
-    return OrchestratorChatCommand(task=stripped[len(parts[0]):].strip())
+    return routing_parse_orchestrator_chat_command(task)
 
 
 def decide_dispatch(task: str, workers: list[Worker]) -> DispatchDecision:
-    find_worker(workers, "planner")
-    find_worker(workers, "executor")
-    find_worker(workers, "reviewer")
-    chat_command = parse_orchestrator_chat_command(task)
-    if chat_command and chat_command.forced_role:
-        find_worker(workers, chat_command.forced_role)
-        return DispatchDecision(
-            role=chat_command.forced_role,
-            reason=f"orchestrator chat command forced {chat_command.forced_role} role",
-            confidence=0.95,
-            next_input=chat_command.task,
-        )
-    next_input = chat_command.task if chat_command else task.strip()
-    normalized = next_input.casefold()
-    if any(marker in normalized for marker in PLANNER_TASK_MARKERS):
-        return DispatchDecision(
-            role="planner",
-            reason="planner-directed task marker matched",
-            confidence=0.85,
-            next_input=next_input,
-        )
-    if any(marker in normalized for marker in REVIEWER_TASK_MARKERS):
-        return DispatchDecision(
-            role="reviewer",
-            reason="reviewer-directed task marker matched",
-            confidence=0.8,
-            next_input=next_input,
-        )
-    if any(marker in normalized for marker in EXECUTOR_TASK_MARKERS):
-        return DispatchDecision(
-            role="executor",
-            reason="executor-directed task marker matched",
-            confidence=0.75,
-            next_input=next_input,
-        )
-    return DispatchDecision(
-        role="planner",
-        reason="ambiguous request; planner fallback",
-        confidence=0.5,
-        next_input=next_input,
-    )
+    return routing_decide_dispatch(task, workers)
 
 
 def resolve_codex_command() -> str:
@@ -480,45 +396,19 @@ class CodexAppServer:
 
 
 def build_worker_prompt(worker: Worker, task: str, prior: str = "") -> str:
-    instructions = read_instructions(worker)
-    return (
-        f"Worker role: {worker.name}\n\n"
-        f"Role configuration:\n{instructions}\n\n"
-        f"Current task:\n{task}\n\n"
-        f"Prior context:\n{prior or 'none'}\n\n"
-        "Return only the result needed by the dispatcher."
-    )
+    return prompts_build_worker_prompt(worker, task, prior=prior)
 
 
 def build_plan_only_prompt(planner: Worker, task: str) -> str:
-    instructions = read_instructions(planner)
-    return (
-        "Prepare a chat approval plan without editing files, running commands, "
-        "or creating a local demo project.\n\n"
-        f"Worker role: {planner.name}\n\n"
-        f"Role configuration:\n{instructions}\n\n"
-        f"User task:\n{task}\n\n"
-        "Return a task-specific planner proposal for user approval. Include the "
-        "objective, proposed steps, key UI/UX notes when the user asks for UI, "
-        "risks or assumptions, executor handoff, reviewer checklist, and a short "
-        "approval sentence. Do not reuse a generic template when the task gives "
-        "domain details."
-    )
+    return prompts_build_plan_only_prompt(planner, task)
 
 
 def build_chain_prior(outputs: dict[str, str]) -> str:
-    if not outputs:
-        return ""
-    sections = []
-    for role in CHAIN_ROLES:
-        output = outputs.get(role)
-        if output:
-            sections.append(f"{role} output:\n{output}")
-    return "\n\n".join(sections)
+    return prompts_build_chain_prior(outputs)
 
 
 def ordered_chain_workers(workers: list[Worker]) -> list[Worker]:
-    return [find_worker(workers, role) for role in CHAIN_ROLES]
+    return routing_ordered_chain_workers(workers)
 
 
 def path_is_inside(child: Path, parent: Path) -> bool:
@@ -1676,22 +1566,7 @@ def local_demo_smoke_summary(
 
 
 def run_command(command: list[str], cwd: Path, timeout_seconds: float = 15) -> CommandResult:
-    completed = subprocess.run(
-        command,
-        cwd=str(cwd),
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
-        timeout=timeout_seconds,
-    )
-    result = CommandResult(
-        command=command,
-        cwd=cwd,
-        exit_code=completed.returncode,
-        stdout=completed.stdout.strip(),
-        stderr=completed.stderr.strip(),
-    )
-    return result
+    return adapter_run_command(command, cwd, timeout_seconds=timeout_seconds)
 
 
 def run_checked_command(command: list[str], cwd: Path, timeout_seconds: float = 15) -> CommandResult:
@@ -1702,13 +1577,7 @@ def run_checked_command(command: list[str], cwd: Path, timeout_seconds: float = 
 
 
 def render_command_result(result: CommandResult) -> str:
-    command = " ".join(result.command)
-    parts = [f"{command} (exit {result.exit_code})"]
-    if result.stdout:
-        parts.append(f"stdout:\n{result.stdout}")
-    if result.stderr:
-        parts.append(f"stderr:\n{result.stderr}")
-    return "\n".join(parts)
+    return adapter_render_command_result(result)
 
 
 def run_local_test_project_chain(

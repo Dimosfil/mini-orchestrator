@@ -1,5 +1,9 @@
 # Launch Desk
 
+Legacy/experimental status: this app is retained for reference and experiments.
+It is not part of the active mini-orchestrator runtime unless the user promotes
+it explicitly.
+
 Launch Desk is a polished web app that helps engineering teams convert a rough launch idea into:
 
 - A prioritized release plan
@@ -35,6 +39,12 @@ npm run install:all
 
 ## Run backend + frontend
 
+GI startup rule: because Launch Desk exposes web/API ports, it must not be
+treated as an active project runtime until it has a project-local config-service
+startup contract and a registered service record. The historical ports below
+are documentation for the legacy app only, not fallback ports for agents to
+bind or assume.
+
 From `launch-desk` root:
 
 ```powershell
@@ -45,6 +55,10 @@ Expected local URLs:
 
 - Backend: `http://localhost:4000`
 - Frontend: `http://localhost:5173`
+
+Current verification blocker: local dependency state has previously been found
+incomplete when `tsc` and `vitest` shims were missing. Run `npm run install:all`
+before backend/frontend checks.
 
 ## API contract
 

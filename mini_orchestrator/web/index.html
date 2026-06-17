@@ -38,7 +38,8 @@
 
     button,
     textarea,
-    input {
+    input,
+    select {
       font: inherit;
     }
 
@@ -170,9 +171,9 @@
       font-weight: 600;
     }
 
-    textarea {
+    textarea,
+    select {
       width: 100%;
-      min-height: 150px;
       resize: vertical;
       border: 1px solid var(--line-strong);
       border-radius: 6px;
@@ -183,8 +184,18 @@
       outline: none;
     }
 
+    textarea {
+      min-height: 150px;
+    }
+
+    select {
+      min-height: 38px;
+      resize: none;
+    }
+
     textarea:focus,
-    input:focus {
+    input:focus,
+    select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
@@ -456,6 +467,13 @@
             <label for="task">Команда</label>
             <textarea id="task" spellcheck="false">оркестратор план Сделай калькулятор</textarea>
           </div>
+          <div class="field">
+            <label for="plan-mode">Plan preview mode</label>
+            <select id="plan-mode">
+              <option value="demo" selected>Demo</option>
+              <option value="real">Real planner</option>
+            </select>
+          </div>
 
           <div class="controls">
             <button id="plan-button" class="btn-primary" type="submit">План</button>
@@ -521,6 +539,7 @@
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
     const taskInput = document.querySelector("#task");
+    const planMode = document.querySelector("#plan-mode");
     const planButton = document.querySelector("#plan-button");
     const coreButton = document.querySelector("#core-button");
     const runButton = document.querySelector("#run-button");
@@ -633,7 +652,7 @@
       setBusy(true, "Планирую");
       setMessage("Запрашиваю план...");
       try {
-        const payload = await postJson("/api/dispatcher/plan", { task });
+        const payload = await postJson("/api/dispatcher/plan", { task, mode: planMode.value });
         lastPlanTask = task;
         approval.checked = false;
         renderPayload(payload);

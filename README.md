@@ -11,6 +11,9 @@ AI-agent workflows. The current UI exposes the project dispatcher flow:
 The older Campaign Concept Studio page has been replaced by the orchestrator
 dashboard.
 
+`launch-desk/` is retained as a legacy/experimental app. It is not part of the
+active mini-orchestrator runtime unless explicitly promoted later.
+
 ## Install
 
 ```powershell
@@ -63,11 +66,21 @@ Use a command such as:
 оркестратор план Сделай калькулятор
 ```
 
-Click **План** to run dispatcher plan preview mode. The UI calls:
+Click **План** to run dispatcher plan preview mode. The default UI mode is the
+explicit demo preview:
 
 ```powershell
 python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry-run
 ```
+
+Selecting **Real planner** calls the planner worker without `--dry-run`:
+
+```powershell
+python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only
+```
+
+Real planner preview returns structured API errors when Codex app-server or the
+selected model is unavailable.
 
 After review, check **План подтвержден** and click **Запустить workflow**. The UI
 calls:
@@ -126,7 +139,8 @@ Plan preview request:
 
 ```json
 {
-  "task": "оркестратор план Сделай калькулятор"
+  "task": "оркестратор план Сделай калькулятор",
+  "mode": "demo"
 }
 ```
 

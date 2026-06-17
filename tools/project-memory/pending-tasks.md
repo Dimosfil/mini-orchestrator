@@ -432,3 +432,31 @@ Planned changes:
 Verification:
 
 - [x] Run focused syntax/compile checks.
+
+### GI Refactor Sprint
+
+Goal: execute the scoped refactor plan in
+`tools/project-memory/refactor-battle-plan-2026-06-17.md`.
+
+Planned changes:
+
+- [x] Harden package-native tool guardrails and search exclusions.
+- [x] Introduce a safe command execution adapter.
+- [x] Move stale Campaign Concept Studio API/code out of the active product
+  surface.
+- [x] Make the UI planner preview use a real planner worker, with explicit
+  demo/dry-run mode.
+- [x] Split `tools/codex-dispatcher/dispatcher.py` into focused modules with
+  dependency injection and signal/event boundaries.
+- [x] Move `launch-desk` into a legacy/experimental boundary and make any
+  retained runnable service obey GI config-service startup rules.
+
+Verification:
+
+- [x] `python -m compileall mini_orchestrator tools\codex-dispatcher`
+- [x] `python tools\codex-dispatcher\test_dispatcher.py`
+- [x] `python -m mini_orchestrator "search AGENTS" --no-log`
+- [x] UI handler smoke for real/demo plan preview contract and removed
+  `/api/campaign`; live `/health` responded on the configured UI port.
+- [x] Launch Desk precise blocker recorded: backend/frontend `tsc.cmd` and
+  `vitest.cmd` shims are missing until dependencies are restored.

@@ -14,7 +14,6 @@ import webbrowser
 from urllib.parse import urlparse
 
 from .orchestrator import Orchestrator
-from .llm import LlmRequestError, LlmUnavailable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -185,7 +184,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self._path()
-        if path not in {"/api/run", "/api/campaign", "/api/dispatcher/plan", "/api/dispatcher/run", "/api/agents/chat"}:
+        if path not in {"/api/run", "/api/dispatcher/plan", "/api/dispatcher/run", "/api/agents/chat"}:
             self._http_error(404, "Unknown endpoint.")
             return
 
@@ -211,17 +210,29 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if path == "/api/dispatcher/plan":
             try:
                 task = self._task_from_payload(payload)
+                mode = str(
+                    payload.get("mode")
+                    or os.environ.get("MINI_ORCHESTRATOR_PLAN_PREVIEW_MODE")
+                    or "demo"
+                ).strip().casefold()
+                if mode not in {"demo", "dry-run", "real"}:
+                    self._http_error(400, "Field 'mode' must be 'demo' or 'real'.")
+                    return
+                dispatcher_args = ["--task", task, "--plan-only"]
+                if mode in {"demo", "dry-run"}:
+                    dispatcher_args.append("--dry-run")
                 result = self._run_dispatcher(
-                    ["--task", task, "--plan-only", "--dry-run"],
-                    timeout_seconds=30,
+                    dispatcher_args,
+                    timeout_seconds=120 if mode == "real" else 30,
                 )
+                result.setdefault("previewMode", "real" if mode == "real" else "demo")
                 self._json_response(200, result)
             except ValueError as exc:
                 self._http_error(400, str(exc))
             except subprocess.TimeoutExpired:
                 self._http_error(504, "Dispatcher plan preview timed out.")
             except Exception as exc:
-                self._http_error(500, str(exc))
+                self._json_response(502, {"error": "Dispatcher plan preview failed.", "detail": str(exc)})
             return
 
         if path == "/api/dispatcher/run":
@@ -325,41 +336,6 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._http_error(500, str(exc))
             return
-
-        try:
-            brief = str(payload.get("brief", "")).strip()
-            target_audience = str(payload.get("target_audience", "")).strip()
-            product_details = str(payload.get("product_details", "")).strip()
-            tone = str(payload.get("tone", "")).strip()
-            channels_value = payload.get("channels", [])
-            if isinstance(channels_value, str):
-                raw_channels = channels_value.split(",")
-            elif isinstance(channels_value, list):
-                raw_channels = channels_value
-            else:
-                raw_channels = []
-
-            channels = [str(channel).strip() for channel in raw_channels if str(channel).strip()]
-
-            if not brief or not target_audience or not product_details or not tone:
-                self._http_error(400, "Fields 'brief', 'target_audience', 'product_details', and 'tone' are required.")
-                return
-            if not channels:
-                self._http_error(400, "At least one channel is required.")
-                return
-
-            campaign = self.orchestrator.llm_client.generate_campaign(
-                brief=brief,
-                target_audience=target_audience,
-                product_details=product_details,
-                tone=tone,
-                channels=channels,
-            )
-            self._json_response(200, campaign)
-        except (LlmUnavailable, LlmRequestError) as exc:
-            self._http_error(502, str(exc))
-        except Exception as exc:
-            self._http_error(500, f"Unexpected server error: {exc}")
 
     def do_GET(self) -> None:
         path = self._path()
