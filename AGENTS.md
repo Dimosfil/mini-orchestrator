@@ -107,6 +107,18 @@ notes, summaries, architecture docs, and selected chunks. Do not replace exact
 graph queries with embeddings, and verify current source files before editing
 because memory indexes can be stale.
 
+Use Context7, when configured or explicitly requested, as an external current
+documentation retrieval layer for public library, framework, SDK, and API docs.
+Treat it as documentation lookup, not project memory, service discovery, task
+management, or an authoritative source for this project's current code. Prefer
+project-local instructions and service guide/contract endpoints for project
+behavior, and prefer official OpenAI documentation workflows for OpenAI product
+questions. Do not send secrets, credentials, private source code, private
+business rules, user data, or project-memory contents to Context7 or similar
+external doc services unless the project has explicit private-source
+configuration and the user approves that scope. Pin exact library IDs and
+versions when known, and verify current local source files before editing.
+
 Treat `tools/summary/` as compact handoff state for the current or recent chat.
 Treat `tools/project-memory/` as durable product and project knowledge. For every
 non-trivial feature, business workflow, or architecture decision, keep
@@ -343,15 +355,24 @@ Inspect logs:
   before enabling self-registration. Ask one short question if no local config
   location is documented.
 - For web-facing applications that expose a port, HTTP API, web UI, task-manager
-  service, or local daemon endpoint, require a live config-service config check
-  on every process startup before publishing or refreshing the app's own service
-  record. On startup, query the app's own `service_id`; if no record exists,
-  create one with the current port and documented endpoints, and if the record
-  exists but the port or endpoints changed, refresh it. Desktop apps, CLI tools,
-  libraries, scripts, and other non-web applications must not query or publish
-  to config-service during normal startup unless local instructions explicitly
-  define a discoverable web/API runtime. Use cached config only as an explicit
-  degraded-startup fallback documented by local run instructions.
+  service, or local daemon endpoint, require a live config-service lookup before
+  the process binds or reserves any port. On every startup, read the configured
+  config-service URL, verify the config service is reachable, and query the
+  app's own `service_id` startup/service record. If the record exists, bind only
+  the recorded port and use config-service records for neighboring service
+  endpoints. If the record is missing and project-local self-registration is
+  `on`, read the config-service guide and contract, list existing records,
+  choose a port that is free on the local host and absent from config-service,
+  bind it, verify the app's local health endpoint, and create or update the
+  service record through the documented config-service operation. If the record
+  is missing and self-registration is `off`, or config-service lacks a
+  documented registration contract, stop with a clear blocker; do not invent
+  payloads, write storage directly, reuse stale local config, or bind a fallback
+  port while config-service is unavailable. If the recorded endpoints changed,
+  refresh the record only after the config-service check succeeds. Desktop apps,
+  CLI tools, libraries, scripts, and other non-web applications must not query
+  or publish to config-service during normal startup unless local instructions
+  explicitly define a discoverable web/API runtime.
 - Treat `gi ftp`, `ги фтп`, `gi ftp push`, `ги фтп пуш`, `gi upload ftp`,
   `gi deploy ftp`, and `gi залей на фтп` as requests to upload this project's
   configured build output to FTP, FTPS, or SFTP. Treat `gi ftp config`,
