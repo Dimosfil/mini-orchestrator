@@ -1,577 +1,701 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Campaign Concept Studio</title>
+  <title>Mini Orchestrator</title>
   <style>
     :root {
-      --bg: radial-gradient(1200px 800px at 20% 10%, #fef2f2 0%, transparent 45%), radial-gradient(900px 600px at 85% 0%, #f4e8ff 0%, transparent 55%), #070b1a;
-      --panel: rgba(10, 16, 36, 0.78);
-      --panel-soft: rgba(255, 255, 255, 0.06);
-      --line: rgba(255, 255, 255, 0.12);
-      --text: #eff3ff;
-      --muted: #aeb7d4;
-      --accent: #9f7bff;
-      --accent-soft: rgba(159, 123, 255, 0.16);
-      --success: #5ad2a0;
-      --warn: #f8c255;
-      --danger: #fca5a5;
-      --font-main: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-muted: #eef2f5;
+      --line: #d6dde5;
+      --line-strong: #aeb9c5;
+      --text: #1d252d;
+      --muted: #617080;
+      --accent: #256f6c;
+      --accent-strong: #195553;
+      --accent-soft: #e0f0ee;
+      --ok: #217a46;
+      --warn: #946200;
+      --danger: #b13b3b;
+      --code: #111827;
+      --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: var(--font-main);
-      display: grid;
-      place-items: center;
-      padding: 28px 16px;
+      font-family: var(--font);
     }
 
-    .shell {
-      width: min(1120px, 100%);
-+      backdrop-filter: blur(16px);
-      background: linear-gradient(155deg, rgba(11, 16, 39, 0.94), rgba(11, 16, 39, 0.82));
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 28px;
-      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
-      overflow: hidden;
-    }
-
-    h1 {
-      margin: 0 0 6px;
-      font-size: 28px;
-      letter-spacing: -0.015em;
-    }
-
-    .subtitle {
-      margin: 0 0 20px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(300px, 1.1fr) 1.2fr;
-      gap: 20px;
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 18px;
-    }
-
-    .row {
-      display: grid;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    label {
-      font-weight: 600;
-      font-size: 14px;
-      color: #d7def7;
-    }
-
-    .helper {
-      margin-top: -8px;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    input, textarea, select {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: rgba(2, 8, 20, 0.65);
-      color: var(--text);
+    button,
+    textarea,
+    input {
       font: inherit;
-      outline: none;
-      transition: border-color 150ms ease;
-    }
-
-    textarea {
-      min-height: 92px;
-      resize: vertical;
-    }
-
-    input:focus, textarea:focus, select:focus {
-      border-color: rgba(159, 123, 255, 0.7);
-      box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.16);
-    }
-
-    .channels {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .chip {
-      border-radius: 999px;
-      padding: 6px 12px;
-      background: var(--panel-soft);
-      border: 1px solid var(--line);
-      font-size: 13px;
-    }
-
-    .buttons {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
     }
 
     button {
-      border: 0;
-      padding: 10px 16px;
-      border-radius: 12px;
-      font: inherit;
-      font-weight: 600;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 8px 12px;
       cursor: pointer;
-      transition: transform 140ms ease, filter 140ms ease;
-    }
-
-    button:active {
-      transform: scale(0.99);
-    }
-
-    .btn-primary {
-      background: linear-gradient(120deg, #8a6dff 0%, #3f6dff 100%);
-      color: #f6f7ff;
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: #cad4ff;
-      border: 1px solid var(--line);
+      font-weight: 600;
+      white-space: nowrap;
     }
 
     button:disabled {
-      opacity: 0.45;
       cursor: not-allowed;
+      opacity: 0.55;
     }
 
-    .state {
-      margin-top: 16px;
-      border-radius: 12px;
-      padding: 12px 12px;
+    .page {
+      width: min(1360px, 100%);
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .topbar {
       display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.4;
+      max-width: 760px;
+    }
+
+    .status-pill {
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      border: 1px solid transparent;
-      min-height: 44px;
+      gap: 8px;
+      min-height: 32px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      flex: 0 0 auto;
     }
 
-    .state-idle {
-      color: #c5cee8;
-      background: rgba(132, 146, 209, 0.08);
-      border-color: rgba(255, 255, 255, 0.12);
-    }
-
-    .state-loading {
-      color: #d8def0;
-      background: rgba(126, 154, 255, 0.14);
-      border-color: rgba(126, 154, 255, 0.34);
-    }
-
-    .state-success {
-      color: #cdf5dd;
-      background: rgba(64, 175, 124, 0.15);
-      border-color: rgba(90, 210, 160, 0.34);
-    }
-
-    .state-error {
-      color: #ffd0d0;
-      background: rgba(255, 84, 84, 0.16);
-      border-color: rgba(255, 84, 84, 0.35);
-    }
-
-    .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-top-color: #ffffff;
+    .dot {
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      background: var(--line-strong);
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .dot.ok {
+      background: var(--ok);
     }
 
-    .result-header {
-      margin: 0 0 12px;
+    .dot.busy {
+      background: var(--warn);
+    }
+
+    .dot.error {
+      background: var(--danger);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .panel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .result-section {
-      border: 1px dashed transparent;
-      border-radius: 12px;
-      padding: 12px;
+    .panel-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
       margin-bottom: 14px;
-      background: rgba(4, 8, 22, 0.45);
-      animation: rise 220ms ease;
     }
 
-    .result-section:last-child {
-      margin-bottom: 0;
+    label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
     }
 
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 10px 11px;
+      background: #fbfcfd;
+      color: var(--text);
+      line-height: 1.45;
+      outline: none;
     }
 
-    .result-section h2 {
-      margin: 0 0 10px;
-      font-size: 16px;
-      color: #f3f7ff;
+    textarea:focus,
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-strong);
+    }
+
+    .btn-secondary {
+      background: #ffffff;
+      color: var(--text);
+      border-color: var(--line-strong);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--surface-muted);
+    }
+
+    .btn-wide {
+      grid-column: 1 / -1;
+    }
+
+    .run-controls {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .check-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .result-section h2::before {
-      content: "";
-      width: 9px;
-      height: 9px;
-      background: var(--accent);
-      border-radius: 999px;
-      display: inline-block;
-    }
-
-    .result-section pre {
-      margin: 0;
-      white-space: pre-wrap;
-      line-height: 1.55;
-      color: #e2e8ff;
-      font-size: 14px;
-    }
-
-    .result-section ul, .result-section ol {
-      margin: 0;
-      padding-left: 20px;
-      line-height: 1.55;
-    }
-
-    .result-section li {
-      margin-bottom: 8px;
-    }
-
-    .img-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
-    }
-
-    .image-card {
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 10px;
-      padding: 10px;
-      background: rgba(3, 7, 21, 0.6);
-    }
-
-    .image-card img {
-      width: 100%;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
-      display: block;
-      margin-bottom: 8px;
-    }
-
-    .img-meta {
-      font-size: 12px;
       color: var(--muted);
-      line-height: 1.4;
-      margin: 0;
-      word-break: break-word;
+      font-size: 13px;
+      line-height: 1.35;
     }
 
-    .meta-row {
-      font-size: 12px;
+    .check-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(110px, 1fr));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric {
+      min-height: 72px;
+      padding: 13px 14px;
+      border-right: 1px solid var(--line);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric-label {
       color: var(--muted);
-      margin-top: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .metric-value {
+      font-size: 15px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .tabs {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px 14px;
+      gap: 8px;
+      padding: 12px 16px 0;
+      border-bottom: 1px solid var(--line);
+      overflow-x: auto;
     }
 
-    .meta-row span {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 999px;
-      padding: 3px 8px;
+    .tab {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-bottom: 0;
+      border-radius: 6px 6px 0 0;
+      background: var(--surface-muted);
+      color: var(--muted);
     }
 
-    .hidden { display: none; }
+    .tab.active {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--line-strong);
+    }
 
-    @media (max-width: 980px) {
-      .grid {
+    .view {
+      display: none;
+      padding: 16px;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .output {
+      margin: 0;
+      min-height: 280px;
+      max-height: 560px;
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #0f1720;
+      color: #edf3f8;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+      font-size: 13px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+    }
+
+    .agent-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .agent {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+      overflow: hidden;
+    }
+
+    .agent h3 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      text-transform: capitalize;
+    }
+
+    .agent pre {
+      margin: 0;
+      padding: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+      color: var(--code);
+      font-size: 13px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+    }
+
+    .empty {
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line-strong);
+      border-radius: 6px;
+      color: var(--muted);
+      text-align: center;
+      padding: 18px;
+      line-height: 1.45;
+    }
+
+    .toast {
+      margin-top: 12px;
+      min-height: 40px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fbfcfd;
+      line-height: 1.4;
+    }
+
+    .toast.ok {
+      border-color: #9bc7ad;
+      color: var(--ok);
+      background: #edf8f1;
+    }
+
+    .toast.error {
+      border-color: #e2aaaa;
+      color: var(--danger);
+      background: #fff1f1;
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        padding: 14px;
+      }
+
+      .topbar,
+      .layout {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .metric:nth-child(2) {
+        border-right: 0;
+      }
+
+      .metric:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--line);
+      }
+    }
+
+    @media (max-width: 520px) {
+      .controls {
         grid-template-columns: 1fr;
       }
 
-      .img-grid {
+      .summary-grid {
         grid-template-columns: 1fr;
+      }
+
+      .metric {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .metric:last-child {
+        border-bottom: 0;
       }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <h1>Campaign Concept Studio</h1>
-    <p class="subtitle">Fill in the campaign brief and generate a concise concept, three copy variants, a launch checklist, plus image prompts and generated assets.</p>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>Mini Orchestrator</h1>
+        <p class="subtitle">Планирование, подтверждение и локальный прогон демо-проекта через dispatcher.</p>
+      </div>
+      <div class="status-pill" aria-live="polite">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">Готов</span>
+      </div>
+    </header>
 
-    <section class="grid">
-      <form id="campaign-form" class="card" autocomplete="off">
-        <div class="row">
-          <label for="brief">Campaign brief</label>
-          <textarea id="brief" name="brief" required placeholder="Example: launch a subscription-based productivity app for creators."></textarea>
-          <p class="helper">Capture the campaign goal and business objective in 1-4 short sentences.</p>
+    <section class="layout">
+      <form id="task-form" class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Задача</h2>
         </div>
-        <div class="row">
-          <label for="audience">Target audience</label>
-          <input id="audience" name="audience" required placeholder="Example: independent creators, 20-35" />
-        </div>
-        <div class="row">
-          <label for="product">Product details</label>
-          <textarea id="product" name="product" required placeholder="Example: SaaS tool with recurring billing, onboarding in-app onboarding, mobile + web."></textarea>
-        </div>
-        <div class="row">
-          <label for="tone">Tone</label>
-          <select id="tone" name="tone">
-            <option>Bold</option>
-            <option>Friendly</option>
-            <option>Premium</option>
-            <option>Playful</option>
-            <option>Urgent</option>
-            <option>Minimal</option>
-          </select>
-        </div>
-        <div class="row">
-          <label>Channels</label>
-          <div class="channels" role="group" aria-label="Channel selection">
-            <label class="chip"><input type="checkbox" name="channels" value="Instagram" checked /> Instagram</label>
-            <label class="chip"><input type="checkbox" name="channels" value="Meta Ads" checked /> Meta Ads</label>
-            <label class="chip"><input type="checkbox" name="channels" value="TikTok" /> TikTok</label>
-            <label class="chip"><input type="checkbox" name="channels" value="YouTube Shorts" /> YouTube Shorts</label>
-            <label class="chip"><input type="checkbox" name="channels" value="Email" /> Email</label>
-            <label class="chip"><input type="checkbox" name="channels" value="Landing page" /> Landing page</label>
+        <div class="panel-body">
+          <div class="field">
+            <label for="task">Команда</label>
+            <textarea id="task" spellcheck="false">оркестратор план Сделай калькулятор</textarea>
           </div>
-          <p class="helper">Select at least one channel to align text and visual suggestions.</p>
+
+          <div class="controls">
+            <button id="plan-button" class="btn-primary" type="submit">План</button>
+            <button id="core-button" class="btn-secondary" type="button">Core run</button>
+          </div>
+
+          <div class="run-controls">
+            <label class="check-row">
+              <input id="approval" type="checkbox" />
+              <span>План подтвержден</span>
+            </label>
+            <button id="run-button" class="btn-primary btn-wide" type="button" disabled>Запустить workflow</button>
+          </div>
+
+          <div id="message" class="toast">Ожидаю задачу.</div>
         </div>
-        <div class="buttons">
-          <button class="btn-primary" type="submit" id="generate">Generate campaign</button>
-          <button class="btn-secondary" type="button" id="reset">Reset</button>
-        </div>
-        <p class="meta-row">
-          <span>Server uses OpenAI Responses API only</span>
-          <span>Image generation is done on the backend</span>
-        </p>
       </form>
 
-      <section class="card">
-        <div id="empty-state" class="state state-idle">Ready — complete the form and generate a concept.</div>
-        <div id="loading-state" class="state state-loading hidden">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Generating concept, copy variants, checklist, prompts, and visuals...</span>
+      <section class="panel">
+        <div class="summary-grid">
+          <div class="metric">
+            <div class="metric-label">Статус</div>
+            <div id="metric-status" class="metric-value">idle</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Режим</div>
+            <div id="metric-mode" class="metric-value">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Роль</div>
+            <div id="metric-role" class="metric-value">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Лог</div>
+            <div id="metric-log" class="metric-value">-</div>
+          </div>
         </div>
-        <div id="error-state" class="state state-error hidden"></div>
-        <div id="result-state" class="hidden">
-          <div class="result-header">
-            <h2 style="margin:0; font-size:18px;">Campaign output</h2>
-            <span id="result-title" style="font-size:12px;color:#a8b6ff;"></span>
-          </div>
 
-          <div class="result-section">
-            <h2>Concept</h2>
-            <pre id="concept"></pre>
-          </div>
+        <div class="tabs" role="tablist" aria-label="Output views">
+          <button class="tab active" type="button" data-tab="plan">План</button>
+          <button class="tab" type="button" data-tab="agents">Агенты</button>
+          <button class="tab" type="button" data-tab="json">JSON</button>
+        </div>
 
-          <div class="result-section">
-            <h2>3 headline/body variants</h2>
-            <ol id="variants"></ol>
-          </div>
+        <div id="view-plan" class="view active">
+          <div id="plan-empty" class="empty">План появится здесь.</div>
+          <pre id="plan-output" class="output" hidden></pre>
+        </div>
 
-          <div class="result-section">
-            <h2>Launch checklist</h2>
-            <ul id="checklist"></ul>
-          </div>
+        <div id="view-agents" class="view">
+          <div id="agents-empty" class="empty">Результаты агентов появятся здесь.</div>
+          <div id="agents-output" class="agent-list" hidden></div>
+        </div>
 
-          <div class="result-section">
-            <h2>Image prompts</h2>
-            <ol id="image-prompts"></ol>
-          </div>
-
-          <div class="result-section">
-            <h2>Generated images</h2>
-            <div id="image-grid" class="img-grid"></div>
-          </div>
-
-          <p class="meta-row" id="meta"></p>
+        <div id="view-json" class="view">
+          <pre id="json-output" class="output">{}</pre>
         </div>
       </section>
     </section>
   </main>
 
   <script>
-    const form = document.getElementById("campaign-form");
-    const generateBtn = document.getElementById("generate");
-    const resetBtn = document.getElementById("reset");
+    const form = document.querySelector("#task-form");
+    const taskInput = document.querySelector("#task");
+    const planButton = document.querySelector("#plan-button");
+    const coreButton = document.querySelector("#core-button");
+    const runButton = document.querySelector("#run-button");
+    const approval = document.querySelector("#approval");
+    const message = document.querySelector("#message");
+    const statusDot = document.querySelector("#status-dot");
+    const statusText = document.querySelector("#status-text");
+    const metricStatus = document.querySelector("#metric-status");
+    const metricMode = document.querySelector("#metric-mode");
+    const metricRole = document.querySelector("#metric-role");
+    const metricLog = document.querySelector("#metric-log");
+    const planEmpty = document.querySelector("#plan-empty");
+    const planOutput = document.querySelector("#plan-output");
+    const agentsEmpty = document.querySelector("#agents-empty");
+    const agentsOutput = document.querySelector("#agents-output");
+    const jsonOutput = document.querySelector("#json-output");
+    let lastPlanTask = "";
+    let busy = false;
 
-    const emptyState = document.getElementById("empty-state");
-    const loadingState = document.getElementById("loading-state");
-    const errorState = document.getElementById("error-state");
-    const resultState = document.getElementById("result-state");
-    const resultTitle = document.getElementById("result-title");
-
-    const concept = document.getElementById("concept");
-    const variants = document.getElementById("variants");
-    const checklist = document.getElementById("checklist");
-    const imagePrompts = document.getElementById("image-prompts");
-    const imageGrid = document.getElementById("image-grid");
-    const metaInfo = document.getElementById("meta");
-
-    function setState(mode, message = "") {
-      emptyState.classList.add("hidden");
-      loadingState.classList.add("hidden");
-      errorState.classList.add("hidden");
-      resultState.classList.add("hidden");
-      generateBtn.disabled = mode === "loading";
-
-      if (mode === "loading") {
-        loadingState.classList.remove("hidden");
-      } else if (mode === "error") {
-        errorState.textContent = message;
-        errorState.classList.remove("hidden");
-      } else if (mode === "success") {
-        resultState.classList.remove("hidden");
-      } else {
-        emptyState.classList.remove("hidden");
-      }
+    function setBusy(nextBusy, label = "Работаю") {
+      busy = nextBusy;
+      planButton.disabled = busy;
+      coreButton.disabled = busy;
+      runButton.disabled = busy || !approval.checked || !lastPlanTask;
+      statusDot.className = `dot ${busy ? "busy" : ""}`;
+      statusText.textContent = busy ? label : "Готов";
     }
 
-    function clearOutput() {
-      concept.textContent = "";
-      variants.innerHTML = "";
-      checklist.innerHTML = "";
-      imagePrompts.innerHTML = "";
-      imageGrid.innerHTML = "";
-      metaInfo.textContent = "";
-      resultTitle.textContent = "";
-      errorState.classList.add("hidden");
-      resultState.classList.add("hidden");
-      setState("idle");
+    function setMessage(text, kind = "") {
+      message.textContent = text;
+      message.className = `toast ${kind}`.trim();
     }
 
-    function createChipList(container, values) {
-      values.forEach((item) => {
-        const li = document.createElement("li");
-        li.textContent = item;
-        container.appendChild(li);
+    function activeTab(name) {
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.tab === name);
+      });
+      document.querySelectorAll(".view").forEach((view) => {
+        view.classList.toggle("active", view.id === `view-${name}`);
       });
     }
 
-    function renderImages(images) {
-      imageGrid.innerHTML = "";
-      images.forEach((img) => {
-        const card = document.createElement("article");
-        card.className = "image-card";
+    function textOf(value) {
+      if (value === null || value === undefined) {
+        return "-";
+      }
+      if (typeof value === "string") {
+        return value || "-";
+      }
+      return JSON.stringify(value, null, 2);
+    }
 
-        const imageTag = document.createElement("img");
-        imageTag.src = "data:image/png;base64," + img.image_base64;
-        imageTag.alt = img.revised_prompt || img.prompt || "Generated campaign visual";
-        card.appendChild(imageTag);
+    function updateSummary(payload) {
+      metricStatus.textContent = textOf(payload.status);
+      metricMode.textContent = textOf(payload.mode || payload.state);
+      metricRole.textContent = textOf(payload.dispatchDecision?.role || payload.model);
+      metricLog.textContent = textOf(payload.log || payload.run_id);
+    }
 
-        const promptMeta = document.createElement("p");
-        promptMeta.className = "img-meta";
-        promptMeta.innerHTML = `<strong>Prompt:</strong> ${escapeHtml(img.prompt || "")}`;
-        card.appendChild(promptMeta);
+    function renderPayload(payload) {
+      updateSummary(payload);
+      jsonOutput.textContent = JSON.stringify(payload, null, 2);
 
-        if (img.revised_prompt) {
-          const revisedMeta = document.createElement("p");
-          revisedMeta.className = "img-meta";
-          revisedMeta.innerHTML = `<strong>Revised:</strong> ${escapeHtml(img.revised_prompt)}`;
-          card.appendChild(revisedMeta);
+      const plannerText = payload.agents?.planner || payload.result?.tool_output || payload.result?.plan_rationale || "";
+      planOutput.textContent = plannerText;
+      planOutput.hidden = !plannerText;
+      planEmpty.hidden = Boolean(plannerText);
+
+      agentsOutput.innerHTML = "";
+      const agents = payload.agents || {};
+      const agentNames = Object.keys(agents);
+      if (agentNames.length) {
+        for (const name of agentNames) {
+          const item = document.createElement("section");
+          item.className = "agent";
+          const title = document.createElement("h3");
+          title.textContent = name;
+          const pre = document.createElement("pre");
+          pre.textContent = textOf(agents[name]);
+          item.append(title, pre);
+          agentsOutput.append(item);
         }
-        imageGrid.appendChild(card);
+      }
+      agentsOutput.hidden = agentNames.length === 0;
+      agentsEmpty.hidden = agentNames.length > 0;
+    }
+
+    async function postJson(url, body) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-    }
-
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-    }
-
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const payload = {
-        brief: document.getElementById("brief").value.trim(),
-        target_audience: document.getElementById("audience").value.trim(),
-        product_details: document.getElementById("product").value.trim(),
-        tone: document.getElementById("tone").value.trim(),
-        channels: Array.from(document.querySelectorAll('input[name="channels"]:checked')).map((el) => el.value),
-      };
-
-      if (!payload.brief || !payload.target_audience || !payload.product_details) {
-        setState("error", "Please fill brief, audience, and product details.");
-        return;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = payload.error?.message || payload.error || response.statusText;
+        throw new Error(detail);
       }
-      if (!payload.channels.length) {
-        setState("error", "Select at least one channel.");
+      return payload;
+    }
+
+    async function createPlan(event) {
+      event?.preventDefault();
+      const task = taskInput.value.trim();
+      if (!task) {
+        setMessage("Введите задачу.", "error");
         return;
       }
 
-      setState("loading");
+      setBusy(true, "Планирую");
+      setMessage("Запрашиваю план...");
       try {
-        const response = await fetch("/api/campaign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result?.error || `Request failed with status ${response.status}`);
-        }
-
-        concept.textContent = result.campaign_concept || "No concept provided.";
-        variants.innerHTML = "";
-        createChipList(variants, (result.headline_body_variants || []).map((item, index) => `${index + 1}. ${item.headline} — ${item.body}`));
-        createChipList(checklist, result.launch_checklist || []);
-        createChipList(imagePrompts, result.image_prompts || []);
-        renderImages(result.generated_images || []);
-
-        metaInfo.textContent = `Text model: ${result.meta?.text_model || "n/a"} • Image model: ${result.meta?.image_model || "n/a"} • Images: ${result.meta?.image_count || "n/a"} • Size: ${result.meta?.image_size || "n/a"} • Quality: ${result.meta?.image_quality || "n/a"}`;
-        resultTitle.textContent = `Generated ${result.generated_images?.length || 0} image asset(s).`;
-        setState("success");
+        const payload = await postJson("/api/dispatcher/plan", { task });
+        lastPlanTask = task;
+        approval.checked = false;
+        renderPayload(payload);
+        activeTab("plan");
+        setMessage("План готов.", "ok");
       } catch (error) {
-        setState("error", error.message || "Unexpected error.");
+        statusDot.className = "dot error";
+        setMessage(error.message, "error");
+      } finally {
+        setBusy(false);
       }
-    });
+    }
 
-    resetBtn.addEventListener("click", () => {
-      form.reset();
-      clearOutput();
-      setState("idle");
-    });
+    async function runApprovedWorkflow() {
+      if (!lastPlanTask || !approval.checked) {
+        setMessage("Подтвердите план перед запуском.", "error");
+        return;
+      }
 
-    clearOutput();
+      setBusy(true, "Запускаю");
+      setMessage("Выполняю approved workflow...");
+      try {
+        const payload = await postJson("/api/dispatcher/run", {
+          task: lastPlanTask,
+          approved: true,
+        });
+        renderPayload(payload);
+        activeTab("agents");
+        setMessage("Workflow завершен.", "ok");
+      } catch (error) {
+        statusDot.className = "dot error";
+        setMessage(error.message, "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function runCoreOrchestrator() {
+      const goal = taskInput.value.trim();
+      if (!goal) {
+        setMessage("Введите задачу.", "error");
+        return;
+      }
+
+      setBusy(true, "Выполняю");
+      setMessage("Запускаю core orchestrator...");
+      try {
+        const payload = await postJson("/api/run", { goal });
+        renderPayload(payload);
+        activeTab("json");
+        setMessage("Core run завершен.", payload.status === "done" ? "ok" : "");
+      } catch (error) {
+        statusDot.className = "dot error";
+        setMessage(error.message, "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    form.addEventListener("submit", createPlan);
+    runButton.addEventListener("click", runApprovedWorkflow);
+    coreButton.addEventListener("click", runCoreOrchestrator);
+    approval.addEventListener("change", () => {
+      runButton.disabled = busy || !approval.checked || !lastPlanTask;
+    });
+    taskInput.addEventListener("input", () => {
+      lastPlanTask = "";
+      approval.checked = false;
+      runButton.disabled = true;
+    });
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => activeTab(tab.dataset.tab));
+    });
   </script>
 </body>
 </html>

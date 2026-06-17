@@ -13,6 +13,7 @@ tools/deploy/ftp.local.json
 *.err
 .mini_orchestrator/
 tools/codex-dispatcher/runs/
+test-projects/
 
 # Python
 .venv/

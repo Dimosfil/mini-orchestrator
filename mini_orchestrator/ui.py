@@ -6,10 +6,18 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 from typing import Any, Dict
 import json
+import os
+import subprocess
+import sys
 import webbrowser
+from urllib.parse import urlparse
 
 from .orchestrator import Orchestrator
 from .llm import LlmRequestError, LlmUnavailable
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
 
 
 @dataclass
@@ -26,6 +34,9 @@ class _ThreadedHttpServer(ThreadingMixIn, HTTPServer):
 class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     orchestrator: Orchestrator
     web_root: Path
+
+    def _path(self) -> str:
+        return urlparse(self.path).path
 
     def _read_json(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -50,8 +61,48 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     def _http_error(self, status: int, message: str) -> None:
         self._json_response(status, {"error": message})
 
+    def _run_dispatcher(self, args: list[str], timeout_seconds: int) -> Dict[str, Any]:
+        if not DISPATCHER.exists():
+            raise RuntimeError(f"Dispatcher script is missing: {DISPATCHER}")
+
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["MINI_ORCHESTRATOR_DISPATCHER_BEST_EFFORT_LOGS"] = "1"
+        completed = subprocess.run(
+            [sys.executable, str(DISPATCHER), *args],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=timeout_seconds,
+            check=False,
+        )
+        stdout = completed.stdout.strip()
+        stderr = completed.stderr.strip()
+        try:
+            payload = json.loads(stdout) if stdout else {}
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Dispatcher returned non-JSON output: {stdout[:800]}") from exc
+
+        if completed.returncode != 0:
+            message = payload.get("error") if isinstance(payload, dict) else None
+            raise RuntimeError(message or stderr or f"Dispatcher failed with exit code {completed.returncode}.")
+
+        if stderr and isinstance(payload, dict):
+            payload.setdefault("stderr", stderr)
+        return payload
+
+    def _task_from_payload(self, payload: Dict[str, Any]) -> str:
+        task = str(payload.get("task") or payload.get("goal") or "").strip()
+        if not task:
+            raise ValueError("Field 'task' is required.")
+        return task
+
     def do_POST(self) -> None:
-        if self.path not in {"/api/run", "/api/campaign"}:
+        path = self._path()
+        if path not in {"/api/run", "/api/campaign", "/api/dispatcher/plan", "/api/dispatcher/run"}:
             self._http_error(404, "Unknown endpoint.")
             return
 
@@ -61,14 +112,52 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             self._http_error(400, str(exc))
             return
 
-        if self.path == "/api/run":
+        if path == "/api/run":
             goal = str(payload.get("goal", "")).strip()
             if not goal:
                 self._http_error(400, "Field 'goal' is required.")
                 return
 
-            state = self.orchestrator.run(goal)
-            self._json_response(200, self.orchestrator.to_dict(state))
+            try:
+                state = self.orchestrator.run(goal)
+                self._json_response(200, self.orchestrator.to_dict(state))
+            except Exception as exc:
+                self._http_error(500, f"Core orchestrator failed: {exc}")
+            return
+
+        if path == "/api/dispatcher/plan":
+            try:
+                task = self._task_from_payload(payload)
+                result = self._run_dispatcher(
+                    ["--task", task, "--plan-only", "--dry-run"],
+                    timeout_seconds=30,
+                )
+                self._json_response(200, result)
+            except ValueError as exc:
+                self._http_error(400, str(exc))
+            except subprocess.TimeoutExpired:
+                self._http_error(504, "Dispatcher plan preview timed out.")
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/dispatcher/run":
+            try:
+                task = self._task_from_payload(payload)
+                if payload.get("approved") is not True:
+                    self._http_error(400, "Field 'approved' must be true before running the workflow.")
+                    return
+                result = self._run_dispatcher(
+                    ["--task", task, "--local-test-project"],
+                    timeout_seconds=120,
+                )
+                self._json_response(200, result)
+            except ValueError as exc:
+                self._http_error(400, str(exc))
+            except subprocess.TimeoutExpired:
+                self._http_error(504, "Approved local workflow timed out.")
+            except Exception as exc:
+                self._http_error(500, str(exc))
             return
 
         try:
@@ -107,7 +196,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             self._http_error(500, f"Unexpected server error: {exc}")
 
     def do_GET(self) -> None:
-        if self.path in {"/", "/index.html"}:
+        path = self._path()
+        if path in {"/", "/index.html"}:
             file_path = self.web_root / "index.html"
             if not file_path.exists():
                 self._http_error(500, "UI file missing.")
@@ -119,7 +209,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
             return
-        if self.path == "/health":
+        if path == "/health":
             self._json_response(200, {"status": "ok"})
             return
         self._http_error(404, "Not found.")

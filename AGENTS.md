@@ -60,6 +60,29 @@ shared baseline, and keep the answer informational: do not run startup restore,
 resume old work, call task managers, mutate files, or execute the listed
 commands unless the user asks for a specific command next.
 
+Treat `оркестратор <task>` and `orchestrator <task>` as project-local
+mini-orchestrator chat commands. For early tests, run the Codex dispatcher full
+chain in dry-run mode unless the user explicitly asks to launch a real Codex
+worker:
+`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain --dry-run`.
+If the user explicitly asks for a real bounded test/demo project, prefer the
+local constrained project mode before launching a broad Codex worker:
+`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --local-test-project`.
+For chat-gated plan commands, first return only the planner proposal in chat:
+`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --plan-only`.
+Do not create files from that plan until the user explicitly approves it. After
+approval, run the approved local workflow with `--local-test-project`; it must
+iterate executor -> test/review until checks pass or the configured iteration
+limit is reached, then report final status, launch/smoke the application, and
+run UI smoke checks for demo projects that expose a browser interface.
+The command `оркестратор план <task>` / `orchestrator plan <task>` starts from a
+planner-directed task; `оркестратор исполнитель <task>` / `orchestrator executor
+<task>` starts from an executor-directed task; `оркестратор ревью <task>` /
+`orchestrator review <task>` starts from a reviewer-directed task. In full-chain
+mode the dispatcher still runs planner -> executor -> reviewer. Use the
+low-level dispatcher without `--chain` only when the user asks for one selected
+worker.
+
 The copied instruction kit is a token-economy and RAG-startup layer for this
 project. Use it to restore only the needed context from local instructions,
 handoff summaries, targeted searches, and project memory instead of reading the

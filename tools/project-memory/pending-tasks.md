@@ -135,3 +135,177 @@ Verification:
 
 - [x] Run focused dispatcher tests.
 - [x] Run syntax checks for dispatcher modules.
+
+### Orchestrator Chat Command Contract
+
+Goal: allow early project testing by sending chat commands such as
+`оркестратор план Сделай калькулятор`, while the dispatcher still selects only
+one worker per run.
+
+Planned changes:
+
+- [x] Record the chat command contract in project memory.
+- [x] Add parser support for `оркестратор` / `orchestrator` command prefixes.
+- [x] Add explicit role aliases for planner, executor, and reviewer commands.
+- [x] Add focused tests and documentation.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run dry-run smoke commands for planner-forced and default task routing.
+
+### Dispatcher Full Chain Increment
+
+Goal: add an explicit planner -> executor -> reviewer -> final dispatcher mode
+while preserving the current one-worker routing mode for narrow tests.
+
+Planned changes:
+
+- [x] Add a chain execution mode to the dispatcher CLI.
+- [x] Pass planner output into executor and executor output into reviewer.
+- [x] Keep dry-run chain output inspectable without launching Codex.
+- [x] Update event protocol, README, and tests.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run dry-run smoke for `оркестратор план Сделай калькулятор --chain`.
+- [x] Run syntax checks for dispatcher modules.
+
+### Dispatcher Local Test Project Mode
+
+Goal: allow an explicitly requested real demo execution path that creates a
+bounded project under `test-projects/`, writes code, and verifies it without
+launching a broad Codex worker.
+
+Planned changes:
+
+- [x] Add a constrained local test project mode to the dispatcher CLI.
+- [x] Support a first `calculator` demo project with generated code and tests.
+- [x] Keep generated projects inside the repository-local `test-projects/`
+  boundary.
+- [x] Update docs and command contract.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run a real local calculator project smoke command.
+
+### Dispatcher Chat Approval Workflow
+
+Goal: make `orchestrator plan <task>` a chat-gated workflow: first return a
+plan for user approval, then after explicit confirmation run implementation,
+test review, fix loops, final review, and application launch.
+
+Planned changes:
+
+- [x] Add dispatcher plan-only output for chat approval.
+- [x] Update local test project execution to run executor -> test/review loops.
+- [x] Add tests for plan-only and bounded review loop behavior.
+- [x] Update AGENTS, docs, and project-memory contract.
+
+Verification:
+
+- [x] Remove the generated calculator test project.
+- [x] Run focused dispatcher tests.
+- [x] Run plan-only calculator command.
+- [x] Run approved local calculator workflow from a clean test project folder in
+  a temporary test directory.
+
+### Dispatcher Plan-only Generalization Fix
+
+Goal: prevent `--plan-only` from reusing the calculator-only local demo plan for
+unrelated tasks or crashing before approval.
+
+Planned changes:
+
+- [x] Keep calculator-only behavior scoped to `--local-test-project`.
+- [x] Return a generic chat approval plan for unsupported local demo tasks.
+- [x] Route UI-described plan requests away from the CLI calculator template.
+- [x] Return structured JSON errors for expected dispatcher mode failures.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run plan-only calculator, calculator-with-UI, and marketplace-agent smoke
+  commands.
+- [x] Run unsupported `--local-test-project` smoke and confirm JSON error output
+  instead of traceback.
+
+### Dispatcher Plan-only Planner Worker Fix
+
+Goal: make real `--plan-only` use the planner worker instead of returning a
+local generic template.
+
+Planned changes:
+
+- [x] Build a plan-only prompt from planner instructions and the user task.
+- [x] Run Codex app-server planner turn for `--plan-only` unless `--dry-run` is
+  set.
+- [x] Keep local fallback approval plans only for `--plan-only --dry-run`.
+- [x] Make JSON CLI output robust when planner responses contain Unicode that
+  the Windows console encoding cannot print.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run real plan-only marketplace-agent command and confirm task-specific
+  planner output.
+- [x] Run real plan-only Word Office MVP command and confirm a different
+  task-specific planner output.
+
+### Dispatcher Construction CRM Local Demo
+
+Goal: allow an approved `orchestrator plan` task for a construction-store CRM to
+run through the bounded local test project workflow instead of failing with the
+calculator-only guard.
+
+Planned changes:
+
+- [x] Add construction-store CRM task detection for local demo project mode.
+- [x] Add generated project files with CRM domain logic, seed data, tests, and a
+  launch/smoke command.
+- [x] Update dispatcher docs and chat-command contract.
+- [x] Add focused dispatcher test coverage.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run the approved construction CRM local workflow and confirm final smoke.
+
+### Dispatcher UI Smoke Review Gate
+
+Goal: make local test project review catch inert browser UIs, especially CRM
+buttons that render but do not do anything.
+
+Planned changes:
+
+- [x] Add a UI smoke check step to local test project review output.
+- [x] Make construction CRM generation include a UI smoke contract and working
+  button/view behavior.
+- [x] Update dispatcher tests and docs so review pass requires UI smoke when a
+  demo project declares it.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+- [x] Run approved construction CRM workflow and confirm `UI smoke` is reported.
+
+### Mini-Orchestrator Web UI Replacement
+
+Goal: replace the stale Campaign Concept Studio page with an actual
+mini-orchestrator UI for the current chat-gated dispatcher workflow.
+
+Planned changes:
+
+- [x] Add narrow UI API endpoints for plan preview and approved local demo run.
+- [x] Replace `mini_orchestrator/web/index.html` with an orchestrator dashboard.
+- [x] Document the new UI/API behavior.
+- [x] Run server/API smoke checks and focused dispatcher tests.
+
+Verification:
+
+- [x] Health endpoint responds.
+- [x] Plan endpoint returns a dry-run approval plan without creating files.
+- [x] Approved local demo endpoint returns dispatcher outputs.
+- [x] Frontend page no longer contains Campaign Concept Studio content.

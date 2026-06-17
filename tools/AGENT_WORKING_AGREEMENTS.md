@@ -201,6 +201,17 @@ or:
   command list. Show compact command names and short descriptions; do not run
   startup restore, resume old tasks, call services, or execute the listed
   commands.
+- Treat `оркестратор <task>` and `orchestrator <task>` as project-local
+  mini-orchestrator dispatch commands. For early tests from chat, run
+  `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain --dry-run`
+  unless the user explicitly asks to launch a real Codex worker. `оркестратор
+  план <task>` / `orchestrator plan <task>` starts from a planner-directed
+  task, `оркестратор исполнитель <task>` / `orchestrator executor <task>` starts
+  from an executor-directed task, and `оркестратор ревью <task>` /
+  `orchestrator review <task>` starts from a reviewer-directed task. In
+  full-chain mode the dispatcher still runs planner -> executor -> reviewer.
+  Use the low-level dispatcher without `--chain` only when the user asks for one
+  selected worker.
 - Use the instruction kit as a token-economy and RAG-startup layer: restore only
   task-relevant context from local instructions, summaries, targeted searches,
   and project memory instead of broad repository reads or large outputs.

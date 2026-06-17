@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 from pathlib import Path
 from typing import Dict
 
@@ -35,8 +36,13 @@ class Orchestrator:
         if not self.log_path:
             return
         line = dump_state_line(state=state, stage=stage, message=message, details=details)
-        with self.log_path.open("a", encoding="utf-8") as file:
-            file.write(line + "\n")
+        try:
+            with self.log_path.open("a", encoding="utf-8") as file:
+                file.write(line + "\n")
+        except OSError as exc:
+            if exc.errno == errno.ENOSPC:
+                return
+            raise
 
     def _record(self, state: TaskState, stage: str, status: str, message: str, details: Dict | None = None) -> None:
         state.events.append(StateEvent(stage=stage, status=status, message=message, attempt=state.attempt, details=details or {}))

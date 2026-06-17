@@ -1,14 +1,15 @@
-# Mini Orchestrator + Campaign Concept Studio
+# Mini Orchestrator
 
-Mini Orchestrator now includes a **full-stack campaign concept studio** UI at `/`:
+Mini Orchestrator is a small local workspace for experimenting with
+AI-agent workflows. The current UI exposes the project dispatcher flow:
 
-- enter campaign brief, target audience, product details, tone, and channels
-- generate:
-  - concise campaign concept
-  - 3 headline/body copy variants
-  - launch checklist
-  - image prompts
-  - generated campaign visuals (base64 images from OpenAI image generation tool)
+- create a chat-gated planner proposal
+- explicitly approve the proposal
+- run a bounded local demo workflow under `test-projects/`
+- inspect planner, executor, reviewer, logs, and raw JSON
+
+The older Campaign Concept Studio page has been replaced by the orchestrator
+dashboard.
 
 ## Install
 
@@ -32,112 +33,80 @@ Optional flags:
 
 Then open `http://127.0.0.1:8765`.
 
-## Example flow
+## UI Workflow
 
-Open the web UI and fill the form like this:
+Use a command such as:
 
 ```text
-Campaign brief:
-Launch a lightweight AI planning tool for small marketing teams that need faster campaign ideas.
-
-Target audience:
-Marketing managers and founders at small B2B SaaS companies.
-
-Product details:
-A browser-based studio that turns a rough brief into campaign concepts, copy variants,
-launch checklists, visual prompts, and generated campaign direction images.
-
-Tone:
-Friendly
-
-Channels:
-Instagram, Meta Ads, Email, Landing page
+оркестратор план Сделай калькулятор
 ```
 
-After you click **Generate campaign**, the app returns:
+Click **План** to run dispatcher plan preview mode. The UI calls:
 
-- a short campaign concept
-- three headline/body copy directions
-- a practical launch checklist
-- image prompts for the creative direction
-- generated campaign images rendered directly in the browser
+```powershell
+python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry-run
+```
 
-The result is meant as a first creative draft for a marketing team, not a final approved campaign.
+After review, check **План подтвержден** and click **Запустить workflow**. The UI
+calls:
 
-## API key and environment
+```powershell
+python tools\codex-dispatcher\dispatcher.py --task "<command>" --local-test-project
+```
 
-- `OPENAI_API_KEY` (required for campaign generation)
-- `MINI_ORCHESTRATOR_OPENAI_API_KEY_ENV` (optional override, default `OPENAI_API_KEY`)
-- `MINI_ORCHESTRATOR_OPENAI_BASE_URL` (optional OpenAI-compatible base URL)
+The approved local workflow currently supports managed demo projects such as the
+calculator and construction-store CRM. Generated demo files stay under
+`test-projects/`, which is ignored by git.
 
-Campaign model/prompt/image knobs:
+## Core Orchestrator
 
-- `MINI_ORCHESTRATOR_CAMPAIGN_TEXT_MODEL` (default `gpt-5.5`)
-- `MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_MODEL` (default `gpt-image-2`)
-- `MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_SIZE` (default `1024x1024`)
-- `MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_QUALITY` (default `medium`)
-- `MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_COUNT` (default `3`)
+The **Core run** button sends the textarea content to the package-native
+orchestrator:
 
-For quick prompt/model tuning without touching frontend code, edit:
+```powershell
+python -m mini_orchestrator "search AGENTS"
+```
 
-- text + JSON schema + campaign prompt in `mini_orchestrator/llm.py`
-  (`OpenAiResponsesClient.generate_campaign` and schema definition)
-- image tool settings inside the same method (`tools` and `tool_choice`)
+This path uses the `plan -> execute -> validate` loop in `mini_orchestrator/`.
+The LLM coordinator is optional and falls back to rules unless OpenAI is
+configured.
 
-## API endpoints
+## LLM Configuration
 
-Existing endpoint remains:
+- `OPENAI_API_KEY`
+- `MINI_ORCHESTRATOR_LLM_PROVIDER` (`auto`, `openai`, `rules`, `off`)
+- `MINI_ORCHESTRATOR_COORDINATOR_MODEL`
+- `MINI_ORCHESTRATOR_EXECUTOR_MODEL`
+- `MINI_ORCHESTRATOR_OPENAI_BASE_URL`
 
-- `POST /api/run` — orchestrator JSON workflow run
+## API Endpoints
 
-New endpoint for studio:
+- `GET /health` - health check
+- `POST /api/run` - package-native orchestrator JSON workflow run
+- `POST /api/dispatcher/plan` - dispatcher plan preview
+- `POST /api/dispatcher/run` - approved local dispatcher workflow
 
-- `POST /api/campaign` — accepts JSON body:
+Plan preview request:
 
 ```json
 {
-  "brief": "...",
-  "target_audience": "...",
-  "product_details": "...",
-  "tone": "...",
-  "channels": ["Instagram", "Meta Ads"]
+  "task": "оркестратор план Сделай калькулятор"
 }
 ```
 
-The response contains campaign content and generated images under `generated_images`.
+Approved run request:
 
-## Client/server boundary (important)
+```json
+{
+  "task": "оркестратор план Сделай калькулятор",
+  "approved": true
+}
+```
 
-- All OpenAI requests stay on the server.
-- The browser UI sends user inputs only to `/api/campaign`.
-- The server calls the OpenAI Responses API and returns only JSON response artifacts.
+## Checks
 
-This keeps API keys off the client and allows you to rotate keys server-side.
-
-## Validation plan (small)
-
-Run after first deploy:
-
-1. Open UI, fill valid fields, click **Generate campaign**.
-2. Verify you see:
-   - concept text
-   - exactly 3 headline/body variants
-   - non-empty checklist
-   - 3 image prompts and matching images.
-3. Confirm error states:
-   - empty input fields show user-facing validation errors
-   - missing `OPENAI_API_KEY` returns a 502-like message from the boundary.
-4. Check model and image settings by temporarily setting:
-   - `MINI_ORCHESTRATOR_CAMPAIGN_TEXT_MODEL`
-   - `MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_MODEL`
-5. Optional: test with fallback channels and short prompt to ensure schema parsing still returns valid JSON.
-
-## Deploy notes
-
-- App is a single Python package; deploy as a long-running process (systemd, Docker, or host process manager).
-- Keep `.venv`, API keys, and logs out of VCS.
-- For Docker, expose port `8765` and provide env vars above at runtime.
-- Ensure outbound HTTPS access to OpenAI APIs for both:
-  - `https://api.openai.com/v1/responses`
-  - response-based image generation workflow in the same endpoint.
-- Keep this repo as the source of truth and pin runtime versions used in deployment.
+```powershell
+python -m compileall mini_orchestrator
+python tools\codex-dispatcher\test_dispatcher.py
+python -m mini_orchestrator "search AGENTS" --no-log
+```
