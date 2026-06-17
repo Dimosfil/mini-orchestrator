@@ -224,6 +224,52 @@ class OpenAiResponsesClient:
 
         return LlmJsonResult(raw_text=text, payload=_extract_first_json_object(text))
 
+    def translate_work_package_field(
+        self,
+        text: str,
+        language: str,
+        field_label: str,
+        model: str | None = None,
+    ) -> str:
+        if not self.is_enabled:
+            raise LlmUnavailable("LLM provider is disabled.")
+        if self.config.llm_provider == "auto" and not self.is_configured():
+            raise LlmUnavailable(f"{self.config.openai_api_key_env} is not set.")
+
+        source = text.strip()
+        if not source:
+            raise LlmRequestError("Text is required.")
+
+        language_name = "Russian" if language == "ru" else "English"
+        api_key = self._api_key()
+        body: Dict[str, Any] = {
+            "model": model or self.config.translation_model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You translate short AI-agent work-package UI helper text. "
+                        "Return only the translated text. Do not add labels, quotes, Markdown, or explanations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Field: {field_label}\n"
+                        f"Target language: {language_name}\n\n"
+                        "Preserve technical terms such as prompt, workflow, branch, scope, JSON, API, and LLM "
+                        "when translating them would make the instruction less clear.\n\n"
+                        f"Text:\n{source}"
+                    ),
+                },
+            ],
+        }
+        data = self._post_responses(body, api_key)
+        translated = _extract_output_text(data).strip()
+        if not translated:
+            raise LlmRequestError("OpenAI response did not include output text.")
+        return translated
+
     def generate_campaign(self, brief: str, target_audience: str, product_details: str, tone: str, channels: List[str]) -> Dict[str, Any]:
         if not self.is_enabled:
             raise LlmUnavailable("LLM provider is disabled.")

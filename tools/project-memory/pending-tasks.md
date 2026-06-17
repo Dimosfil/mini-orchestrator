@@ -403,6 +403,28 @@ Verification:
 
 - [x] Run focused syntax/compile checks.
 
+### Agent API Module And Work Package Translation Timing
+
+Goal: split visual-agent chat backend behavior out of the web UI handler and
+make work-package helper translation update after the user leaves a prompt
+field, not on every keystroke.
+
+Planned changes:
+
+- [x] Add a focused backend module for the visual agent chat API.
+- [x] Keep `/api/agents/chat` behavior compatible through the existing UI
+  route.
+- [x] Update work-package textareas so draft text is stored during editing and
+  translation refresh waits for field blur.
+- [x] Run focused syntax and unit checks.
+
+Follow-up changes:
+
+- [x] Store edited work-package text together with its generated translation.
+- [x] Prefer saved field translations, then built-in dictionary translations,
+  then remote agent translation for unknown text.
+- [x] Persist generated translations when agent or preset settings are saved.
+
 ### Dispatcher Worker Model Defaults
 
 Goal: make real Codex dispatcher runs pass the selected worker model to Codex

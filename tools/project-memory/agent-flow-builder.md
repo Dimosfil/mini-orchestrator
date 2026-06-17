@@ -47,9 +47,21 @@ until a backend save/validate/run contract is implemented.
   - `expected output format`
 - The work-package editor shows a read-only translation next to each prompt
   field. The selected translation language is stored separately in browser
-  `localStorage`; translations are UI guidance only and are not persisted into
-  the agent flow JSON. Built-in preset text uses local dictionary translations,
-  while user-edited text can show an explicit unavailable-translation notice.
+  `localStorage`; translations are UI guidance only and must not be sent as
+  executable prompt fields. Built-in preset text uses local dictionary
+  translations.
+  Edited prompt text updates the settings draft while typing, but the visible
+  translation refreshes only after the textarea loses focus so typing is not
+  interrupted by immediate helper-text changes. If a changed text has no local
+  dictionary translation, the builder calls `/api/agents/translate-work-package`
+  after blur and replaces the helper text with the agent-generated translation
+  when it returns. Saving settings persists the edited work-package text and
+  its generated translation together under `workPackageTranslations`, so the
+  new text/translation pair becomes the current UI helper state.
+- Work-package translation is latency-sensitive UI helper behavior. The backend
+  should try a direct OpenAI Responses API translation first using
+  `MINI_ORCHESTRATOR_TRANSLATION_MODEL` (default `gpt-4.1-mini`) and fall back
+  to the dispatcher/Codex-agent path only when the direct client is unavailable.
 - Work-package fields are prompt text. They are stored with the visual card and
   should be passed to future orchestrator execution as a structured handoff
   package instead of forwarding the whole mini-chat history.
@@ -119,6 +131,11 @@ until a backend save/validate/run contract is implemented.
         "allowedTools": "Read-only inspection and planning.",
         "expectedOutput": "Objective, steps, risks, handoff, checklist."
       },
+      "workPackageTranslations": {
+        "ru": {
+          "instructions": "Перевод текущего текста role/instructions."
+        }
+      },
       "x": 360,
       "y": 90
     }
@@ -147,6 +164,7 @@ localStorage model as executable state:
 - `PUT /api/agent-flows/{id}`
 - `POST /api/agent-flows/{id}/validate`
 - `POST /api/agent-flows/{id}/run`
+- `POST /api/agents/translate-work-package`
 
 Validation should check:
 
@@ -163,5 +181,6 @@ plan -> execute -> validate lifecycle only after validation succeeds.
 ## Implementation Map
 
 - Backend static route: `mini_orchestrator/ui.py`
+- Visual agent chat API behavior: `mini_orchestrator/agent_api.py`
 - Main UI entry button: `mini_orchestrator/web/index.html`
 - Builder MVP page: `mini_orchestrator/web/agents-builder.html`

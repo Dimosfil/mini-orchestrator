@@ -20,6 +20,7 @@ class OrchestratorConfig:
     llm_provider: str = "auto"
     coordinator_model: str = "gpt-5.5"
     executor_model: str = "gpt-5.3-codex-spark"
+    translation_model: str = "gpt-4.1-mini"
     campaign_text_model: str = "gpt-5.5"
     campaign_image_model: str = "gpt-image-2"
     campaign_image_size: str = "1024x1024"
@@ -59,6 +60,7 @@ def parse_runtime_config(
         or os.environ.get("MINI_ORCHESTRATOR_COORDINATOR_MODEL", "gpt-5.5"),
         executor_model=executor_model
         or os.environ.get("MINI_ORCHESTRATOR_EXECUTOR_MODEL", "gpt-5.3-codex-spark"),
+        translation_model=os.environ.get("MINI_ORCHESTRATOR_TRANSLATION_MODEL", "gpt-4.1-mini"),
         campaign_text_model=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_TEXT_MODEL", "gpt-5.5"),
         campaign_image_model=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_MODEL", "gpt-image-2"),
         campaign_image_size=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_SIZE", "1024x1024"),

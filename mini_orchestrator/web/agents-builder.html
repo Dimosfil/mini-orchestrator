@@ -1346,6 +1346,7 @@
     let linkState = null;
     const chatHistories = new Map();
     const chatBusyAgents = new Set();
+    let translationRequestSerial = 0;
     const openMiniChats = new Set();
 
     const flow = loadFlow();
@@ -1394,6 +1395,7 @@
           speed: SPEED_OPTIONS.some(([option]) => option === raw.speed) ? raw.speed : preset.speed,
           reasoning: REASONING_OPTIONS.some(([option]) => option === raw.reasoning) ? raw.reasoning : preset.reasoning,
           workPackage: normalizeWorkPackage(raw.workPackage, presetKey),
+          workPackageTranslations: normalizeWorkPackageTranslations(raw.workPackageTranslations),
         };
       }
       return settings;
@@ -1420,6 +1422,7 @@
         speed: agent.speed || preset.speed,
         reasoning: agent.reasoning || preset.reasoning,
         workPackage: normalizeWorkPackage(agent.workPackage, presetKey),
+        workPackageTranslations: normalizeWorkPackageTranslations(agent.workPackageTranslations),
       };
     }
 
@@ -1460,6 +1463,32 @@
       return normalized;
     }
 
+    function normalizeWorkPackageTranslations(value) {
+      const normalized = {};
+      if (!value || typeof value !== "object") {
+        return normalized;
+      }
+      for (const [language] of TRANSLATION_LANGUAGE_OPTIONS) {
+        const languageValue = value[language];
+        if (!languageValue || typeof languageValue !== "object") {
+          continue;
+        }
+        const fields = {};
+        for (const [key] of WORK_PACKAGE_FIELDS) {
+          if (Object.prototype.hasOwnProperty.call(languageValue, key)) {
+            const text = String(languageValue[key] || "").trim();
+            if (text) {
+              fields[key] = text;
+            }
+          }
+        }
+        if (Object.keys(fields).length) {
+          normalized[language] = fields;
+        }
+      }
+      return normalized;
+    }
+
     function effectivePreset(presetKey) {
       const selectedPreset = normalizePresetKey(presetKey);
       const base = AGENT_PRESETS[selectedPreset] || AGENT_PRESETS.agent;
@@ -1470,6 +1499,7 @@
         speed: override.speed || base.speed,
         reasoning: override.reasoning || base.reasoning,
         workPackage: normalizeWorkPackage(override.workPackage || base.workPackage, selectedPreset),
+        workPackageTranslations: normalizeWorkPackageTranslations(override.workPackageTranslations),
       };
     }
 
@@ -1482,6 +1512,7 @@
         speed: source?.speed || AGENT_PRESETS[selectedPreset].speed,
         reasoning: source?.reasoning || AGENT_PRESETS[selectedPreset].reasoning,
         workPackage: normalizeWorkPackage(source?.workPackage, selectedPreset),
+        workPackageTranslations: normalizeWorkPackageTranslations(source?.workPackageTranslations),
       };
     }
 
@@ -1515,19 +1546,45 @@
       renderAgentSettings();
     }
 
-    function workPackageTranslation(text, language) {
+    function workPackageTranslation(text, language, fieldKey, savedTranslations = {}) {
       const source = String(text || "").trim();
       if (!source) {
-        return { text: "Пусто", missing: true };
+        return { text: "Пусто", missing: true, source: "empty" };
       }
       if (language === "en") {
-        return { text: source, missing: false };
+        return { text: source, missing: false, source: "original" };
+      }
+      const saved = String(savedTranslations?.[language]?.[fieldKey] || "").trim();
+      if (saved) {
+        return { text: saved, missing: false, source: "saved" };
       }
       const translated = WORK_PACKAGE_TRANSLATIONS[language]?.[source] || "";
       return {
         text: translated || "Нет перевода для изменённого текста.",
         missing: !translated,
+        source: translated ? "dictionary" : "missing",
       };
+    }
+    async function fetchWorkPackageTranslation(text, language, field, model) {
+      const response = await fetch("/api/agents/translate-work-package", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, language, field, model }),
+      });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch {
+        payload = {};
+      }
+      if (!response.ok) {
+        throw new Error(payload.error || `Translation failed with HTTP ${response.status}.`);
+      }
+      const translated = String(payload.text || "").trim();
+      if (!translated) {
+        throw new Error("Translation endpoint returned an empty response.");
+      }
+      return translated;
     }
 
     function modelLabel(value) {
@@ -1634,6 +1691,7 @@
           speed: agent.speed || "fast",
           reasoning: agent.reasoning || "low",
           workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
+          workPackageTranslations: normalizeWorkPackageTranslations(agent.workPackageTranslations),
           x: Math.round(rect.left - canvasRect.left),
           y: Math.round(rect.top - canvasRect.top),
         };
@@ -1737,6 +1795,7 @@
         speed: preset.speed,
         reasoning: preset.reasoning,
         workPackage: cloneWorkPackage(preset.workPackage),
+        workPackageTranslations: normalizeWorkPackageTranslations(preset.workPackageTranslations),
         x: 360 + (count % 3) * 42,
         y: 90 + (count % 4) * 54,
       };
@@ -1889,6 +1948,7 @@
         speed: preset.speed,
         reasoning: preset.reasoning,
         workPackage: cloneWorkPackage(preset.workPackage),
+        workPackageTranslations: normalizeWorkPackageTranslations(preset.workPackageTranslations),
       });
       if (!agent.name || AGENT_PRESET_OPTIONS.some(([, label]) => agent.name.startsWith(label))) {
         agent.name = preset.namePrefix;
@@ -2134,14 +2194,67 @@
         const translationCaption = document.createElement("strong");
         translationCaption.textContent = `Перевод: ${optionLabel(TRANSLATION_LANGUAGE_OPTIONS, selectedTranslationLanguage)}`;
         const translationText = document.createElement("span");
-        const refreshTranslation = () => {
-          const translated = workPackageTranslation(textarea.value, selectedTranslationLanguage);
+        let activeTranslationRequest = 0;
+        const applyTranslation = (translated) => {
           translationText.textContent = translated.text;
           translation.classList.toggle("muted", translated.missing);
         };
+        const refreshTranslation = async (options = {}) => {
+          const translated = workPackageTranslation(
+            textarea.value,
+            selectedTranslationLanguage,
+            key,
+            settingsDraft.workPackageTranslations,
+          );
+          applyTranslation(translated);
+          const source = String(textarea.value || "").trim();
+          if (!options.remote || !source || selectedTranslationLanguage === "en" || !translated.missing) {
+            return;
+          }
+          const requestId = ++translationRequestSerial;
+          activeTranslationRequest = requestId;
+          applyTranslation({ text: "\u041f\u0435\u0440\u0435\u0432\u043e\u0436\u0443...", missing: true });
+          try {
+            const remoteText = await fetchWorkPackageTranslation(
+              source,
+              selectedTranslationLanguage,
+              labelText,
+              settingsDraft.llm,
+            );
+            if (activeTranslationRequest === requestId && textarea.value.trim() === source) {
+              settingsDraft.workPackageTranslations = normalizeWorkPackageTranslations({
+                ...(settingsDraft.workPackageTranslations || {}),
+                [selectedTranslationLanguage]: {
+                  ...(settingsDraft.workPackageTranslations?.[selectedTranslationLanguage] || {}),
+                  [key]: remoteText,
+                },
+              });
+              applyTranslation({ text: remoteText, missing: false });
+            }
+          } catch (error) {
+            if (activeTranslationRequest === requestId && textarea.value.trim() === source) {
+              const message = error instanceof Error ? error.message : "translation failed";
+              applyTranslation({
+                text: `\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0435\u0440\u0435\u0432\u0435\u0441\u0442\u0438: ${message}`,
+                missing: true,
+              });
+            }
+          }
+        };
         textarea.addEventListener("input", () => {
           settingsDraft.workPackage[key] = textarea.value;
-          refreshTranslation();
+          for (const [language] of TRANSLATION_LANGUAGE_OPTIONS) {
+            if (settingsDraft.workPackageTranslations?.[language]) {
+              delete settingsDraft.workPackageTranslations[language][key];
+              if (!Object.keys(settingsDraft.workPackageTranslations[language]).length) {
+                delete settingsDraft.workPackageTranslations[language];
+              }
+            }
+          }
+        });
+        textarea.addEventListener("blur", () => {
+          settingsDraft.workPackage[key] = textarea.value;
+          refreshTranslation({ remote: true });
         });
         wrapper.append(caption, textarea);
         translation.append(translationCaption, translationText);
@@ -2182,6 +2295,7 @@
         speed: settingsDraft.speed,
         reasoning: settingsDraft.reasoning,
         workPackage: normalizeWorkPackage(settingsDraft.workPackage, settingsDraft.preset),
+        workPackageTranslations: normalizeWorkPackageTranslations(settingsDraft.workPackageTranslations),
       });
       render();
       persistFlow("Настройки агента сохранены.");
