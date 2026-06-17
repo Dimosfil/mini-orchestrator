@@ -134,6 +134,25 @@ Planned changes:
 Verification:
 
 - [x] Run focused dispatcher tests.
+
+### GI Config-Service UI Startup
+
+Goal: make the web UI obey GI config-service rules for runtime ports and
+service discovery.
+
+Planned changes:
+
+- [x] Add project-local runtime config with `service_id` and config-service
+  bootstrap behavior.
+- [x] Resolve UI host/port from live config-service before binding.
+- [x] Fail with a clear blocker when the service record is missing or
+  incomplete instead of guessing a fallback port.
+- [x] Document the startup contract and verification commands.
+
+Verification:
+
+- [x] Run compile checks.
+- [x] Verify missing `mini-orchestrator` service record blocks UI startup.
 - [x] Run syntax checks for dispatcher modules.
 
 ### Orchestrator Chat Command Contract
@@ -367,3 +386,49 @@ Verification:
 
 - [x] Run builder JavaScript syntax and DOM-invariant checks.
 - [x] Run Python compile check for the package.
+
+### Agent Card Mini Chat
+
+Goal: let the user test how each visual agent card talks through its selected
+LLM from the application UI.
+
+Planned changes:
+
+- [x] Add a backend chat endpoint for one agent card.
+- [x] Send selected `llm`, `role`, `speed`, and `reasoning` from the builder UI.
+- [x] Render a compact mini chat inside each agent card.
+- [x] Keep `rules` agents clearly non-LLM instead of pretending to call a model.
+
+Verification:
+
+- [x] Run focused syntax/compile checks.
+
+### Dispatcher Worker Model Defaults
+
+Goal: make real Codex dispatcher runs pass the selected worker model to Codex
+app-server by default.
+
+Planned changes:
+
+- [x] Make `--use-worker-models` the CLI default.
+- [x] Add `--use-codex-default-models` as the explicit opt-out.
+- [x] Update dispatcher documentation.
+
+Verification:
+
+- [x] Run focused dispatcher tests.
+
+### Agent Card Runtime Identity Debugging
+
+Goal: make each visual agent card show and return the selected model/runtime
+identity clearly enough to debug which LLM answered.
+
+Planned changes:
+
+- [x] Add a compact Codex-like model/reasoning badge to agent cards.
+- [x] Return speed/reasoning metadata from the agent mini-chat endpoint.
+- [x] Show model/speed/reasoning metadata beside mini-chat answers.
+
+Verification:
+
+- [x] Run focused syntax/compile checks.

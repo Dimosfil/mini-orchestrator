@@ -27,11 +27,33 @@ python -m mini_orchestrator --ui
 
 Optional flags:
 
-- `--host` (default `127.0.0.1`)
-- `--port` (default `8765`)
+- `--host` expected host; must match config-service
+- `--port` expected port; must match config-service
 - `--open-browser`
 
-Then open `http://127.0.0.1:8765`.
+The UI is a web-facing application, so startup follows GI config-service rules.
+Before binding a port it reads the configured GI config-service URL, verifies
+the service is reachable, then resolves its own service record:
+
+```text
+GET /services/mini-orchestrator
+```
+
+The host and port come from that record's `baseUrl`. If config-service is
+unavailable, the `mini-orchestrator` record is missing, or the record lacks
+`baseUrl`, `endpoints.availability`, or `endpoints.api`, startup stops with a
+clear blocker instead of guessing a fallback port.
+
+The project-local runtime selector is:
+
+```text
+tools/project-memory/service-runtime.json
+```
+
+The running UI exposes service-owned agent endpoints for future records:
+
+- `GET /agent/guide`
+- `GET /agent/contract`
 
 ## UI Workflow
 
@@ -71,6 +93,17 @@ This path uses the `plan -> execute -> validate` loop in `mini_orchestrator/`.
 The LLM coordinator is optional and falls back to rules unless OpenAI is
 configured.
 
+## Agent Builder Mini Chat
+
+The **Настройка агентов** page stores visual agent cards in browser
+`localStorage`. Each card includes a mini chat for checking how that card talks
+through its selected `llm`, `speed`, and `reasoning` settings. The mini chat is
+a test conversation only; it does not execute the saved visual flow.
+
+Mini chat requests call the application backend, which routes the message
+through `tools\codex-dispatcher\dispatcher.py` in real Codex app-server mode
+with the card's selected model. Cards set to `rules` do not call a live LLM.
+
 ## LLM Configuration
 
 - `OPENAI_API_KEY`
@@ -82,9 +115,12 @@ configured.
 ## API Endpoints
 
 - `GET /health` - health check
+- `GET /agent/guide` - agent-facing service guide
+- `GET /agent/contract` - strict service contract
 - `POST /api/run` - package-native orchestrator JSON workflow run
 - `POST /api/dispatcher/plan` - dispatcher plan preview
 - `POST /api/dispatcher/run` - approved local dispatcher workflow
+- `POST /api/agents/chat` - one-card mini chat through the selected model
 
 Plan preview request:
 

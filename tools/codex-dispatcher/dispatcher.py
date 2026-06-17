@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import tempfile
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -154,10 +155,46 @@ def write_event(log_path: Path, event_type: str, **payload: Any) -> None:
 
 def print_json(payload: dict[str, Any]) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2)
-    try:
-        print(text)
-    except UnicodeEncodeError:
-        print(json.dumps(payload, ensure_ascii=True, indent=2))
+    sys.stdout.buffer.write(text.encode("utf-8"))
+    sys.stdout.buffer.write(b"\n")
+    sys.stdout.buffer.flush()
+
+
+MOJIBAKE_MARKERS = (
+    "Рђ",
+    "Рџ",
+    "РЎ",
+    "Рќ",
+    "Рё",
+    "Рµ",
+    "СЃ",
+    "С‚",
+    "вЂ",
+    "в„",
+    "Â",
+)
+
+
+def mojibake_score(text: str) -> int:
+    return (text.count("\ufffd") * 8) + sum(text.count(marker) for marker in MOJIBAKE_MARKERS)
+
+
+def repair_text_encoding(text: str) -> str:
+    if not text:
+        return text
+
+    best = text
+    best_score = mojibake_score(text)
+    for source_encoding in ("cp1251", "latin1"):
+        try:
+            candidate = text.encode(source_encoding).decode("utf-8")
+        except UnicodeError:
+            continue
+        score = mojibake_score(candidate)
+        if score < best_score:
+            best = candidate
+            best_score = score
+    return best
 
 
 def read_instructions(worker: Worker) -> str:
@@ -439,7 +476,7 @@ class CodexAppServer:
                         chunks.append(text)
             if method == "turn/completed":
                 if not turn_id or params.get("turn", {}).get("id") == turn_id:
-                    return "".join(chunks).strip()
+                    return repair_text_encoding("".join(chunks).strip())
 
 
 def build_worker_prompt(worker: Worker, task: str, prior: str = "") -> str:
@@ -2006,6 +2043,7 @@ def load_worknest_task(project: str, config_service_url: str | None) -> WorkNest
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Codex-native dispatcher prototype.")
     parser.add_argument("--task", help="Task to classify and route to one dispatcher worker.")
+    parser.add_argument("--task-file", help="UTF-8 text file containing the task to classify and route.")
     parser.add_argument("--dry-run", action="store_true", help="Write dispatcher events without starting Codex.")
     parser.add_argument("--chain", action="store_true", help="Run planner -> executor -> reviewer instead of one selected worker.")
     parser.add_argument("--plan-only", action="store_true", help="Return only a chat approval plan without writing project files.")
@@ -2029,14 +2067,35 @@ def main() -> int:
     parser.add_argument("--project", default="mini-orchestrator", help="WorkNest project id for --from-worknest.")
     parser.add_argument("--config-service-url", help="Override GI config-service URL for manager discovery.")
     parser.add_argument("--codex-command", help="Path to the Codex CLI executable or command shim.")
-    parser.add_argument("--model", help="Override worker model labels; use with --use-worker-models to pass them to app-server.")
-    parser.add_argument("--use-worker-models", action="store_true", help="Pass worker model names to app-server instead of using Codex config defaults.")
+    parser.add_argument("--model", help="Override worker model labels passed to app-server.")
+    parser.add_argument(
+        "--use-worker-models",
+        dest="use_worker_models",
+        action="store_true",
+        default=True,
+        help="Pass worker model names to app-server. This is the default.",
+    )
+    parser.add_argument(
+        "--use-codex-default-models",
+        dest="use_worker_models",
+        action="store_false",
+        help="Do not pass worker model names; let Codex config choose the model.",
+    )
     parser.add_argument("--request-timeout-seconds", type=float, default=30, help="Timeout for app-server request responses.")
     parser.add_argument("--turn-timeout-seconds", type=float, default=90, help="Timeout for each agent turn.")
     args = parser.parse_args()
 
     started = time.time()
     task_text = args.task
+    if args.task_file:
+        task_path = Path(args.task_file)
+        if not task_path.is_absolute():
+            task_path = (ROOT / task_path).resolve()
+        resolved_task_path = task_path.resolve()
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        if not (path_is_inside(resolved_task_path, ROOT) or path_is_inside(resolved_task_path, temp_root)):
+            raise ValueError(f"--task-file must stay inside {ROOT} or {temp_root}. Got: {resolved_task_path}")
+        task_text = resolved_task_path.read_text(encoding="utf-8-sig")
     if args.from_worknest:
         worknest_task = load_worknest_task(args.project, args.config_service_url)
         task_text = f"{worknest_task.title}\n\nWhat to do:\n{worknest_task.what_to_do}\n\nDone when:\n{worknest_task.definition_of_done}"

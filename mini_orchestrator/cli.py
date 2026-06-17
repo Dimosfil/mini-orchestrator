@@ -6,6 +6,7 @@ import json
 
 from .config import parse_runtime_config
 from .orchestrator import Orchestrator
+from .service_discovery import ConfigServiceBlocker, resolve_ui_runtime
 from .ui import UiConfig, run_ui_server
 
 
@@ -64,8 +65,8 @@ def run_from_args(argv=None) -> int:
     )
     parser.add_argument("--chat", action="store_true", help="Start interactive chat mode")
     parser.add_argument("--ui", action="store_true", help="Start web UI mode")
-    parser.add_argument("--host", default="127.0.0.1", help="Host for UI mode")
-    parser.add_argument("--port", type=int, default=8765, help="Port for UI mode")
+    parser.add_argument("--host", default=None, help="Expected host for UI mode; must match config-service")
+    parser.add_argument("--port", type=int, default=None, help="Expected port for UI mode; must match config-service")
     parser.add_argument("--open-browser", action="store_true", help="Open browser when UI starts")
     parser.add_argument("--workdir", default=".", help="Workspace root for operations")
     parser.add_argument("--max-iterations", type=int, default=None, help="Maximum loop iterations")
@@ -99,9 +100,20 @@ def run_from_args(argv=None) -> int:
     orchestrator = Orchestrator(config=config, log_path=None if args.no_log else Path(args.log).resolve())
 
     if args.ui:
+        try:
+            runtime = resolve_ui_runtime(args.host, args.port)
+        except ConfigServiceBlocker as exc:
+            print(f"Config-service blocker: {exc}")
+            return 2
         return run_ui_server(
             orchestrator=orchestrator,
-            ui_config=UiConfig(host=args.host, port=args.port, open_browser=args.open_browser),
+            ui_config=UiConfig(
+                host=runtime.host,
+                port=runtime.port,
+                open_browser=args.open_browser,
+                service_id=runtime.service_id,
+                base_url=runtime.base_url,
+            ),
         )
 
     if args.chat:

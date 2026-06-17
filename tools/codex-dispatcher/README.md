@@ -44,6 +44,9 @@ tasks route to `executor`; explicit review/verification tasks route to
 - `reviewer`: `gpt-5.4-mini`, high reasoning
 
 The role instructions are sourced from `.codex/agents/*.toml`.
+Real Codex app-server runs pass the selected worker model by default. Use
+`--model <name>` to override all worker model labels for a run, or
+`--use-codex-default-models` to let the current Codex config choose the model.
 
 ## Usage
 

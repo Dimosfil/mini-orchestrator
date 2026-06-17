@@ -25,8 +25,11 @@ until a backend save/validate/run contract is implemented.
   - `x`
   - `y`
 - Supported MVP `llm` values include `gpt-5.5`, `gpt-5.4`,
-  `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5-mini`, `gpt-5`,
-  `gpt-4.1-mini`, and `rules`.
+  `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5`, `gpt-4.1-mini`,
+  and `rules`. The default is `gpt-5.5`.
+- Stored agent cards with an unsupported `llm` value are normalized to the
+  default on load so stale browser-local flows do not keep calling unsupported
+  models.
 - Supported MVP `speed` values are `fast`, `balanced`, and `careful`.
 - Supported MVP `reasoning` values are `low`, `medium`, `high`, and
   `very_high`.
@@ -54,6 +57,14 @@ until a backend save/validate/run contract is implemented.
   connections.
 - The sidebar shows a readable flow summary plus compact JSON preview instead
   of using a raw editable JSON textarea as the primary display.
+- Each card has a collapsed mini-chat button. Opening it reveals a message
+  window, text input, and send button for checking the selected agent style.
+  The mini chat calls `/api/agents/chat` only for live LLM models; `rules` cards
+  show a local fallback notice. Empty dispatcher output is an error and must be
+  shown in the mini chat instead of rendering a blank assistant message.
+- Mini-chat tasks with non-ASCII text are passed to the dispatcher through a
+  UTF-8 task file, and dispatcher JSON responses are written to stdout as UTF-8
+  bytes. This preserves Cyrillic user messages and agent responses on Windows.
 
 ## Flow Model
 
@@ -64,7 +75,7 @@ until a backend save/validate/run contract is implemented.
       "id": "agent-...",
       "name": "Planner 1",
       "role": "Planner",
-      "llm": "gpt-5-mini",
+      "llm": "gpt-5.5",
       "speed": "fast",
       "reasoning": "medium",
       "x": 360,
