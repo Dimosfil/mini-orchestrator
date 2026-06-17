@@ -100,6 +100,13 @@
       flex: 0 0 auto;
     }
 
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
     .dot {
       width: 9px;
       height: 9px;
@@ -430,9 +437,12 @@
         <h1>Mini Orchestrator</h1>
         <p class="subtitle">Планирование, подтверждение и локальный прогон демо-проекта через dispatcher.</p>
       </div>
-      <div class="status-pill" aria-live="polite">
-        <span id="status-dot" class="dot"></span>
-        <span id="status-text">Готов</span>
+      <div class="topbar-actions">
+        <button id="agents-builder-button" class="btn-secondary" type="button">Настройка агентов</button>
+        <div class="status-pill" aria-live="polite">
+          <span id="status-dot" class="dot"></span>
+          <span id="status-text">Готов</span>
+        </div>
       </div>
     </header>
 
@@ -509,6 +519,7 @@
 
   <script>
     const form = document.querySelector("#task-form");
+    const agentsBuilderButton = document.querySelector("#agents-builder-button");
     const taskInput = document.querySelector("#task");
     const planButton = document.querySelector("#plan-button");
     const coreButton = document.querySelector("#core-button");
@@ -683,6 +694,9 @@
     }
 
     form.addEventListener("submit", createPlan);
+    agentsBuilderButton.addEventListener("click", () => {
+      window.open("/agents-builder", "mini-orchestrator-agents-builder");
+    });
     runButton.addEventListener("click", runApprovedWorkflow);
     coreButton.addEventListener("click", runCoreOrchestrator);
     approval.addEventListener("change", () => {

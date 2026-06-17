@@ -154,6 +154,24 @@ Verification:
 - [x] Run focused dispatcher tests.
 - [x] Run dry-run smoke commands for planner-forced and default task routing.
 
+### Agent Settings Builder MVP
+
+Goal: add a visual agent-flow constructor to the Web UI.
+
+Planned changes:
+
+- [x] Add a main UI button that opens the agent settings builder.
+- [x] Add a dedicated builder page with a left control panel and central flow workspace.
+- [x] Add configurable agent cards with LLM, speed, and reasoning settings.
+- [x] Add draggable cards, connection ports, flexible arrows, and local JSON state.
+- [x] Document the next backend integration contract for saving, validating, and running flows.
+
+Verification:
+
+- [x] Run Python syntax checks.
+- [x] Smoke-check `/`, `/agents-builder`, and `/health`.
+- [x] Browser-check card creation, dragging, connecting, and local JSON state.
+
 ### Dispatcher Full Chain Increment
 
 Goal: add an explicit planner -> executor -> reviewer -> final dispatcher mode

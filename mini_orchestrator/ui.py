@@ -197,8 +197,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self._path()
-        if path in {"/", "/index.html"}:
-            file_path = self.web_root / "index.html"
+        static_pages = {
+            "/": "index.html",
+            "/index.html": "index.html",
+            "/agents-builder": "agents-builder.html",
+            "/agents-builder.html": "agents-builder.html",
+        }
+        if path in static_pages:
+            file_path = self.web_root / static_pages[path]
             if not file_path.exists():
                 self._http_error(500, "UI file missing.")
                 return
