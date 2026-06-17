@@ -955,13 +955,61 @@
       gap: 10px;
     }
 
+    .settings-toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .settings-toolbar .field {
+      width: min(240px, 100%);
+    }
+
     .work-package-grid {
       display: grid;
       gap: 10px;
     }
 
+    .work-package-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, 0.85fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+
     .work-package-grid textarea {
       min-height: 84px;
+    }
+
+    .translation-box {
+      display: grid;
+      gap: 5px;
+      align-content: start;
+      min-height: 84px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+
+    .translation-box strong {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+      text-transform: uppercase;
+    }
+
+    .translation-box span {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .translation-box.muted span {
+      color: var(--muted);
+      font-style: italic;
     }
 
     @media (max-width: 820px) {
@@ -996,6 +1044,18 @@
       }
 
       .settings-body {
+        grid-template-columns: 1fr;
+      }
+
+      .settings-toolbar {
+        justify-content: stretch;
+      }
+
+      .settings-toolbar .field {
+        width: 100%;
+      }
+
+      .work-package-row {
         grid-template-columns: 1fr;
       }
     }
@@ -1096,6 +1156,7 @@
 
   <script>
     const STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
+    const TRANSLATION_LANGUAGE_STORAGE_KEY = "mini-orchestrator-agent-translation-language";
     const DEFAULT_LLM = "gpt-5.5";
     const MODEL_OPTIONS = [
       ["gpt-5.5", "GPT-5.5"],
@@ -1125,6 +1186,10 @@
       ["previousOutputs", "previous agent outputs"],
       ["allowedTools", "allowed tools/actions"],
       ["expectedOutput", "expected output format"],
+    ];
+    const TRANSLATION_LANGUAGE_OPTIONS = [
+      ["ru", "Русский"],
+      ["en", "English (original)"],
     ];
     const AGENT_PRESETS = {
       planner: {
@@ -1218,6 +1283,39 @@
         },
       },
     };
+    const WORK_PACKAGE_TRANSLATIONS = {
+      ru: {
+        "Turn rough user intent into a scoped plan, assumptions, risks, and a handoff for execution.": "Преобразует черновое намерение пользователя в ограниченный план, допущения, риски и передачу в исполнение.",
+        "Clarify what should be built or changed before any file edits happen.": "Уточнить, что нужно создать или изменить, до любых правок файлов.",
+        "User request, selected workflow, relevant project docs, prior approved decisions.": "Запрос пользователя, выбранный workflow, релевантные проектные документы, ранее утверждённые решения.",
+        "Do not edit files during planning. Keep scope small and ask for approval when needed.": "Не редактировать файлы во время планирования. Держать scope небольшим и запрашивать approval при необходимости.",
+        "Use prior coordinator summaries only when they are current and task-relevant.": "Использовать предыдущие summary координатора только если они актуальны и относятся к задаче.",
+        "Read-only inspection, planning, risk analysis, handoff drafting.": "Инспекция только на чтение, планирование, анализ рисков, подготовка handoff.",
+        "Objective, proposed steps, risks, executor handoff, reviewer checklist.": "Цель, предложенные шаги, риски, handoff для исполнителя, checklist для ревьюера.",
+        "Perform bounded technical steps from an approved plan and report the exact result.": "Выполняет ограниченные технические шаги из утверждённого плана и сообщает точный результат.",
+        "Implement the approved change with minimal unrelated movement.": "Реализовать утверждённое изменение с минимальными несвязанными правками.",
+        "Approved plan, target files, existing tests, current source code.": "Утверждённый план, целевые файлы, существующие тесты, текущий исходный код.",
+        "Do not expand scope. Preserve user changes. Stop on unsafe ambiguity.": "Не расширять scope. Сохранять изменения пользователя. Остановиться при небезопасной неоднозначности.",
+        "Planner output and any accepted user clarification.": "Вывод Planner и любые принятые уточнения пользователя.",
+        "Read files, edit scoped files, run focused verification commands.": "Читать файлы, редактировать файлы в scope, запускать сфокусированные проверки.",
+        "Changed files, important implementation notes, verification results, blockers if any.": "Изменённые файлы, важные заметки по реализации, результаты проверки, blockers при наличии.",
+        "Review the implemented result for bugs, regressions, missing tests, and contract drift.": "Проверяет реализованный результат на bugs, regressions, отсутствующие тесты и отклонения от contract.",
+        "Validate whether the executor output satisfies the approved plan.": "Проверить, соответствует ли вывод Executor утверждённому плану.",
+        "Planner output, executor output, diffs, tests, relevant contracts.": "Вывод Planner, вывод Executor, diffs, tests, релевантные contracts.",
+        "Prioritize concrete findings with file or behavior references.": "Приоритизировать конкретные findings со ссылками на файлы или поведение.",
+        "Planner and executor outputs from this run.": "Выводы Planner и Executor из этого запуска.",
+        "Read files, inspect diffs, run focused checks, summarize review findings.": "Читать файлы, inspect diffs, запускать сфокусированные checks, summarise review findings.",
+        "Findings first, residual risk, verification notes, final recommendation.": "Сначала findings, затем residual risk, verification notes, final recommendation.",
+        "Act as a configurable workflow agent for one bounded step.": "Действует как настраиваемый workflow-agent для одного ограниченного шага.",
+        "Complete the assigned step from the orchestrator handoff.": "Выполнить назначенный шаг из handoff оркестратора.",
+        "Current task package and connected upstream outputs.": "Текущий task package и связанные upstream outputs.",
+        "Stay within the selected tools, prompt, and workflow branch.": "Оставаться в рамках выбранных tools, prompt и ветки workflow.",
+        "Use only previous outputs supplied by the orchestrator for this run.": "Использовать только previous outputs, переданные оркестратором для этого запуска.",
+        "Configured per workflow.": "Настраивается для каждого workflow.",
+        "Concise result for the next workflow step.": "Краткий результат для следующего шага workflow.",
+        "Write custom role instructions for this agent.": "Написать пользовательские role instructions для этого агента.",
+      },
+    };
     const AGENT_PRESET_OPTIONS = Object.entries(AGENT_PRESETS).map(([value, preset]) => [value, preset.label]);
     const canvas = document.querySelector("#canvas");
     const svg = document.querySelector("#connections");
@@ -1243,6 +1341,7 @@
     let settingsMode = "";
     let settingsPresetKey = "";
     let settingsDraft = null;
+    let selectedTranslationLanguage = loadTranslationLanguage();
     let dragState = null;
     let linkState = null;
     const chatHistories = new Map();
@@ -1392,6 +1491,43 @@
         return value || "";
       }
       return Array.isArray(match) ? match[1] : match;
+    }
+
+    function normalizeTranslationLanguage(value) {
+      return TRANSLATION_LANGUAGE_OPTIONS.some(([option]) => option === value) ? value : "ru";
+    }
+
+    function loadTranslationLanguage() {
+      try {
+        return normalizeTranslationLanguage(localStorage.getItem(TRANSLATION_LANGUAGE_STORAGE_KEY));
+      } catch {
+        return "ru";
+      }
+    }
+
+    function saveTranslationLanguage(value) {
+      selectedTranslationLanguage = normalizeTranslationLanguage(value);
+      try {
+        localStorage.setItem(TRANSLATION_LANGUAGE_STORAGE_KEY, selectedTranslationLanguage);
+      } catch {
+        // Browser storage can be unavailable in private or restricted contexts.
+      }
+      renderAgentSettings();
+    }
+
+    function workPackageTranslation(text, language) {
+      const source = String(text || "").trim();
+      if (!source) {
+        return { text: "Пусто", missing: true };
+      }
+      if (language === "en") {
+        return { text: source, missing: false };
+      }
+      const translated = WORK_PACKAGE_TRANSLATIONS[language]?.[source] || "";
+      return {
+        text: translated || "Нет перевода для изменённого текста.",
+        missing: !translated,
+      };
     }
 
     function modelLabel(value) {
@@ -1979,22 +2115,41 @@
 
       const packagePanel = document.createElement("section");
       packagePanel.className = "settings-panel";
+      const packageToolbar = document.createElement("div");
+      packageToolbar.className = "settings-toolbar";
+      packageToolbar.append(selectField("Язык перевода", selectedTranslationLanguage, TRANSLATION_LANGUAGE_OPTIONS, saveTranslationLanguage));
       const packageGrid = document.createElement("div");
       packageGrid.className = "work-package-grid";
       for (const [key, labelText] of WORK_PACKAGE_FIELDS) {
+        const row = document.createElement("div");
+        row.className = "work-package-row";
         const wrapper = document.createElement("label");
         wrapper.className = "field";
         const caption = document.createElement("span");
         caption.textContent = labelText;
         const textarea = document.createElement("textarea");
         textarea.value = settingsDraft.workPackage[key] || "";
+        const translation = document.createElement("div");
+        translation.className = "translation-box";
+        const translationCaption = document.createElement("strong");
+        translationCaption.textContent = `Перевод: ${optionLabel(TRANSLATION_LANGUAGE_OPTIONS, selectedTranslationLanguage)}`;
+        const translationText = document.createElement("span");
+        const refreshTranslation = () => {
+          const translated = workPackageTranslation(textarea.value, selectedTranslationLanguage);
+          translationText.textContent = translated.text;
+          translation.classList.toggle("muted", translated.missing);
+        };
         textarea.addEventListener("input", () => {
           settingsDraft.workPackage[key] = textarea.value;
+          refreshTranslation();
         });
         wrapper.append(caption, textarea);
-        packageGrid.append(wrapper);
+        translation.append(translationCaption, translationText);
+        refreshTranslation();
+        row.append(wrapper, translation);
+        packageGrid.append(row);
       }
-      packagePanel.append(packageGrid);
+      packagePanel.append(packageToolbar, packageGrid);
       settingsBody.replaceChildren(runtimePanel, packagePanel);
     }
 

@@ -45,6 +45,11 @@ until a backend save/validate/run contract is implemented.
   - `previous agent outputs`
   - `allowed tools/actions`
   - `expected output format`
+- The work-package editor shows a read-only translation next to each prompt
+  field. The selected translation language is stored separately in browser
+  `localStorage`; translations are UI guidance only and are not persisted into
+  the agent flow JSON. Built-in preset text uses local dictionary translations,
+  while user-edited text can show an explicit unavailable-translation notice.
 - Work-package fields are prompt text. They are stored with the visual card and
   should be passed to future orchestrator execution as a structured handoff
   package instead of forwarding the whole mini-chat history.
