@@ -17,9 +17,9 @@ WorkNest intake:
 Bring the mini-orchestrator runtime closer to GI rules without changing the
 user-visible workflow in one risky rewrite.
 
-The sprint should preserve the current Python UI, dispatcher contract, local
-demo workflow, and agent builder behavior while reducing hidden coupling and
-making runtime boundaries explicit.
+The original sprint preserved the local demo workflow. The release architecture
+follow-up removes that demo workflow from the active dispatcher surface while
+preserving the Python UI, dispatcher contract, and agent builder behavior.
 
 ## Work Order
 
@@ -101,11 +101,9 @@ Target module boundaries:
 - `events`: event types, JSONL writer, protocol validation.
 - `codex_app`: Codex app-server transport and turn collection.
 - `prompts`: worker prompt and plan-only prompt builders.
-- `local_demo`: local demo selection, generated project writers, smoke/review
-  loop.
 - `worknest_client`: task-manager discovery and WorkNest intake/completion.
-- `pipeline`: orchestration modes that compose routing, events, codex transport,
-  local demo, and WorkNest.
+- `pipeline`: orchestration modes that compose routing, events, and Codex
+  transport.
 - `cli`: argument parsing and final JSON output.
 
 Communication rule:
@@ -114,7 +112,7 @@ Communication rule:
   runner, and Codex transport.
 - Use narrow signal/event objects for pipeline progress instead of modules
   importing each other's internals.
-- Keep generated demo project templates behind the local-demo boundary.
+- Do not keep local demo project templates in the release dispatcher.
 
 Definition of done:
 
@@ -180,10 +178,13 @@ Date: 2026-06-17
   blockers, timeout handling, and focused tests.
 - `/api/campaign` is removed from active UI routing; the service contract stays
   focused on core run, dispatcher plan/run, and agent mini chat.
-- `/api/dispatcher/plan` supports explicit `mode: "demo"` and `mode: "real"`;
-  real mode calls dispatcher `--plan-only` without `--dry-run`.
+- `/api/dispatcher/plan` supports explicit `mode: "dry-run"` and
+  `mode: "real"`; real mode calls dispatcher `--plan-only` without `--dry-run`.
 - Dispatcher now delegates models, routing, events, prompts, and command
   execution to focused modules while preserving the existing CLI/test surface.
+- Release follow-up delegates Codex app-server transport, pipeline orchestration,
+  WorkNest task loading, and CLI parsing to focused modules, and removes local
+  calculator/CRM demo generation from active dispatcher code.
 - `launch-desk/` is documented as legacy/experimental with GI startup caveats.
   Current Launch Desk check blocker: backend/frontend `tsc.cmd` and
   `vitest.cmd` shims are missing until dependencies are restored.

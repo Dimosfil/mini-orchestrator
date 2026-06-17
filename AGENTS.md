@@ -65,16 +65,14 @@ mini-orchestrator chat commands. For early tests, run the Codex dispatcher full
 chain in dry-run mode unless the user explicitly asks to launch a real Codex
 worker:
 `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain --dry-run`.
-If the user explicitly asks for a real bounded test/demo project, prefer the
-local constrained project mode before launching a broad Codex worker:
-`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --local-test-project`.
+If the user explicitly asks for a real approved workflow, run the release
+dispatcher chain through Codex app-server:
+`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain`.
 For chat-gated plan commands, first return only the planner proposal in chat:
 `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --plan-only`.
 Do not create files from that plan until the user explicitly approves it. After
-approval, run the approved local workflow with `--local-test-project`; it must
-iterate executor -> test/review until checks pass or the configured iteration
-limit is reached, then report final status, launch/smoke the application, and
-run UI smoke checks for demo projects that expose a browser interface.
+approval, run the approved release workflow with `--chain`; it routes planner
+-> executor -> reviewer through Codex app-server and returns final role outputs.
 The command `оркестратор план <task>` / `orchestrator plan <task>` starts from a
 planner-directed task; `оркестратор исполнитель <task>` / `orchestrator executor
 <task>` starts from an executor-directed task; `оркестратор ревью <task>` /

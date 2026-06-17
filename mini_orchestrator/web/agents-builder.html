@@ -229,6 +229,76 @@
       color: #ffffff;
     }
 
+    .preset-picker {
+      display: grid;
+      gap: 8px;
+    }
+
+    .preset-preview {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .preset-preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .preset-preview-title {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .preset-preview-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex: 0 0 auto;
+    }
+
+    .preset-preview-role {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .preset-preview-meta {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .preset-preview-package {
+      display: grid;
+      gap: 4px;
+      max-height: 132px;
+      overflow: auto;
+      padding-top: 7px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .preset-preview-package strong {
+      color: var(--text);
+      font-size: 11px;
+    }
+
     .swatch {
       width: 14px;
       height: 14px;
@@ -369,6 +439,13 @@
       font-weight: 700;
     }
 
+    .agent-card-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
     .runtime-pill {
       display: inline-flex;
       align-items: center;
@@ -394,6 +471,28 @@
       background: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
       flex: 0 0 auto;
+    }
+
+    .work-package-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: #f8fafb;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .work-package-pill:hover {
+      border-color: var(--accent);
+      color: var(--text);
     }
 
     .card-body {
@@ -787,6 +886,84 @@
       display: grid;
     }
 
+    .settings-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(28, 38, 48, 0.38);
+    }
+
+    .settings-backdrop[hidden] {
+      display: none;
+    }
+
+    .settings-dialog {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      width: min(820px, 100%);
+      max-height: min(820px, calc(100vh - 48px));
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .settings-head,
+    .settings-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .settings-foot {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
+
+    .settings-title {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .settings-title strong {
+      font-size: 15px;
+    }
+
+    .settings-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .settings-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+      gap: 14px;
+      overflow: auto;
+      padding: 14px 16px;
+    }
+
+    .settings-panel {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .work-package-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .work-package-grid textarea {
+      min-height: 84px;
+    }
+
     @media (max-width: 820px) {
       body {
         overflow: auto;
@@ -817,6 +994,10 @@
       .canvas {
         min-height: 680px;
       }
+
+      .settings-body {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -837,8 +1018,13 @@
       <aside class="sidebar" aria-label="Контролы конструктора">
         <section class="section">
           <h2>Добавить агента</h2>
-          <div class="palette">
-            <button class="add-agent-button" type="button" data-add-agent="Agent">Добавить агента</button>
+          <div class="preset-picker">
+            <div class="field">
+              <label for="agent-preset-select">Пресет</label>
+              <select id="agent-preset-select"></select>
+            </div>
+            <div id="agent-preset-preview" class="preset-preview" aria-live="polite"></div>
+            <button id="add-agent" class="add-agent-button" type="button">Добавить агента</button>
           </div>
         </section>
 
@@ -888,6 +1074,26 @@
     </section>
   </main>
 
+  <div id="agent-settings" class="settings-backdrop" hidden>
+    <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="settings-head">
+        <div class="settings-title">
+          <strong id="settings-title">Настройки агента</strong>
+          <span id="settings-subtitle">Пресет и рабочий пакет</span>
+        </div>
+        <button id="close-settings" class="card-delete" type="button" aria-label="Закрыть">×</button>
+      </header>
+      <div id="settings-body" class="settings-body"></div>
+      <footer class="settings-foot">
+        <span class="status-line">Рабочий пакет сохраняется вместе с карточкой.</span>
+        <div class="actions">
+          <button id="cancel-settings" class="btn-secondary" type="button">Отмена</button>
+          <button id="save-settings" class="btn-primary" type="button">Сохранить</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+
   <script>
     const STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
     const DEFAULT_LLM = "gpt-5.5";
@@ -900,6 +1106,119 @@
       ["gpt-4.1-mini", "gpt-4.1-mini"],
       ["rules", "rules fallback"],
     ];
+    const SPEED_OPTIONS = [
+      ["fast", "Быстро"],
+      ["balanced", "Средне"],
+      ["careful", "Аккуратно"],
+    ];
+    const REASONING_OPTIONS = [
+      ["low", "Низкий"],
+      ["medium", "Средний"],
+      ["high", "Высокий"],
+      ["very_high", "Очень высокий"],
+    ];
+    const WORK_PACKAGE_FIELDS = [
+      ["instructions", "role/instructions"],
+      ["currentObjective", "current objective"],
+      ["inputsArtifacts", "inputs/artifacts"],
+      ["constraints", "constraints"],
+      ["previousOutputs", "previous agent outputs"],
+      ["allowedTools", "allowed tools/actions"],
+      ["expectedOutput", "expected output format"],
+    ];
+    const AGENT_PRESETS = {
+      planner: {
+        label: "Planner",
+        role: "Planner",
+        namePrefix: "Planner",
+        llm: DEFAULT_LLM,
+        speed: "balanced",
+        reasoning: "high",
+        color: "#256f6c",
+        workPackage: {
+          instructions: "Turn rough user intent into a scoped plan, assumptions, risks, and a handoff for execution.",
+          currentObjective: "Clarify what should be built or changed before any file edits happen.",
+          inputsArtifacts: "User request, selected workflow, relevant project docs, prior approved decisions.",
+          constraints: "Do not edit files during planning. Keep scope small and ask for approval when needed.",
+          previousOutputs: "Use prior coordinator summaries only when they are current and task-relevant.",
+          allowedTools: "Read-only inspection, planning, risk analysis, handoff drafting.",
+          expectedOutput: "Objective, proposed steps, risks, executor handoff, reviewer checklist.",
+        },
+      },
+      executor: {
+        label: "Executor",
+        role: "Executor",
+        namePrefix: "Executor",
+        llm: DEFAULT_LLM,
+        speed: "fast",
+        reasoning: "medium",
+        color: "#2f6690",
+        workPackage: {
+          instructions: "Perform bounded technical steps from an approved plan and report the exact result.",
+          currentObjective: "Implement the approved change with minimal unrelated movement.",
+          inputsArtifacts: "Approved plan, target files, existing tests, current source code.",
+          constraints: "Do not expand scope. Preserve user changes. Stop on unsafe ambiguity.",
+          previousOutputs: "Planner output and any accepted user clarification.",
+          allowedTools: "Read files, edit scoped files, run focused verification commands.",
+          expectedOutput: "Changed files, important implementation notes, verification results, blockers if any.",
+        },
+      },
+      reviewer: {
+        label: "Reviewer",
+        role: "Reviewer",
+        namePrefix: "Reviewer",
+        llm: DEFAULT_LLM,
+        speed: "careful",
+        reasoning: "high",
+        color: "#a06100",
+        workPackage: {
+          instructions: "Review the implemented result for bugs, regressions, missing tests, and contract drift.",
+          currentObjective: "Validate whether the executor output satisfies the approved plan.",
+          inputsArtifacts: "Planner output, executor output, diffs, tests, relevant contracts.",
+          constraints: "Prioritize concrete findings with file or behavior references.",
+          previousOutputs: "Planner and executor outputs from this run.",
+          allowedTools: "Read files, inspect diffs, run focused checks, summarize review findings.",
+          expectedOutput: "Findings first, residual risk, verification notes, final recommendation.",
+        },
+      },
+      agent: {
+        label: "Agent",
+        role: "Agent",
+        namePrefix: "Agent",
+        llm: DEFAULT_LLM,
+        speed: "fast",
+        reasoning: "low",
+        color: "#256f6c",
+        workPackage: {
+          instructions: "Act as a configurable workflow agent for one bounded step.",
+          currentObjective: "Complete the assigned step from the orchestrator handoff.",
+          inputsArtifacts: "Current task package and connected upstream outputs.",
+          constraints: "Stay within the selected tools, prompt, and workflow branch.",
+          previousOutputs: "Use only previous outputs supplied by the orchestrator for this run.",
+          allowedTools: "Configured per workflow.",
+          expectedOutput: "Concise result for the next workflow step.",
+        },
+      },
+      custom: {
+        label: "Custom",
+        role: "Custom",
+        namePrefix: "Custom Agent",
+        llm: DEFAULT_LLM,
+        speed: "balanced",
+        reasoning: "medium",
+        color: "#617183",
+        workPackage: {
+          instructions: "Write custom role instructions for this agent.",
+          currentObjective: "",
+          inputsArtifacts: "",
+          constraints: "",
+          previousOutputs: "",
+          allowedTools: "",
+          expectedOutput: "",
+        },
+      },
+    };
+    const AGENT_PRESET_OPTIONS = Object.entries(AGENT_PRESETS).map(([value, preset]) => [value, preset.label]);
     const canvas = document.querySelector("#canvas");
     const svg = document.querySelector("#connections");
     const emptyState = document.querySelector("#empty-state");
@@ -911,8 +1230,19 @@
     const connectionPort = document.querySelector("#connection-port");
     const connectionTo = document.querySelector("#connection-to");
     const statusLine = document.querySelector("#status-line");
+    const addAgentButton = document.querySelector("#add-agent");
+    const agentPresetSelect = document.querySelector("#agent-preset-select");
+    const agentPresetPreview = document.querySelector("#agent-preset-preview");
+    const settingsBackdrop = document.querySelector("#agent-settings");
+    const settingsBody = document.querySelector("#settings-body");
+    const settingsTitle = document.querySelector("#settings-title");
+    const settingsSubtitle = document.querySelector("#settings-subtitle");
     let selectedAgentId = "";
     let selectedConnectionId = "";
+    let settingsAgentId = "";
+    let settingsMode = "";
+    let settingsPresetKey = "";
+    let settingsDraft = null;
     let dragState = null;
     let linkState = null;
     const chatHistories = new Map();
@@ -926,6 +1256,7 @@
         agents: [],
         connections: [],
         nextAgentNumber: 1,
+        presetSettings: {},
       };
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -940,10 +1271,33 @@
           agents: parsed.agents.map(normalizeAgent),
           connections: parsed.connections.map(normalizeConnection),
           nextAgentNumber: Number(parsed.nextAgentNumber || parsed.agents.length + 1),
+          presetSettings: normalizePresetSettings(parsed.presetSettings),
         };
       } catch {
         return fallback;
       }
+    }
+
+    function normalizePresetSettings(value) {
+      const settings = {};
+      if (!value || typeof value !== "object") {
+        return settings;
+      }
+      for (const key of Object.keys(value)) {
+        const presetKey = normalizePresetKey(key);
+        const preset = AGENT_PRESETS[presetKey];
+        const raw = value[key];
+        if (!preset || !raw || typeof raw !== "object") {
+          continue;
+        }
+        settings[presetKey] = {
+          llm: MODEL_OPTIONS.some(([option]) => option === raw.llm) ? raw.llm : preset.llm,
+          speed: SPEED_OPTIONS.some(([option]) => option === raw.speed) ? raw.speed : preset.speed,
+          reasoning: REASONING_OPTIONS.some(([option]) => option === raw.reasoning) ? raw.reasoning : preset.reasoning,
+          workPackage: normalizeWorkPackage(raw.workPackage, presetKey),
+        };
+      }
+      return settings;
     }
 
     function normalizeConnection(connection) {
@@ -957,9 +1311,78 @@
 
     function normalizeAgent(agent) {
       const llm = MODEL_OPTIONS.some(([value]) => value === agent.llm) ? agent.llm : DEFAULT_LLM;
+      const presetKey = normalizePresetKey(agent.preset || agent.role);
+      const preset = AGENT_PRESETS[presetKey];
       return {
         ...agent,
+        preset: presetKey,
+        role: agent.role || preset.role,
         llm,
+        speed: agent.speed || preset.speed,
+        reasoning: agent.reasoning || preset.reasoning,
+        workPackage: normalizeWorkPackage(agent.workPackage, presetKey),
+      };
+    }
+
+    function normalizePresetKey(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (AGENT_PRESETS[normalized]) {
+        return normalized;
+      }
+      if (normalized === "planner") {
+        return "planner";
+      }
+      if (normalized === "executor") {
+        return "executor";
+      }
+      if (normalized === "reviewer") {
+        return "reviewer";
+      }
+      if (normalized === "custom") {
+        return "custom";
+      }
+      return "agent";
+    }
+
+    function cloneWorkPackage(workPackage) {
+      return Object.fromEntries(WORK_PACKAGE_FIELDS.map(([key]) => [key, String(workPackage?.[key] || "")]));
+    }
+
+    function normalizeWorkPackage(workPackage, presetKey) {
+      const preset = AGENT_PRESETS[presetKey] || AGENT_PRESETS.agent;
+      const normalized = cloneWorkPackage(preset.workPackage);
+      if (workPackage && typeof workPackage === "object") {
+        for (const [key] of WORK_PACKAGE_FIELDS) {
+          if (Object.prototype.hasOwnProperty.call(workPackage, key)) {
+            normalized[key] = String(workPackage[key] || "");
+          }
+        }
+      }
+      return normalized;
+    }
+
+    function effectivePreset(presetKey) {
+      const selectedPreset = normalizePresetKey(presetKey);
+      const base = AGENT_PRESETS[selectedPreset] || AGENT_PRESETS.agent;
+      const override = flow?.presetSettings?.[selectedPreset] || {};
+      return {
+        ...base,
+        llm: override.llm || base.llm,
+        speed: override.speed || base.speed,
+        reasoning: override.reasoning || base.reasoning,
+        workPackage: normalizeWorkPackage(override.workPackage || base.workPackage, selectedPreset),
+      };
+    }
+
+    function cloneAgentSettings(source, presetKey) {
+      const selectedPreset = normalizePresetKey(presetKey || source?.preset || source?.role);
+      return {
+        preset: selectedPreset,
+        role: source?.role || AGENT_PRESETS[selectedPreset].role,
+        llm: source?.llm || AGENT_PRESETS[selectedPreset].llm,
+        speed: source?.speed || AGENT_PRESETS[selectedPreset].speed,
+        reasoning: source?.reasoning || AGENT_PRESETS[selectedPreset].reasoning,
+        workPackage: normalizeWorkPackage(source?.workPackage, selectedPreset),
       };
     }
 
@@ -976,20 +1399,11 @@
     }
 
     function reasoningLabel(value) {
-      return optionLabel([
-        ["low", "Низкий"],
-        ["medium", "Средний"],
-        ["high", "Высокий"],
-        ["very_high", "Очень высокий"],
-      ], value);
+      return optionLabel(REASONING_OPTIONS, value);
     }
 
     function speedLabel(value) {
-      return optionLabel([
-        ["fast", "Быстро"],
-        ["balanced", "Средне"],
-        ["careful", "Аккуратно"],
-      ], value);
+      return optionLabel(SPEED_OPTIONS, value);
     }
 
     function runtimeLabel(agent) {
@@ -1001,6 +1415,65 @@
 
     function responseRuntimeMeta(agent) {
       return `${agent.name || "Agent"} · ${runtimeLabel(agent)}`;
+    }
+
+    function renderPresetPreview() {
+      const presetKey = normalizePresetKey(agentPresetSelect.value || "agent");
+      const preset = effectivePreset(presetKey);
+      const previewAgent = {
+        llm: preset.llm,
+        speed: preset.speed,
+        reasoning: preset.reasoning,
+      };
+
+      const head = document.createElement("div");
+      head.className = "preset-preview-head";
+      const title = document.createElement("div");
+      title.className = "preset-preview-title";
+      title.textContent = preset.label;
+      const role = document.createElement("div");
+      role.className = "preset-preview-role";
+      role.textContent = preset.role;
+      const actions = document.createElement("div");
+      actions.className = "preset-preview-actions";
+      const settingsButton = document.createElement("button");
+      settingsButton.className = "toolbar-icon";
+      settingsButton.type = "button";
+      settingsButton.title = "Настройки пресета";
+      settingsButton.ariaLabel = "Настройки пресета";
+      settingsButton.textContent = "⚙";
+      settingsButton.addEventListener("click", () => openPresetSettings(presetKey));
+      actions.append(role, settingsButton);
+      head.append(title, actions);
+
+      const meta = document.createElement("div");
+      meta.className = "preset-preview-meta";
+      const runtime = document.createElement("div");
+      runtime.textContent = runtimeLabel(previewAgent);
+      const namePrefix = document.createElement("div");
+      namePrefix.textContent = `Имя: ${preset.namePrefix} N`;
+      meta.append(runtime, namePrefix);
+
+      const packagePreview = document.createElement("div");
+      packagePreview.className = "preset-preview-package";
+      for (const [key, labelText] of WORK_PACKAGE_FIELDS) {
+        const value = String(preset.workPackage?.[key] || "").trim();
+        if (!value) {
+          continue;
+        }
+        const line = document.createElement("div");
+        const caption = document.createElement("strong");
+        caption.textContent = `${labelText}: `;
+        line.append(caption, document.createTextNode(value.length > 110 ? `${value.slice(0, 110)}...` : value));
+        packagePreview.append(line);
+      }
+      if (!packagePreview.childElementCount) {
+        const empty = document.createElement("div");
+        empty.textContent = "Рабочий пакет пустой, его можно заполнить в настройках карточки.";
+        packagePreview.append(empty);
+      }
+
+      agentPresetPreview.replaceChildren(head, meta, packagePreview);
     }
 
     function persistFlow(message = "Сохранено локально.") {
@@ -1016,14 +1489,15 @@
         const agent = getAgent(card.dataset.agentId) || {};
         const rect = card.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
-        const fields = card.querySelectorAll("select");
         return {
           id: card.dataset.agentId,
           name: card.querySelector(".agent-name")?.value || agent.name || "Agent",
+          preset: agent.preset || "agent",
           role: agent.role || "Agent",
-          llm: fields[0]?.value || agent.llm || DEFAULT_LLM,
-          speed: fields[1]?.value || agent.speed || "fast",
-          reasoning: fields[2]?.value || agent.reasoning || "low",
+          llm: agent.llm || DEFAULT_LLM,
+          speed: agent.speed || "fast",
+          reasoning: agent.reasoning || "low",
+          workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
           x: Math.round(rect.left - canvasRect.left),
           y: Math.round(rect.top - canvasRect.top),
         };
@@ -1035,6 +1509,7 @@
           .filter((connection) => agentIds.has(connection.fromAgentId) && agentIds.has(connection.toAgentId))
           .map(normalizeConnection),
         nextAgentNumber: flow.nextAgentNumber,
+        presetSettings: normalizePresetSettings(flow.presetSettings),
       };
     }
 
@@ -1055,8 +1530,9 @@
           const success = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "success").length;
           const failure = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "failure").length;
           return [
-            agent.name || agent.role,
+            `${agent.name || agent.role} (${optionLabel(AGENT_PRESET_OPTIONS, agent.preset)})`,
             `${agent.llm} | скорость: ${agent.speed} | размышление: ${agent.reasoning}`,
+            `рабочий пакет: ${WORK_PACKAGE_FIELDS.length} полей`,
             `входящих стрелок: ${incoming} | успех: ${success} | не успех: ${failure}`,
           ];
         }),
@@ -1108,25 +1584,23 @@
     }
 
     function cardColor(role) {
-      if (role === "Executor") {
-        return "#2f6690";
-      }
-      if (role === "Reviewer") {
-        return "#a06100";
-      }
-      return "#256f6c";
+      const presetKey = normalizePresetKey(role);
+      return AGENT_PRESETS[presetKey]?.color || AGENT_PRESETS.agent.color;
     }
 
-    function addAgent(role) {
+    function addAgent(presetKey) {
       const count = flow.nextAgentNumber++;
-      const agentRole = role === "Agent" ? "Agent" : role;
+      const selectedPreset = normalizePresetKey(presetKey);
+      const preset = effectivePreset(selectedPreset);
       const agent = {
         id: `agent-${Date.now()}-${count}`,
-        name: `${agentRole} ${count}`,
-        role: agentRole,
-        llm: DEFAULT_LLM,
-        speed: "fast",
-        reasoning: "low",
+        name: `${preset.namePrefix} ${count}`,
+        preset: selectedPreset,
+        role: preset.role,
+        llm: preset.llm,
+        speed: preset.speed,
+        reasoning: preset.reasoning,
+        workPackage: cloneWorkPackage(preset.workPackage),
         x: 360 + (count % 3) * 42,
         y: 90 + (count % 4) * 54,
       };
@@ -1239,6 +1713,11 @@
     function handleKeyboardShortcuts(event) {
       const target = event.target;
       const isEditingField = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea"));
+      if (event.key === "Escape" && !settingsBackdrop.hidden) {
+        event.preventDefault();
+        closeAgentSettings();
+        return;
+      }
       if (event.key === "Delete" && selectedConnectionId && !isEditingField) {
         event.preventDefault();
         deleteSelectedConnection();
@@ -1258,6 +1737,38 @@
       Object.assign(agent, patch);
       renderConnections();
       updateFlowPreview("Настройки агента обновлены. Есть несохраненные изменения.");
+    }
+
+    function applyAgentPreset(agentId, presetKey) {
+      const agent = getAgent(agentId);
+      const selectedPreset = normalizePresetKey(presetKey);
+      const preset = effectivePreset(selectedPreset);
+      if (!agent || !preset) {
+        return;
+      }
+      Object.assign(agent, {
+        preset: selectedPreset,
+        role: preset.role,
+        llm: preset.llm,
+        speed: preset.speed,
+        reasoning: preset.reasoning,
+        workPackage: cloneWorkPackage(preset.workPackage),
+      });
+      if (!agent.name || AGENT_PRESET_OPTIONS.some(([, label]) => agent.name.startsWith(label))) {
+        agent.name = preset.namePrefix;
+      }
+      render();
+      updateFlowPreview("Пресет агента применен. Рабочий пакет обновлен.");
+    }
+
+    function updateAgentWorkPackage(agentId, key, value) {
+      const agent = getAgent(agentId);
+      if (!agent) {
+        return;
+      }
+      agent.workPackage = normalizeWorkPackage(agent.workPackage, agent.preset || "agent");
+      agent.workPackage[key] = value;
+      updateFlowPreview("Рабочий пакет агента обновлен.");
     }
 
     function render() {
@@ -1317,11 +1828,26 @@
       name.addEventListener("input", () => updateAgent(agent.id, { name: name.value }));
       const role = document.createElement("span");
       role.className = "agent-role";
-      role.textContent = agent.role;
+      role.textContent = optionLabel(AGENT_PRESET_OPTIONS, agent.preset);
       const runtime = document.createElement("span");
       runtime.className = "runtime-pill";
       runtime.title = "Модель / скорость / размышление";
       runtime.textContent = runtimeLabel(agent);
+      const settingsButton = document.createElement("button");
+      settingsButton.className = "toolbar-icon";
+      settingsButton.type = "button";
+      settingsButton.title = "Настройки агента";
+      settingsButton.ariaLabel = "Настройки агента";
+      settingsButton.textContent = "⚙";
+      settingsButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      settingsButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openAgentSettings(agent.id);
+      });
       const deleteButton = document.createElement("button");
       deleteButton.className = "card-delete";
       deleteButton.type = "button";
@@ -1337,24 +1863,26 @@
         event.stopPropagation();
         deleteAgent(agent.id);
       });
-      head.append(name, role, deleteButton);
+      const cardActions = document.createElement("div");
+      cardActions.className = "agent-card-actions";
+      cardActions.append(settingsButton, deleteButton);
+      head.append(name, role, cardActions);
 
       const body = document.createElement("div");
       body.className = "card-body";
+      const workPackageButton = document.createElement("button");
+      workPackageButton.className = "work-package-pill";
+      workPackageButton.type = "button";
+      workPackageButton.textContent = "Рабочий пакет";
+      workPackageButton.title = "Открыть role/instructions, objective, inputs, constraints и output format";
+      workPackageButton.addEventListener("click", () => openAgentSettings(agent.id));
       body.append(
         runtime,
+        selectField("Пресет агента", agent.preset || "agent", AGENT_PRESET_OPTIONS, (value) => applyAgentPreset(agent.id, value)),
         selectField("LLM", agent.llm, MODEL_OPTIONS, (value) => updateAgent(agent.id, { llm: value })),
-        selectField("Скорость LLM", agent.speed, [
-          ["fast", "Быстро"],
-          ["balanced", "Средне"],
-          ["careful", "Аккуратно"],
-        ], (value) => updateAgent(agent.id, { speed: value })),
-        selectField("Размышление", agent.reasoning, [
-          ["low", "Низкий"],
-          ["medium", "Средний"],
-          ["high", "Высокий"],
-          ["very_high", "Очень высокий"],
-        ], (value) => updateAgent(agent.id, { reasoning: value })),
+        selectField("Скорость LLM", agent.speed, SPEED_OPTIONS, (value) => updateAgent(agent.id, { speed: value })),
+        selectField("Размышление", agent.reasoning, REASONING_OPTIONS, (value) => updateAgent(agent.id, { reasoning: value })),
+        workPackageButton,
         renderMiniChat(agent),
       );
 
@@ -1371,6 +1899,138 @@
       failurePort.addEventListener("pointerdown", (event) => startLink(event, agent.id, "failure"));
       inputPort.addEventListener("pointerup", (event) => finishLink(event, agent.id));
       return card;
+    }
+
+    function openAgentSettings(agentId) {
+      const agent = getAgent(agentId);
+      if (!agent) {
+        return;
+      }
+      settingsMode = "agent";
+      settingsAgentId = agentId;
+      settingsPresetKey = "";
+      settingsDraft = cloneAgentSettings(agent, agent.preset || "agent");
+      renderAgentSettings();
+      settingsBackdrop.hidden = false;
+    }
+
+    function openPresetSettings(presetKey) {
+      const selectedPreset = normalizePresetKey(presetKey);
+      const preset = effectivePreset(selectedPreset);
+      settingsMode = "preset";
+      settingsAgentId = "";
+      settingsPresetKey = selectedPreset;
+      settingsDraft = cloneAgentSettings(preset, selectedPreset);
+      renderAgentSettings();
+      settingsBackdrop.hidden = false;
+    }
+
+    function closeAgentSettings() {
+      settingsAgentId = "";
+      settingsMode = "";
+      settingsPresetKey = "";
+      settingsDraft = null;
+      settingsBackdrop.hidden = true;
+      settingsBody.replaceChildren();
+    }
+
+    function renderAgentSettings() {
+      if (!settingsDraft) {
+        closeAgentSettings();
+        return;
+      }
+      const isPresetMode = settingsMode === "preset";
+      const agent = isPresetMode ? null : getAgent(settingsAgentId);
+      if (!isPresetMode && !agent) {
+        closeAgentSettings();
+        return;
+      }
+      const titleName = isPresetMode
+        ? `пресета ${optionLabel(AGENT_PRESET_OPTIONS, settingsPresetKey)}`
+        : (agent.name || "Agent");
+      settingsTitle.textContent = `Настройки: ${titleName}`;
+      settingsSubtitle.textContent = `${optionLabel(AGENT_PRESET_OPTIONS, settingsDraft.preset)} · ${runtimeLabel(settingsDraft)}`;
+
+      const runtimePanel = document.createElement("section");
+      runtimePanel.className = "settings-panel";
+      runtimePanel.append(
+        selectField("Пресет агента", settingsDraft.preset || "agent", AGENT_PRESET_OPTIONS, (value) => {
+          const selectedPreset = normalizePresetKey(value);
+          const preset = effectivePreset(selectedPreset);
+          settingsDraft = cloneAgentSettings(preset, selectedPreset);
+          if (isPresetMode) {
+            settingsPresetKey = selectedPreset;
+          }
+          renderAgentSettings();
+        }),
+        selectField("LLM", settingsDraft.llm, MODEL_OPTIONS, (value) => {
+          settingsDraft.llm = value;
+          renderAgentSettings();
+        }),
+        selectField("Скорость LLM", settingsDraft.speed, SPEED_OPTIONS, (value) => {
+          settingsDraft.speed = value;
+          renderAgentSettings();
+        }),
+        selectField("Размышление", settingsDraft.reasoning, REASONING_OPTIONS, (value) => {
+          settingsDraft.reasoning = value;
+          renderAgentSettings();
+        }),
+      );
+
+      const packagePanel = document.createElement("section");
+      packagePanel.className = "settings-panel";
+      const packageGrid = document.createElement("div");
+      packageGrid.className = "work-package-grid";
+      for (const [key, labelText] of WORK_PACKAGE_FIELDS) {
+        const wrapper = document.createElement("label");
+        wrapper.className = "field";
+        const caption = document.createElement("span");
+        caption.textContent = labelText;
+        const textarea = document.createElement("textarea");
+        textarea.value = settingsDraft.workPackage[key] || "";
+        textarea.addEventListener("input", () => {
+          settingsDraft.workPackage[key] = textarea.value;
+        });
+        wrapper.append(caption, textarea);
+        packageGrid.append(wrapper);
+      }
+      packagePanel.append(packageGrid);
+      settingsBody.replaceChildren(runtimePanel, packagePanel);
+    }
+
+    function saveAgentSettings() {
+      if (!settingsDraft) {
+        closeAgentSettings();
+        return;
+      }
+      if (settingsMode === "preset") {
+        const presetKey = normalizePresetKey(settingsPresetKey || settingsDraft.preset);
+        flow.presetSettings = normalizePresetSettings({
+          ...(flow.presetSettings || {}),
+          [presetKey]: settingsDraft,
+        });
+        agentPresetSelect.value = presetKey;
+        renderPresetPreview();
+        persistFlow("Настройки пресета сохранены. Новые карточки будут создаваться с ними.");
+        closeAgentSettings();
+        return;
+      }
+      const agent = getAgent(settingsAgentId);
+      if (!agent) {
+        closeAgentSettings();
+        return;
+      }
+      Object.assign(agent, {
+        preset: normalizePresetKey(settingsDraft.preset),
+        role: settingsDraft.role,
+        llm: settingsDraft.llm,
+        speed: settingsDraft.speed,
+        reasoning: settingsDraft.reasoning,
+        workPackage: normalizeWorkPackage(settingsDraft.workPackage, settingsDraft.preset),
+      });
+      render();
+      persistFlow("Настройки агента сохранены.");
+      closeAgentSettings();
     }
 
     function renderMiniChat(agent) {
@@ -1548,6 +2208,7 @@
               llm: agent.llm,
               speed: agent.speed,
               reasoning: agent.reasoning,
+              workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
             },
             message: text,
             history: history.slice(-8),
@@ -1820,11 +2481,24 @@
       updateFlowPreview("Флоу очищен.");
     }
 
-    document.querySelectorAll("[data-add-agent]").forEach((button) => {
-      button.addEventListener("click", () => addAgent(button.dataset.addAgent));
-    });
+    agentPresetSelect.replaceChildren(...AGENT_PRESET_OPTIONS.map(([value, labelText]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = labelText;
+      return option;
+    }));
+    addAgentButton.addEventListener("click", () => addAgent(agentPresetSelect.value || "agent"));
+    agentPresetSelect.addEventListener("change", renderPresetPreview);
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);
+    document.querySelector("#close-settings").addEventListener("click", closeAgentSettings);
+    document.querySelector("#cancel-settings").addEventListener("click", closeAgentSettings);
+    document.querySelector("#save-settings").addEventListener("click", saveAgentSettings);
+    settingsBackdrop.addEventListener("click", (event) => {
+      if (event.target === settingsBackdrop) {
+        closeAgentSettings();
+      }
+    });
     connectionFrom.addEventListener("change", () => updateSelectedConnection({ fromAgentId: connectionFrom.value }));
     connectionPort.addEventListener("change", () => updateSelectedConnection({ fromPort: connectionPort.value }));
     connectionTo.addEventListener("change", () => updateSelectedConnection({ toAgentId: connectionTo.value }));
@@ -1839,6 +2513,7 @@
     canvas.addEventListener("pointerup", endDrag);
     window.addEventListener("resize", renderConnections);
     window.addEventListener("keydown", handleKeyboardShortcuts);
+    renderPresetPreview();
     render();
   </script>
 </body>

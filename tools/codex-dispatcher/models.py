@@ -24,12 +24,3 @@ class DispatchDecision:
 class OrchestratorChatCommand:
     task: str
     forced_role: str | None = None
-
-
-@dataclass(frozen=True)
-class CommandResult:
-    command: list[str]
-    cwd: Path
-    exit_code: int
-    stdout: str
-    stderr: str

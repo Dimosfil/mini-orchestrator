@@ -23,7 +23,7 @@ def build_plan_only_prompt(planner: Worker, task: str) -> str:
     instructions = read_instructions(planner)
     return (
         "Prepare a chat approval plan without editing files, running commands, "
-        "or creating a local demo project.\n\n"
+        "or creating project files.\n\n"
         f"Worker role: {planner.name}\n\n"
         f"Role configuration:\n{instructions}\n\n"
         f"User task:\n{task}\n\n"

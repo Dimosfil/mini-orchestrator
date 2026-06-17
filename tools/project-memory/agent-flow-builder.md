@@ -13,17 +13,43 @@ until a backend save/validate/run contract is implemented.
 - The main Web UI exposes a `Настройка агентов` button.
 - The button opens `/agents-builder` in a separate browser window or tab.
 - The builder has a left control panel and a central flow workspace.
-- Users add agent cards through a single `Добавить агента` action. New cards
-  start with local defaults and can be renamed/configured on the card.
+- Users add agent cards by choosing a preset from the sidebar dropdown and
+  clicking `Добавить агента`. Presets are editable starting templates, not
+  fixed worker types.
+- The sidebar shows a compact preview for the selected preset between the
+  preset dropdown and `Добавить агента`. The preview includes role, runtime
+  settings, name prefix, a short work-package summary, and a settings button.
+- Editing a preset from the preview opens the same settings dialog used by
+  cards. Changes are staged in the dialog and apply only after `Сохранить`;
+  `Отмена` or closing the dialog discards the draft.
 - Each agent card stores:
   - `id`
   - `name`
+  - `preset`
   - `role`
   - `llm`
   - `speed`
   - `reasoning`
+  - `workPackage`
   - `x`
   - `y`
+- Built-in presets are `planner`, `executor`, `reviewer`, `agent`, and
+  `custom`. A preset defines the default role, name prefix, model, speed,
+  reasoning level, and initial work-package text.
+- Each card has an agent settings dialog. The dialog exposes runtime settings
+  and the work-package prompt fields:
+  - `role/instructions`
+  - `current objective`
+  - `inputs/artifacts`
+  - `constraints`
+  - `previous agent outputs`
+  - `allowed tools/actions`
+  - `expected output format`
+- Work-package fields are prompt text. They are stored with the visual card and
+  should be passed to future orchestrator execution as a structured handoff
+  package instead of forwarding the whole mini-chat history.
+- The flow model may also store `presetSettings`, a browser-local set of
+  user-edited preset defaults used when creating new cards from the sidebar.
 - Supported MVP `llm` values include `gpt-5.5`, `gpt-5.4`,
   `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5`, `gpt-4.1-mini`,
   and `rules`. The default is `gpt-5.5`.
@@ -74,10 +100,20 @@ until a backend save/validate/run contract is implemented.
     {
       "id": "agent-...",
       "name": "Planner 1",
+      "preset": "planner",
       "role": "Planner",
       "llm": "gpt-5.5",
       "speed": "fast",
       "reasoning": "medium",
+      "workPackage": {
+        "instructions": "Turn rough user intent into a scoped plan...",
+        "currentObjective": "Clarify what should be built...",
+        "inputsArtifacts": "User request, selected workflow...",
+        "constraints": "Do not edit files during planning.",
+        "previousOutputs": "Use prior coordinator summaries only when current.",
+        "allowedTools": "Read-only inspection and planning.",
+        "expectedOutput": "Objective, steps, risks, handoff, checklist."
+      },
       "x": 360,
       "y": 90
     }

@@ -5,7 +5,7 @@ AI-agent workflows. The current UI exposes the project dispatcher flow:
 
 - create a chat-gated planner proposal
 - explicitly approve the proposal
-- run a bounded local demo workflow under `test-projects/`
+- run the real planner -> executor -> reviewer dispatcher chain
 - inspect planner, executor, reviewer, logs, and raw JSON
 
 The older Campaign Concept Studio page has been replaced by the orchestrator
@@ -66,17 +66,18 @@ Use a command such as:
 оркестратор план Сделай калькулятор
 ```
 
-Click **План** to run dispatcher plan preview mode. The default UI mode is the
-explicit demo preview:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry-run
-```
-
-Selecting **Real planner** calls the planner worker without `--dry-run`:
+Click **План** to run dispatcher plan preview mode. The default UI mode calls
+the real planner worker:
 
 ```powershell
 python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only
+```
+
+Selecting **Dry-run smoke** uses the local parser/log fallback without starting
+Codex app-server:
+
+```powershell
+python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry-run
 ```
 
 Real planner preview returns structured API errors when Codex app-server or the
@@ -86,12 +87,12 @@ After review, check **План подтвержден** and click **Запуст
 calls:
 
 ```powershell
-python tools\codex-dispatcher\dispatcher.py --task "<command>" --local-test-project
+python tools\codex-dispatcher\dispatcher.py --task "<command>" --chain
 ```
 
-The approved local workflow currently supports managed demo projects such as the
-calculator and construction-store CRM. Generated demo files stay under
-`test-projects/`, which is ignored by git.
+The approved workflow runs the release dispatcher chain through Codex
+app-server. Local demo project generation is no longer part of the active
+dispatcher surface.
 
 ## Core Orchestrator
 
@@ -140,7 +141,7 @@ Plan preview request:
 ```json
 {
   "task": "оркестратор план Сделай калькулятор",
-  "mode": "demo"
+  "mode": "real"
 }
 ```
 

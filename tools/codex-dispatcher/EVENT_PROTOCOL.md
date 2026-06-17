@@ -24,10 +24,6 @@ Chain runs use the same event types and add `chain=true` to task, dispatch, and
 final events. Handoff and agent result events occur once per role in this order:
 `planner`, `executor`, `reviewer`.
 
-Local test project runs use the same event types and add
-`localTestProject=true` to task, dispatch, handoff, agent, and final events.
-They still use the fixed planner -> executor -> reviewer order, but execute a
-bounded local demo project flow instead of starting Codex app-server.
 Plan-only runs use the same event types and add `planOnly=true`; they return
 only planner output and must not write project files.
 
@@ -45,11 +41,7 @@ Task-related events should include:
 - `task`: original user task or compact task summary
 - `dryRun`: boolean when the run did not start Codex app-server
 - `chain`: boolean when the run uses planner -> executor -> reviewer
-- `localTestProject`: boolean when the run created and verified a bounded demo
-  project under `test-projects/`
 - `planOnly`: boolean when the run returned only a chat approval plan
-- `iteration`: numeric executor -> test/review attempt for local project loops
-- `passed`: boolean review result when a local test/review event completed
 
 Dispatch decision events should include:
 

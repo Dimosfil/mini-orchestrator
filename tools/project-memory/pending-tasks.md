@@ -460,3 +460,54 @@ Verification:
   `/api/campaign`; live `/health` responded on the configured UI port.
 - [x] Launch Desk precise blocker recorded: backend/frontend `tsc.cmd` and
   `vitest.cmd` shims are missing until dependencies are restored.
+
+### Dispatcher Release Architecture Refactor
+
+Goal: finish the dispatcher split into release-oriented modules and remove local
+demo project generation from the active dispatcher/UI surface.
+
+Planned changes:
+
+- [x] Move Codex app-server transport out of `dispatcher.py`.
+- [x] Move dispatcher pipeline orchestration out of `dispatcher.py`.
+- [x] Move CLI parsing/output out of `dispatcher.py`.
+- [x] Remove `--local-test-project`, `test-projects/` generator code, and
+  calculator/construction CRM demo templates from active release code.
+- [x] Update UI approved workflow to run the real dispatcher chain instead of
+  local demo mode.
+- [x] Update README, dispatcher docs, event protocol, and chat command contract.
+- [x] Update tests to cover release dispatcher behavior without demo generation.
+
+Verification:
+
+- [x] `python -m compileall mini_orchestrator tools\codex-dispatcher`
+- [x] `python tools\codex-dispatcher\test_dispatcher.py`
+- [x] `python -m pytest tests`
+- [x] `python -m mini_orchestrator "search AGENTS" --no-log`
+- [x] Dispatcher CLI smoke: `--plan-only --dry-run`.
+- [x] Dispatcher CLI smoke: `--chain --dry-run`.
+- [x] Removed CLI flag check: `--local-test-project` is rejected by argparse.
+- [x] Live UI restart not run: config-service was unavailable and
+  `service-runtime.json` has `self_registration=off`, so binding a fallback port
+  would violate the project startup contract.
+
+### Agent Presets And Work Packages
+
+Goal: make visual agent roles behave as editable orchestration presets instead
+of only card labels.
+
+Planned changes:
+
+- [x] Replace role-only agent creation with preset-based creation/selection for
+  planner, executor, reviewer, generic agent, and custom agents.
+- [x] Add an agent settings window that exposes runtime settings and the work
+  package prompt fields: role/instructions, current objective, inputs/artifacts,
+  constraints, previous agent outputs, allowed tools/actions, and expected
+  output format.
+- [x] Persist work-package fields with each visual agent card.
+- [x] Keep the mini-chat focused on testing an agent's selected settings, not
+  executing the visual workflow.
+
+Verification:
+
+- [x] Run focused syntax/compile checks.

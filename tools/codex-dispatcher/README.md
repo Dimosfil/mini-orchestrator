@@ -22,16 +22,6 @@ Chain mode:
 4. Pass planner and executor output to `reviewer`.
 5. Return all role outputs and write a JSONL event log with `chain=true`.
 
-Local test project mode:
-
-1. Classify and normalize the user task into a `DispatchDecision`.
-2. Run the fixed planner -> executor -> reviewer chain locally after approval.
-3. Create a supported demo project under `test-projects/`.
-4. Run executor -> test/review iterations until checks pass or the limit is
-   reached.
-5. After a clean review, launch/smoke the application, run any declared UI
-   smoke checks, and return role outputs with `localTestProject=true`.
-
 The decision includes `role`, `reason`, `confidence`, and `next_input`.
 Planner-directed tasks route to `planner`; explicit implementation/editing
 tasks route to `executor`; explicit review/verification tasks route to
@@ -90,27 +80,15 @@ By default this starts only the planner worker through Codex app-server and
 returns its task-specific proposal. Add `--dry-run` to test parser/log behavior
 with the local fallback plan instead of launching Codex.
 
-Approved local calculator demo project, no Codex app-server:
+Approved release chain after the user accepts a plan:
 
 ```powershell
-python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Make a calculator" --local-test-project
+python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Make a calculator" --chain
 ```
 
-Approved local construction-store CRM demo project, no Codex app-server:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Make a CRM for a construction store" --local-test-project
-```
-
-Generated local demo projects are written under `test-projects/` by default and
-are ignored by git. Supported demo projects are `calculator` and
-`construction-crm`. Run `--local-test-project` only after the user has approved
-the `--plan-only` proposal in chat.
-
-For demo projects with a browser UI, reviewer output must include a `UI smoke`
-section. The construction CRM smoke checks that navigation/action buttons have
-a declared interaction contract and that the page loads JavaScript handlers, so
-an inert static mock cannot pass as a working UI.
+The release dispatcher no longer includes local calculator/CRM demo project
+generation or `--local-test-project`. Use `--dry-run` only for parser/log smoke
+checks.
 
 Supported chat command forms:
 

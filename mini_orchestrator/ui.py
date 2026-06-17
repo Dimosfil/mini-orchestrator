@@ -150,6 +150,23 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         speed = str(agent.get("speed") or "balanced").strip()[:40]
         reasoning = str(agent.get("reasoning") or "medium").strip()[:40]
         dispatcher_role = self._agent_role_for_dispatcher(role)
+        work_package_value = agent.get("workPackage", {})
+        work_package = work_package_value if isinstance(work_package_value, dict) else {}
+        package_fields = [
+            ("role/instructions", "instructions"),
+            ("current objective", "currentObjective"),
+            ("inputs/artifacts", "inputsArtifacts"),
+            ("constraints", "constraints"),
+            ("previous agent outputs", "previousOutputs"),
+            ("allowed tools/actions", "allowedTools"),
+            ("expected output format", "expectedOutput"),
+        ]
+        package_lines = []
+        for label, key in package_fields:
+            value = str(work_package.get(key) or "").strip()
+            if value:
+                package_lines.append(f"{label}: {value[:1200]}")
+        package_text = "\n".join(package_lines) if package_lines else "No custom work package fields."
 
         history_lines: list[str] = []
         for raw_item in history[-8:]:
@@ -169,6 +186,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             f"Selected model: {model}\n"
             f"Preferred speed: {speed}\n"
             f"Reasoning level: {reasoning}\n\n"
+            f"Agent work package:\n{package_text}\n\n"
             "Keep the answer concise and useful for checking this agent's style. "
             "If the user asks who you are or which model/settings are selected, answer from these agent settings. "
             "Do not edit files, run commands, or claim that the visual flow is executing.\n\n"
@@ -213,19 +231,19 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 mode = str(
                     payload.get("mode")
                     or os.environ.get("MINI_ORCHESTRATOR_PLAN_PREVIEW_MODE")
-                    or "demo"
+                    or "real"
                 ).strip().casefold()
-                if mode not in {"demo", "dry-run", "real"}:
-                    self._http_error(400, "Field 'mode' must be 'demo' or 'real'.")
+                if mode not in {"dry-run", "real"}:
+                    self._http_error(400, "Field 'mode' must be 'dry-run' or 'real'.")
                     return
                 dispatcher_args = ["--task", task, "--plan-only"]
-                if mode in {"demo", "dry-run"}:
+                if mode == "dry-run":
                     dispatcher_args.append("--dry-run")
                 result = self._run_dispatcher(
                     dispatcher_args,
                     timeout_seconds=120 if mode == "real" else 30,
                 )
-                result.setdefault("previewMode", "real" if mode == "real" else "demo")
+                result.setdefault("previewMode", mode)
                 self._json_response(200, result)
             except ValueError as exc:
                 self._http_error(400, str(exc))
@@ -242,14 +260,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     self._http_error(400, "Field 'approved' must be true before running the workflow.")
                     return
                 result = self._run_dispatcher(
-                    ["--task", task, "--local-test-project"],
-                    timeout_seconds=120,
+                    ["--task", task, "--chain"],
+                    timeout_seconds=300,
                 )
                 self._json_response(200, result)
             except ValueError as exc:
                 self._http_error(400, str(exc))
             except subprocess.TimeoutExpired:
-                self._http_error(504, "Approved local workflow timed out.")
+                self._http_error(504, "Approved dispatcher workflow timed out.")
             except Exception as exc:
                 self._http_error(500, str(exc))
             return
@@ -371,7 +389,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     "allowedActions": [
                         "Open the dashboard and agent builder UI.",
                         "Run dispatcher plan preview through /api/dispatcher/plan.",
-                        "Run approved local demo workflows through /api/dispatcher/run.",
+                        "Run approved dispatcher workflows through /api/dispatcher/run.",
                         "Test one visual agent card through /api/agents/chat.",
                     ],
                     "forbiddenActions": [
@@ -422,7 +440,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     "capabilities": [
                         "orchestrator-dashboard",
                         "dispatcher-plan-preview",
-                        "approved-local-demo-workflow",
+                        "approved-dispatcher-workflow",
                         "agent-card-mini-chat",
                     ],
                 },

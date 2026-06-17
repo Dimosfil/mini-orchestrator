@@ -26,7 +26,11 @@ class FakeCodexAppServer:
 
     def run_turn(self, thread_id: str, worker: dispatcher.Worker, prompt: str) -> str:
         self.prompts.append(prompt)
-        return f"agent plan from {worker.name}: {prompt.split('User task:', 1)[1].strip().splitlines()[0]}"
+        if "User task:" in prompt:
+            task = prompt.split("User task:", 1)[1].strip().splitlines()[0]
+        else:
+            task = prompt.split("Current task:", 1)[1].strip().splitlines()[0]
+        return f"agent output from {worker.name}: {task}"
 
 
 class DispatchDecisionTests(unittest.TestCase):
@@ -166,7 +170,7 @@ class DispatchDecisionTests(unittest.TestCase):
 
             self.assertEqual(decision.role, "planner")
             self.assertEqual(list(outputs), ["planner"])
-            self.assertIn("agent plan from planner", outputs["planner"])
+            self.assertIn("agent output from planner", outputs["planner"])
             self.assertIn("Make a calculator", outputs["planner"])
             self.assertEqual(len(FakeCodexAppServer.prompts), 1)
             self.assertIn("Do not reuse a generic template", FakeCodexAppServer.prompts[0])
@@ -222,118 +226,45 @@ class DispatchDecisionTests(unittest.TestCase):
             finally:
                 dispatcher.RUNS_DIR = original_runs_dir
 
-            self.assertIn("agent plan from planner", outputs["planner"])
+            self.assertIn("agent output from planner", outputs["planner"])
             self.assertEqual(len(FakeCodexAppServer.prompts), 1)
             self.assertIn("key UI/UX notes", FakeCodexAppServer.prompts[0])
             self.assertIn("Make a calculator and describe the UI", FakeCodexAppServer.prompts[0])
             self.assertNotIn("Python CLI calculator", outputs["planner"])
 
-    def test_local_test_project_chain_creates_calculator_and_runs_checks(self) -> None:
+    def test_release_chain_runs_planner_executor_reviewer_through_codex_server(self) -> None:
         original_runs_dir = dispatcher.RUNS_DIR
-        original_root = dispatcher.ROOT
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            dispatcher.ROOT = temp_path
             dispatcher.RUNS_DIR = temp_path / "runs"
-            test_projects_dir = temp_path / "test-projects"
+            FakeCodexAppServer.prompts = []
             try:
-                log_path, outputs, decision = dispatcher.run_pipeline(
-                    task="orchestrator plan Make a calculator",
-                    dry=False,
-                    workers=dispatcher.WORKERS,
-                    codex_command=None,
-                    request_timeout_seconds=1,
-                    turn_timeout_seconds=1,
-                    use_worker_models=False,
-                    chain=True,
-                    local_test_project=True,
-                    test_projects_dir=test_projects_dir,
-                    max_review_iterations=3,
-                )
+                with patch.object(dispatcher, "CodexAppServer", FakeCodexAppServer):
+                    log_path, outputs, decision = dispatcher.run_pipeline(
+                        task="orchestrator plan Make a release workflow",
+                        dry=False,
+                        workers=dispatcher.WORKERS,
+                        codex_command=None,
+                        request_timeout_seconds=1,
+                        turn_timeout_seconds=1,
+                        use_worker_models=False,
+                        chain=True,
+                    )
             finally:
                 dispatcher.RUNS_DIR = original_runs_dir
-                dispatcher.ROOT = original_root
 
-            project_path = test_projects_dir / "calculator"
             self.assertEqual(decision.role, "planner")
             self.assertEqual(list(outputs), ["planner", "executor", "reviewer"])
-            self.assertTrue((project_path / "calculator.py").exists())
-            self.assertTrue((project_path / "test_calculator.py").exists())
-            self.assertIn("wrote files", outputs["executor"])
-            self.assertIn("Unit tests", outputs["reviewer"])
-            self.assertIn("Final passed", outputs["reviewer"])
-            self.assertIn("Application launch smoke", outputs["reviewer"])
-            self.assertIn("UI smoke", outputs["reviewer"])
+            self.assertEqual(len(FakeCodexAppServer.prompts), 3)
+            self.assertIn("Make a release workflow", FakeCodexAppServer.prompts[0])
+            self.assertIn("planner output", FakeCodexAppServer.prompts[1])
+            self.assertIn("executor output", FakeCodexAppServer.prompts[2])
 
             events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
             final_events = [event for event in events if event["type"] == "final"]
             self.assertEqual(len(final_events), 1)
-            self.assertTrue(final_events[0]["localTestProject"])
-
-    def test_local_test_project_chain_creates_construction_crm_and_runs_checks(self) -> None:
-        original_runs_dir = dispatcher.RUNS_DIR
-        original_root = dispatcher.ROOT
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            dispatcher.ROOT = temp_path
-            dispatcher.RUNS_DIR = temp_path / "runs"
-            test_projects_dir = temp_path / "test-projects"
-            try:
-                log_path, outputs, decision = dispatcher.run_pipeline(
-                    task="orchestrator plan Make a CRM for a construction store",
-                    dry=False,
-                    workers=dispatcher.WORKERS,
-                    codex_command=None,
-                    request_timeout_seconds=1,
-                    turn_timeout_seconds=1,
-                    use_worker_models=False,
-                    chain=True,
-                    local_test_project=True,
-                    test_projects_dir=test_projects_dir,
-                    max_review_iterations=3,
-                )
-            finally:
-                dispatcher.RUNS_DIR = original_runs_dir
-                dispatcher.ROOT = original_root
-
-            project_path = test_projects_dir / "construction-crm"
-            self.assertEqual(decision.role, "planner")
-            self.assertEqual(list(outputs), ["planner", "executor", "reviewer"])
-            self.assertTrue((project_path / "crm.py").exists())
-            self.assertTrue((project_path / "test_crm.py").exists())
-            self.assertTrue((project_path / "index.html").exists())
-            self.assertTrue((project_path / "app.js").exists())
-            self.assertTrue((project_path / "ui_smoke.py").exists())
-            self.assertIn("construction-store CRM", outputs["planner"])
-            self.assertIn("interactive manager workspace", outputs["planner"])
-            self.assertIn("Unit tests", outputs["reviewer"])
-            self.assertIn("smoke passed: ORD-1001 picking total 8170.00", outputs["reviewer"])
-            self.assertIn("UI smoke", outputs["reviewer"])
-            self.assertIn("ui smoke passed", outputs["reviewer"])
-            self.assertIn("Final passed", outputs["reviewer"])
-
-            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-            final_events = [event for event in events if event["type"] == "final"]
-            self.assertEqual(len(final_events), 1)
-            self.assertTrue(final_events[0]["localTestProject"])
-
-    def test_construction_crm_ui_smoke_rejects_inert_buttons(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            project_path = Path(temp_dir)
-            dispatcher.write_construction_crm_project(project_path)
-            (project_path / "index.html").write_text(
-                "<!doctype html><html><body><button>Dashboard</button><script src=\"app.js\"></script></body></html>",
-                encoding="utf-8",
-            )
-            (project_path / "app.js").write_text("", encoding="utf-8")
-
-            result = dispatcher.run_command(
-                [dispatcher.sys.executable, str(project_path / "ui_smoke.py")],
-                cwd=project_path,
-            )
-
-            self.assertNotEqual(result.exit_code, 0)
-            self.assertIn("button(s) have no data-view/data-action contract", result.stderr)
+            self.assertTrue(final_events[0]["chain"])
+            self.assertNotIn("localTestProject", final_events[0])
 
 
 if __name__ == "__main__":
