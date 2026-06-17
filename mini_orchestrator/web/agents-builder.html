@@ -222,6 +222,13 @@
       font-weight: 700;
     }
 
+    .add-agent-button {
+      width: 100%;
+      justify-content: center;
+      background: var(--accent);
+      color: #ffffff;
+    }
+
     .swatch {
       width: 14px;
       height: 14px;
@@ -260,9 +267,38 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
+      pointer-events: auto;
       overflow: visible;
       z-index: 1;
+    }
+
+    .connection {
+      pointer-events: stroke;
+      cursor: pointer;
+    }
+
+    .connection.selected {
+      filter: drop-shadow(0 0 4px rgba(37, 111, 108, 0.45));
+    }
+
+    .connection-label {
+      pointer-events: auto;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      fill: #ffffff;
+    }
+
+    .connection-label-bg {
+      pointer-events: auto;
+      cursor: pointer;
+      fill: var(--accent);
+      stroke: #ffffff;
+      stroke-width: 2;
+    }
+
+    .preview {
+      pointer-events: none;
     }
 
     .agent-card {
@@ -295,6 +331,26 @@
 
     .card-head:active {
       cursor: grabbing;
+    }
+
+    .card-delete {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      min-height: 24px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .card-delete:hover {
+      background: #fff0f0;
+      color: var(--danger);
     }
 
     .agent-name {
@@ -456,6 +512,35 @@
       right: -8px;
     }
 
+    .port.output.success {
+      top: 38%;
+      background: var(--accent);
+    }
+
+    .port.output.failure {
+      top: 62%;
+      background: var(--danger);
+      box-shadow: 0 0 0 1px #7d2929;
+    }
+
+    .port-label {
+      position: absolute;
+      right: 14px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      pointer-events: none;
+      text-transform: uppercase;
+    }
+
+    .port-label.success {
+      top: calc(38% - 7px);
+    }
+
+    .port-label.failure {
+      top: calc(62% - 7px);
+    }
+
     .port.active {
       box-shadow: 0 0 0 4px var(--accent-soft);
     }
@@ -482,6 +567,72 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.35;
+    }
+
+    .flow-summary {
+      display: grid;
+      gap: 10px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .summary-group {
+      display: grid;
+      gap: 7px;
+    }
+
+    .summary-title {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .summary-item {
+      display: grid;
+      gap: 3px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .summary-item strong {
+      font-size: 13px;
+    }
+
+    .summary-meta {
+      color: var(--muted);
+    }
+
+    .json-preview {
+      max-height: 190px;
+      overflow: auto;
+      margin: 0;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8fafc;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .connection-editor {
+      display: none;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .connection-editor.active {
+      display: grid;
     }
 
     @media (max-width: 820px) {
@@ -535,51 +686,37 @@
         <section class="section">
           <h2>Добавить агента</h2>
           <div class="palette">
-            <button type="button" data-add-agent="Planner"><span class="swatch"></span><span>Planner</span></button>
-            <button type="button" data-add-agent="Executor"><span class="swatch executor"></span><span>Executor</span></button>
-            <button type="button" data-add-agent="Reviewer"><span class="swatch reviewer"></span><span>Reviewer</span></button>
+            <button class="add-agent-button" type="button" data-add-agent="Agent">Добавить агента</button>
           </div>
         </section>
 
         <section class="section">
-          <h2>Настройки нового агента</h2>
-          <div class="control-grid">
+          <h2>Связь</h2>
+          <div id="connection-editor" class="connection-editor">
             <div class="field">
-              <label for="default-llm">LLM</label>
-              <select id="default-llm">
-                <option value="gpt-5.5">GPT-5.5</option>
-                <option value="gpt-5.4">GPT-5.4</option>
-                <option value="gpt-5.4-mini">GPT-5.4-Mini</option>
-                <option value="gpt-5.3-codex-spark">GPT-5.3-Codex-Spark</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5">gpt-5</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="rules">rules fallback</option>
+              <label for="connection-from">От агента</label>
+              <select id="connection-from"></select>
+            </div>
+            <div class="field">
+              <label for="connection-port">Исход</label>
+              <select id="connection-port">
+                <option value="success">Успех</option>
+                <option value="failure">Не успех</option>
               </select>
             </div>
             <div class="field">
-              <label for="default-speed">Скорость</label>
-              <select id="default-speed">
-                <option value="fast">Быстро</option>
-                <option value="balanced">Средне</option>
-                <option value="careful">Аккуратно</option>
-              </select>
+              <label for="connection-to">К агенту</label>
+              <select id="connection-to"></select>
             </div>
-            <div class="field">
-              <label for="default-reasoning">Уровень размышления</label>
-              <select id="default-reasoning">
-                <option value="low">Низкий</option>
-                <option value="medium">Средний</option>
-                <option value="high">Высокий</option>
-                <option value="very_high">Очень высокий</option>
-              </select>
-            </div>
+            <button id="delete-connection" class="btn-danger" type="button">Удалить стрелку</button>
           </div>
+          <div class="status-line" id="connection-empty">Выберите стрелку на поле, чтобы переаттачить или удалить ее.</div>
         </section>
 
         <section class="section">
           <h2>JSON флоу</h2>
-          <textarea id="flow-json" spellcheck="false" readonly></textarea>
+          <div id="flow-summary" class="flow-summary"></div>
+          <pre id="flow-json" class="json-preview"></pre>
           <div class="status-line" id="status-line">Флоу хранится локально в браузере.</div>
         </section>
       </aside>
@@ -605,11 +742,15 @@
     const svg = document.querySelector("#connections");
     const emptyState = document.querySelector("#empty-state");
     const flowJson = document.querySelector("#flow-json");
-    const defaultLlm = document.querySelector("#default-llm");
-    const defaultSpeed = document.querySelector("#default-speed");
-    const defaultReasoning = document.querySelector("#default-reasoning");
+    const flowSummary = document.querySelector("#flow-summary");
+    const connectionEditor = document.querySelector("#connection-editor");
+    const connectionEmpty = document.querySelector("#connection-empty");
+    const connectionFrom = document.querySelector("#connection-from");
+    const connectionPort = document.querySelector("#connection-port");
+    const connectionTo = document.querySelector("#connection-to");
     const statusLine = document.querySelector("#status-line");
     let selectedAgentId = "";
+    let selectedConnectionId = "";
     let dragState = null;
     let linkState = null;
 
@@ -632,7 +773,7 @@
         }
         return {
           agents: parsed.agents,
-          connections: parsed.connections,
+          connections: parsed.connections.map(normalizeConnection),
           nextAgentNumber: Number(parsed.nextAgentNumber || parsed.agents.length + 1),
         };
       } catch {
@@ -640,10 +781,117 @@
       }
     }
 
+    function normalizeConnection(connection) {
+      const fromPort = connection.fromPort === "failure" ? "failure" : "success";
+      return {
+        ...connection,
+        fromPort,
+        toPort: "input",
+      };
+    }
+
     function persistFlow(message = "Сохранено локально.") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(flow));
-      flowJson.value = JSON.stringify(flow, null, 2);
+      const snapshot = buildFlowSnapshotFromCanvas();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      Object.assign(flow, snapshot);
+      updateFlowPreview();
       statusLine.textContent = message;
+    }
+
+    function buildFlowSnapshotFromCanvas() {
+      const agents = [...canvas.querySelectorAll(".agent-card")].map((card) => {
+        const agent = getAgent(card.dataset.agentId) || {};
+        const rect = card.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const fields = card.querySelectorAll("select");
+        return {
+          id: card.dataset.agentId,
+          name: card.querySelector(".agent-name")?.value || agent.name || "Agent",
+          role: agent.role || "Agent",
+          llm: fields[0]?.value || agent.llm || "gpt-5-mini",
+          speed: fields[1]?.value || agent.speed || "fast",
+          reasoning: fields[2]?.value || agent.reasoning || "low",
+          x: Math.round(rect.left - canvasRect.left),
+          y: Math.round(rect.top - canvasRect.top),
+        };
+      });
+      const agentIds = new Set(agents.map((agent) => agent.id));
+      return {
+        agents,
+        connections: flow.connections
+          .filter((connection) => agentIds.has(connection.fromAgentId) && agentIds.has(connection.toAgentId))
+          .map(normalizeConnection),
+        nextAgentNumber: flow.nextAgentNumber,
+      };
+    }
+
+    function updateFlowPreview(message) {
+      const snapshot = buildFlowSnapshotFromCanvas();
+      flowJson.textContent = JSON.stringify(snapshot, null, 2);
+      renderFlowSummary(snapshot);
+      renderConnectionEditor();
+      if (message) {
+        statusLine.textContent = message;
+      }
+    }
+
+    function renderFlowSummary(snapshot) {
+      flowSummary.replaceChildren(
+        summaryGroup("Агенты", snapshot.agents, (agent) => {
+          const incoming = snapshot.connections.filter((connection) => connection.toAgentId === agent.id).length;
+          const success = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "success").length;
+          const failure = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "failure").length;
+          return [
+            agent.name || agent.role,
+            `${agent.llm} | скорость: ${agent.speed} | размышление: ${agent.reasoning}`,
+            `входящих стрелок: ${incoming} | успех: ${success} | не успех: ${failure}`,
+          ];
+        }),
+        summaryGroup("Стрелки", snapshot.connections, (connection, index) => {
+          const from = snapshot.agents.find((agent) => agent.id === connection.fromAgentId);
+          const to = snapshot.agents.find((agent) => agent.id === connection.toAgentId);
+          return [
+            `${index + 1}. ${from?.name || "?"} / ${branchLabel(connection.fromPort)} -> ${to?.name || "?"}`,
+            selectedConnectionId === connection.id ? "выбрана для редактирования" : connection.id,
+          ];
+        }),
+      );
+    }
+
+    function branchLabel(fromPort) {
+      return fromPort === "failure" ? "не успех" : "успех";
+    }
+
+    function summaryGroup(title, items, describe) {
+      const group = document.createElement("div");
+      group.className = "summary-group";
+      const heading = document.createElement("div");
+      heading.className = "summary-title";
+      heading.textContent = `${title}: ${items.length}`;
+      group.append(heading);
+      if (items.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "summary-item summary-meta";
+        empty.textContent = "Пока пусто.";
+        group.append(empty);
+        return group;
+      }
+      items.forEach((item, index) => {
+        const lines = describe(item, index);
+        const node = document.createElement("div");
+        node.className = "summary-item";
+        const titleLine = document.createElement("strong");
+        titleLine.textContent = lines[0];
+        node.append(titleLine);
+        lines.slice(1).forEach((line) => {
+          const meta = document.createElement("div");
+          meta.className = "summary-meta";
+          meta.textContent = line;
+          node.append(meta);
+        });
+        group.append(node);
+      });
+      return group;
     }
 
     function cardColor(role) {
@@ -658,29 +906,135 @@
 
     function addAgent(role) {
       const count = flow.nextAgentNumber++;
+      const agentRole = role === "Agent" ? "Agent" : role;
       const agent = {
         id: `agent-${Date.now()}-${count}`,
-        name: `${role} ${count}`,
-        role,
-        llm: defaultLlm.value,
-        speed: defaultSpeed.value,
-        reasoning: defaultReasoning.value,
+        name: `${agentRole} ${count}`,
+        role: agentRole,
+        llm: "gpt-5-mini",
+        speed: "fast",
+        reasoning: "low",
         x: 360 + (count % 3) * 42,
         y: 90 + (count % 4) * 54,
       };
       flow.agents.push(agent);
       selectedAgentId = agent.id;
       render();
-      persistFlow("Агент добавлен.");
+      updateFlowPreview("Агент добавлен. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
     }
 
     function removeBrokenConnections() {
       const ids = new Set(flow.agents.map((agent) => agent.id));
       flow.connections = flow.connections.filter((connection) => ids.has(connection.fromAgentId) && ids.has(connection.toAgentId));
+      if (selectedConnectionId && !flow.connections.some((connection) => connection.id === selectedConnectionId)) {
+        selectedConnectionId = "";
+      }
     }
 
     function getAgent(id) {
       return flow.agents.find((agent) => agent.id === id);
+    }
+
+    function getConnection(id) {
+      return flow.connections.find((connection) => connection.id === id);
+    }
+
+    function renderConnectionEditor() {
+      const connection = getConnection(selectedConnectionId);
+      connectionEditor.classList.toggle("active", Boolean(connection));
+      connectionEmpty.hidden = Boolean(connection);
+      if (!connection) {
+        connectionFrom.replaceChildren();
+        connectionPort.value = "success";
+        connectionTo.replaceChildren();
+        return;
+      }
+      connectionFrom.replaceChildren(...flow.agents.map((agent) => connectionOption(agent, connection.fromAgentId)));
+      connectionPort.value = normalizeConnection(connection).fromPort;
+      connectionTo.replaceChildren(...flow.agents.map((agent) => connectionOption(agent, connection.toAgentId)));
+    }
+
+    function connectionOption(agent, selectedId) {
+      const option = document.createElement("option");
+      option.value = agent.id;
+      option.textContent = agent.name;
+      option.selected = agent.id === selectedId;
+      return option;
+    }
+
+    function selectConnection(connectionId) {
+      selectedConnectionId = connectionId;
+      selectedAgentId = "";
+      document.querySelectorAll(".agent-card").forEach((node) => node.classList.remove("selected"));
+      renderConnections();
+      renderConnectionEditor();
+      updateFlowPreview("Стрелка выбрана.");
+    }
+
+    function updateSelectedConnection(patch) {
+      const connection = getConnection(selectedConnectionId);
+      if (!connection) {
+        return;
+      }
+      const next = { ...connection, ...patch };
+      if (next.fromAgentId === next.toAgentId) {
+        statusLine.textContent = "Стрелка не может вести агента в самого себя.";
+        renderConnectionEditor();
+        return;
+      }
+      const duplicate = flow.connections.some((item) => (
+        item.id !== connection.id &&
+        item.fromAgentId === next.fromAgentId &&
+        normalizeConnection(item).fromPort === normalizeConnection(next).fromPort &&
+        item.toAgentId === next.toAgentId
+      ));
+      if (duplicate) {
+        statusLine.textContent = "Такая стрелка уже есть.";
+        renderConnectionEditor();
+        return;
+      }
+      Object.assign(connection, next);
+      renderConnections();
+      updateFlowPreview("Стрелка переаттачена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
+    }
+
+    function deleteSelectedConnection() {
+      if (!selectedConnectionId) {
+        return;
+      }
+      flow.connections = flow.connections.filter((connection) => connection.id !== selectedConnectionId);
+      selectedConnectionId = "";
+      renderConnections();
+      updateFlowPreview("Стрелка удалена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
+    }
+
+    function deleteAgent(agentId) {
+      const agent = getAgent(agentId);
+      if (!agent) {
+        return;
+      }
+      flow.agents = flow.agents.filter((item) => item.id !== agentId);
+      flow.connections = flow.connections.filter((connection) => connection.fromAgentId !== agentId && connection.toAgentId !== agentId);
+      if (selectedAgentId === agentId) {
+        selectedAgentId = "";
+      }
+      selectedConnectionId = "";
+      render();
+      updateFlowPreview(`Карточка ${agent.name} удалена. Нажмите Сохранить, чтобы пересобрать JSON флоу.`);
+    }
+
+    function handleKeyboardShortcuts(event) {
+      const target = event.target;
+      const isEditingField = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea"));
+      if (event.key === "Delete" && selectedConnectionId && !isEditingField) {
+        event.preventDefault();
+        deleteSelectedConnection();
+        return;
+      }
+      if (event.key === "Delete" && selectedAgentId && !isEditingField) {
+        event.preventDefault();
+        deleteAgent(selectedAgentId);
+      }
     }
 
     function updateAgent(id, patch) {
@@ -690,7 +1044,7 @@
       }
       Object.assign(agent, patch);
       renderConnections();
-      persistFlow("Настройки агента обновлены.");
+      updateFlowPreview("Настройки агента обновлены. Есть несохраненные изменения.");
     }
 
     function render() {
@@ -701,7 +1055,7 @@
         canvas.append(renderAgentCard(agent));
       }
       renderConnections();
-      persistFlow("Флоу готов.");
+      updateFlowPreview("Флоу готов.");
     }
 
     function renderAgentCard(agent) {
@@ -719,12 +1073,27 @@
       inputPort.dataset.port = "input";
       inputPort.dataset.agentId = agent.id;
 
-      const outputPort = document.createElement("button");
-      outputPort.className = "port output";
-      outputPort.type = "button";
-      outputPort.title = "Выход агента";
-      outputPort.dataset.port = "output";
-      outputPort.dataset.agentId = agent.id;
+      const successPort = document.createElement("button");
+      successPort.className = "port output success";
+      successPort.type = "button";
+      successPort.title = "Выход: успех";
+      successPort.dataset.port = "success";
+      successPort.dataset.agentId = agent.id;
+
+      const failurePort = document.createElement("button");
+      failurePort.className = "port output failure";
+      failurePort.type = "button";
+      failurePort.title = "Выход: не успех";
+      failurePort.dataset.port = "failure";
+      failurePort.dataset.agentId = agent.id;
+
+      const successLabel = document.createElement("span");
+      successLabel.className = "port-label success";
+      successLabel.textContent = "успех";
+
+      const failureLabel = document.createElement("span");
+      failureLabel.className = "port-label failure";
+      failureLabel.textContent = "не успех";
 
       const head = document.createElement("header");
       head.className = "card-head";
@@ -736,7 +1105,22 @@
       const role = document.createElement("span");
       role.className = "agent-role";
       role.textContent = agent.role;
-      head.append(name, role);
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "card-delete";
+      deleteButton.type = "button";
+      deleteButton.title = "Удалить карточку";
+      deleteButton.ariaLabel = "Удалить карточку";
+      deleteButton.textContent = "×";
+      deleteButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      deleteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteAgent(agent.id);
+      });
+      head.append(name, role, deleteButton);
 
       const body = document.createElement("div");
       body.className = "card-body";
@@ -764,13 +1148,17 @@
         ], (value) => updateAgent(agent.id, { reasoning: value })),
       );
 
-      card.append(inputPort, outputPort, head, body);
+      card.append(inputPort, successPort, failurePort, successLabel, failureLabel, head, body);
       card.addEventListener("pointerdown", () => {
         selectedAgentId = agent.id;
+        selectedConnectionId = "";
         document.querySelectorAll(".agent-card").forEach((node) => node.classList.toggle("selected", node.dataset.agentId === agent.id));
+        renderConnections();
+        renderConnectionEditor();
       });
       head.addEventListener("pointerdown", (event) => startDrag(event, agent.id));
-      outputPort.addEventListener("pointerdown", (event) => startLink(event, agent.id));
+      successPort.addEventListener("pointerdown", (event) => startLink(event, agent.id, "success"));
+      failurePort.addEventListener("pointerdown", (event) => startLink(event, agent.id, "failure"));
       inputPort.addEventListener("pointerup", (event) => finishLink(event, agent.id));
       return card;
     }
@@ -830,7 +1218,7 @@
         card.style.top = `${agent.y}px`;
       }
       renderConnections();
-      flowJson.value = JSON.stringify(flow, null, 2);
+      updateFlowPreview();
     }
 
     function endDrag() {
@@ -838,18 +1226,20 @@
         return;
       }
       dragState = null;
-      persistFlow("Позиция агента сохранена.");
+      updateFlowPreview("Позиция агента обновлена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
     }
 
-    function startLink(event, agentId) {
+    function startLink(event, agentId, fromPort) {
       event.preventDefault();
       event.stopPropagation();
       selectedAgentId = agentId;
+      selectedConnectionId = "";
       linkState = {
         fromAgentId: agentId,
+        fromPort,
         pointer: pointerPoint(event),
       };
-      document.querySelectorAll(".port").forEach((port) => port.classList.toggle("active", port.dataset.agentId === agentId && port.dataset.port === "output"));
+      document.querySelectorAll(".port").forEach((port) => port.classList.toggle("active", port.dataset.agentId === agentId && port.dataset.port === fromPort));
       renderConnections();
       window.addEventListener("pointerup", cancelLink, { once: true });
     }
@@ -861,14 +1251,19 @@
       event.preventDefault();
       event.stopPropagation();
       const fromAgentId = linkState.fromAgentId;
+      const fromPort = linkState.fromPort;
       if (fromAgentId !== toAgentId) {
-        const exists = flow.connections.some((connection) => connection.fromAgentId === fromAgentId && connection.toAgentId === toAgentId);
+        const exists = flow.connections.some((connection) => (
+          connection.fromAgentId === fromAgentId &&
+          normalizeConnection(connection).fromPort === fromPort &&
+          connection.toAgentId === toAgentId
+        ));
         if (!exists) {
           flow.connections.push({
             id: `connection-${Date.now()}`,
             fromAgentId,
             toAgentId,
-            fromPort: "output",
+            fromPort,
             toPort: "input",
           });
         }
@@ -876,7 +1271,7 @@
       linkState = null;
       document.querySelectorAll(".port").forEach((port) => port.classList.remove("active"));
       renderConnections();
-      persistFlow("Связь добавлена.");
+      updateFlowPreview("Связь добавлена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
     }
 
     function cancelLink() {
@@ -886,7 +1281,7 @@
       linkState = null;
       document.querySelectorAll(".port").forEach((port) => port.classList.remove("active"));
       renderConnections();
-      persistFlow("Соединение отменено.");
+      updateFlowPreview("Соединение отменено.");
     }
 
     function pointerPoint(event) {
@@ -897,15 +1292,23 @@
       };
     }
 
-    function portPoint(agentId, port) {
+    function portPoint(agentId, port, offsetY = 0) {
       const card = canvas.querySelector(`.agent-card[data-agent-id="${agentId}"]`);
       if (!card) {
         return { x: 0, y: 0 };
       }
       const cardRect = card.getBoundingClientRect();
       const canvasRect = canvas.getBoundingClientRect();
-      const x = port === "output" ? cardRect.right - canvasRect.left : cardRect.left - canvasRect.left;
-      const y = cardRect.top - canvasRect.top + cardRect.height / 2;
+      const isOutput = port === "success" || port === "failure";
+      const x = isOutput ? cardRect.right - canvasRect.left : cardRect.left - canvasRect.left;
+      let y = cardRect.top - canvasRect.top + cardRect.height / 2;
+      if (port === "success") {
+        y = cardRect.top - canvasRect.top + cardRect.height * 0.38;
+      }
+      if (port === "failure") {
+        y = cardRect.top - canvasRect.top + cardRect.height * 0.62;
+      }
+      y += offsetY;
       return { x, y };
     }
 
@@ -915,21 +1318,68 @@
     }
 
     function renderConnections() {
-      svg.querySelectorAll("path.connection, path.preview").forEach((node) => node.remove());
+      svg.querySelectorAll("path.connection, path.preview, circle.connection-label-bg, text.connection-label").forEach((node) => node.remove());
+      const incomingIndexes = new Map();
       for (const connection of flow.connections) {
-        const from = portPoint(connection.fromAgentId, "output");
-        const to = portPoint(connection.toAgentId, "input");
+        const items = flow.connections.filter((item) => item.toAgentId === connection.toAgentId);
+        const index = items.findIndex((item) => item.id === connection.id);
+        const spread = 18;
+        incomingIndexes.set(connection.id, {
+          index,
+          total: items.length,
+          offset: items.length > 1 ? (index - (items.length - 1) / 2) * spread : 0,
+        });
+      }
+      for (const connection of flow.connections) {
+        const normalized = normalizeConnection(connection);
+        const from = portPoint(normalized.fromAgentId, normalized.fromPort);
+        const incoming = incomingIndexes.get(connection.id) || { index: 0, total: 1, offset: 0 };
+        const to = portPoint(normalized.toAgentId, "input", incoming.offset);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("class", "connection");
+        path.setAttribute("class", `connection ${selectedConnectionId === connection.id ? "selected" : ""}`);
         path.setAttribute("d", connectionPath(from, to));
         path.setAttribute("fill", "none");
-        path.setAttribute("stroke", "#256f6c");
-        path.setAttribute("stroke-width", "2.5");
+        path.setAttribute("stroke", selectedConnectionId === connection.id ? "#184f4d" : (normalized.fromPort === "failure" ? "#b13b3b" : "#256f6c"));
+        path.setAttribute("stroke-width", selectedConnectionId === connection.id ? "4" : "2.5");
         path.setAttribute("marker-end", "url(#arrow-head)");
+        path.dataset.connectionId = connection.id;
+        path.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectConnection(connection.id);
+        });
         svg.append(path);
+        if (incoming.total > 1) {
+          const badge = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          badge.setAttribute("class", "connection-label-bg");
+          badge.setAttribute("cx", String(to.x - 15));
+          badge.setAttribute("cy", String(to.y));
+          badge.setAttribute("r", "9");
+          badge.dataset.connectionId = connection.id;
+          badge.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectConnection(connection.id);
+          });
+          svg.append(badge);
+
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("class", "connection-label");
+          label.setAttribute("x", String(to.x - 15));
+          label.setAttribute("y", String(to.y + 4));
+          label.setAttribute("text-anchor", "middle");
+          label.dataset.connectionId = connection.id;
+          label.textContent = String(incoming.index + 1);
+          label.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectConnection(connection.id);
+          });
+          svg.append(label);
+        }
       }
       if (linkState) {
-        const from = portPoint(linkState.fromAgentId, "output");
+        const from = portPoint(linkState.fromAgentId, linkState.fromPort);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("class", "preview");
         path.setAttribute("d", connectionPath(from, linkState.pointer));
@@ -943,7 +1393,7 @@
     }
 
     function saveFlow() {
-      persistFlow("Флоу сохранен в localStorage.");
+      persistFlow("JSON флоу пересобран с экрана и сохранен в localStorage.");
     }
 
     function resetFlow() {
@@ -954,9 +1404,10 @@
       flow.connections = [];
       flow.nextAgentNumber = 1;
       selectedAgentId = "";
+      selectedConnectionId = "";
       localStorage.removeItem(STORAGE_KEY);
       render();
-      persistFlow("Флоу очищен.");
+      updateFlowPreview("Флоу очищен.");
     }
 
     document.querySelectorAll("[data-add-agent]").forEach((button) => {
@@ -964,6 +1415,10 @@
     });
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);
+    connectionFrom.addEventListener("change", () => updateSelectedConnection({ fromAgentId: connectionFrom.value }));
+    connectionPort.addEventListener("change", () => updateSelectedConnection({ fromPort: connectionPort.value }));
+    connectionTo.addEventListener("change", () => updateSelectedConnection({ toAgentId: connectionTo.value }));
+    document.querySelector("#delete-connection").addEventListener("click", deleteSelectedConnection);
     canvas.addEventListener("pointermove", (event) => {
       moveDrag(event);
       if (linkState) {
@@ -973,6 +1428,7 @@
     });
     canvas.addEventListener("pointerup", endDrag);
     window.addEventListener("resize", renderConnections);
+    window.addEventListener("keydown", handleKeyboardShortcuts);
     render();
   </script>
 </body>

@@ -327,3 +327,43 @@ Verification:
 - [x] Plan endpoint returns a dry-run approval plan without creating files.
 - [x] Approved local demo endpoint returns dispatcher outputs.
 - [x] Frontend page no longer contains Campaign Concept Studio content.
+
+### Agent Flow Builder Editing Sprint
+
+Goal: turn the browser-local agent flow builder into a clearer graph editor
+where users add agents, edit connections, understand multiple incoming arrows,
+and save a regenerated flow model from the visible cards and arrows.
+
+Planned changes:
+
+- [x] Collapse the sidebar creation controls to a single `Добавить агента`
+  action.
+- [x] Replace raw JSON textarea with a readable flow summary and compact JSON
+  preview.
+- [x] Add connection selection, reattach controls, and delete action.
+- [x] Visually separate multiple incoming arrows to the same agent.
+- [x] Rebuild and persist the JSON model only from the visible flow when
+  `Сохранить` is clicked.
+
+Verification:
+
+- [x] Run syntax/static checks for the updated builder page.
+- [x] Smoke the builder with HTTP and DOM-invariant checks.
+
+### Agent Flow Builder Branch Outputs
+
+Goal: make every agent card work like a flowchart block with two separate
+outcomes: `успех` and `не успех`.
+
+Planned changes:
+
+- [x] Add two output ports to each card.
+- [x] Store selected outgoing branch in `connection.fromPort`.
+- [x] Allow editing the selected connection's outgoing branch.
+- [x] Show branch labels in the readable flow summary and JSON preview.
+- [x] Update project-memory flow contract.
+
+Verification:
+
+- [x] Run builder JavaScript syntax and DOM-invariant checks.
+- [x] Run Python compile check for the package.

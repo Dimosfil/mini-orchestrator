@@ -13,8 +13,8 @@ until a backend save/validate/run contract is implemented.
 - The main Web UI exposes a `Настройка агентов` button.
 - The button opens `/agents-builder` in a separate browser window or tab.
 - The builder has a left control panel and a central flow workspace.
-- Users can add agent cards from role presets: `Planner`, `Executor`,
-  `Reviewer`.
+- Users add agent cards through a single `Добавить агента` action. New cards
+  start with local defaults and can be renamed/configured on the card.
 - Each agent card stores:
   - `id`
   - `name`
@@ -31,12 +31,29 @@ until a backend save/validate/run contract is implemented.
 - Supported MVP `reasoning` values are `low`, `medium`, `high`, and
   `very_high`.
 - Cards can be moved within the workspace and persist their positions.
-- Cards expose an input port and an output port.
-- Dragging from an output port to another card input port creates a directed
-  connection.
+- Cards can be deleted with the mini `×` button in the card header or with the
+  `Delete` key when the card is selected and focus is not inside a text field
+  or select control. Deleting a card also removes all incoming and outgoing
+  connections for that card.
+- Cards expose one input port and two output ports: `success` (`успех`) and
+  `failure` (`не успех`), matching flowchart-style branching.
+- Dragging from either output port to another card input port creates a
+  directed connection for that outcome branch.
 - Connections are rendered as flexible SVG arrows and update when cards move.
+- Clicking a connection selects it for editing. The selected connection can be
+  reattached to another source/target agent, switched between the `success` and
+  `failure` outgoing branches, or deleted.
+- Pressing `Delete` removes the currently selected connection when focus is not
+  inside a text field or select control.
+- When several connections enter the same agent, their input endpoints are
+  vertically offset and numbered so the separate incoming arrows remain visible.
+  Clicking the numbered badge selects that connection for reattaching.
 - The browser stores the flow in `localStorage` under
-  `mini-orchestrator-agent-flow-v1`.
+  `mini-orchestrator-agent-flow-v1` only when the user clicks `Сохранить`.
+  Save rebuilds the JSON model from the currently visible agent cards and
+  connections.
+- The sidebar shows a readable flow summary plus compact JSON preview instead
+  of using a raw editable JSON textarea as the primary display.
 
 ## Flow Model
 
@@ -59,7 +76,7 @@ until a backend save/validate/run contract is implemented.
       "id": "connection-...",
       "fromAgentId": "agent-...",
       "toAgentId": "agent-...",
-      "fromPort": "output",
+      "fromPort": "success",
       "toPort": "input"
     }
   ],
@@ -82,7 +99,8 @@ localStorage model as executable state:
 Validation should check:
 
 - all connection endpoints refer to existing agents;
-- each connection starts at an output port and ends at an input port;
+- each connection starts at a supported output port (`success` or `failure`)
+  and ends at an input port;
 - at least one start agent is identifiable;
 - cycles are rejected unless the flow explicitly supports loop semantics;
 - every agent has a supported LLM, speed, and reasoning value.
