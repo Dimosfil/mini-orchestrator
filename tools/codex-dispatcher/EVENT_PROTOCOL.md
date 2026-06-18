@@ -6,6 +6,10 @@ Each event is one JSON object with at least:
 - `time`: ISO-8601 UTC timestamp
 - `type`: event type
 
+When the dispatcher is started with `--run-id`, the JSONL filename must be
+`<run-id>.jsonl`. UI clients may use that stable filename to poll live run
+state before the subprocess prints its final JSON response.
+
 ## Event Types
 
 - `task_created`: dispatcher accepted a user task.
@@ -19,6 +23,11 @@ Each event is one JSON object with at least:
 - `agent_result`: worker returned a result.
 - `final`: dispatcher assembled final worker outputs.
 - `error`: dispatcher hit a terminal blocker.
+
+Approval-gated Codex app-server turns are exposed through `codex_notification`
+events whose raw method is `item/fileChange/requestApproval`. Replay consumers
+should surface this as a blocked or `waiting_approval` state until a final or
+terminal error event appears.
 
 Chain runs use the same event types and add `chain=true` to task, dispatch, and
 final events. Handoff and agent result events occur once per role in this order:

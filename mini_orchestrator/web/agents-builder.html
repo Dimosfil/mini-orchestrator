@@ -1158,6 +1158,7 @@
     const STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
     const TRANSLATION_LANGUAGE_STORAGE_KEY = "mini-orchestrator-agent-translation-language";
     const DEFAULT_LLM = "gpt-5.5";
+    const DEFAULT_ACCESS_MODE = "danger-full-access";
     const MODEL_OPTIONS = [
       ["gpt-5.5", "GPT-5.5"],
       ["gpt-5.4", "GPT-5.4"],
@@ -1177,6 +1178,11 @@
       ["medium", "Средний"],
       ["high", "Высокий"],
       ["very_high", "Очень высокий"],
+    ];
+    const ACCESS_MODE_OPTIONS = [
+      ["danger-full-access", "Полный доступ"],
+      ["workspace-write", "Workspace"],
+      ["read-only", "Только чтение"],
     ];
     const WORK_PACKAGE_FIELDS = [
       ["instructions", "role/instructions"],
@@ -1199,6 +1205,7 @@
         llm: DEFAULT_LLM,
         speed: "balanced",
         reasoning: "high",
+        accessMode: DEFAULT_ACCESS_MODE,
         color: "#256f6c",
         workPackage: {
           instructions: "Turn rough user intent into a scoped plan, assumptions, risks, and a handoff for execution.",
@@ -1217,6 +1224,7 @@
         llm: DEFAULT_LLM,
         speed: "fast",
         reasoning: "medium",
+        accessMode: DEFAULT_ACCESS_MODE,
         color: "#2f6690",
         workPackage: {
           instructions: "Perform bounded technical steps from an approved plan and report the exact result.",
@@ -1235,6 +1243,7 @@
         llm: DEFAULT_LLM,
         speed: "careful",
         reasoning: "high",
+        accessMode: DEFAULT_ACCESS_MODE,
         color: "#a06100",
         workPackage: {
           instructions: "Review the implemented result for bugs, regressions, missing tests, and contract drift.",
@@ -1253,6 +1262,7 @@
         llm: DEFAULT_LLM,
         speed: "fast",
         reasoning: "low",
+        accessMode: DEFAULT_ACCESS_MODE,
         color: "#256f6c",
         workPackage: {
           instructions: "Act as a configurable workflow agent for one bounded step.",
@@ -1271,6 +1281,7 @@
         llm: DEFAULT_LLM,
         speed: "balanced",
         reasoning: "medium",
+        accessMode: DEFAULT_ACCESS_MODE,
         color: "#617183",
         workPackage: {
           instructions: "Write custom role instructions for this agent.",
@@ -1396,6 +1407,7 @@
           llm: MODEL_OPTIONS.some(([option]) => option === raw.llm) ? raw.llm : preset.llm,
           speed: SPEED_OPTIONS.some(([option]) => option === raw.speed) ? raw.speed : preset.speed,
           reasoning: REASONING_OPTIONS.some(([option]) => option === raw.reasoning) ? raw.reasoning : preset.reasoning,
+          accessMode: normalizeAccessMode(raw.accessMode || preset.accessMode),
           workPackage: normalizeWorkPackage(raw.workPackage, presetKey),
           workPackageTranslations: normalizeWorkPackageTranslations(raw.workPackageTranslations),
         };
@@ -1423,6 +1435,7 @@
         llm,
         speed: agent.speed || preset.speed,
         reasoning: agent.reasoning || preset.reasoning,
+        accessMode: normalizeAccessMode(agent.accessMode || preset.accessMode),
         workPackage: normalizeWorkPackage(agent.workPackage, presetKey),
         workPackageTranslations: normalizeWorkPackageTranslations(agent.workPackageTranslations),
       };
@@ -1500,6 +1513,7 @@
         llm: override.llm || base.llm,
         speed: override.speed || base.speed,
         reasoning: override.reasoning || base.reasoning,
+        accessMode: normalizeAccessMode(override.accessMode || base.accessMode),
         workPackage: normalizeWorkPackage(override.workPackage || base.workPackage, selectedPreset),
         workPackageTranslations: normalizeWorkPackageTranslations(override.workPackageTranslations),
       };
@@ -1513,9 +1527,14 @@
         llm: source?.llm || AGENT_PRESETS[selectedPreset].llm,
         speed: source?.speed || AGENT_PRESETS[selectedPreset].speed,
         reasoning: source?.reasoning || AGENT_PRESETS[selectedPreset].reasoning,
+        accessMode: normalizeAccessMode(source?.accessMode || AGENT_PRESETS[selectedPreset].accessMode),
         workPackage: normalizeWorkPackage(source?.workPackage, selectedPreset),
         workPackageTranslations: normalizeWorkPackageTranslations(source?.workPackageTranslations),
       };
+    }
+
+    function normalizeAccessMode(value) {
+      return ACCESS_MODE_OPTIONS.some(([option]) => option === value) ? value : DEFAULT_ACCESS_MODE;
     }
 
     function optionLabel(values, value) {
@@ -1647,11 +1666,16 @@
       return optionLabel(SPEED_OPTIONS, value);
     }
 
+    function accessModeLabel(value) {
+      return optionLabel(ACCESS_MODE_OPTIONS, normalizeAccessMode(value));
+    }
+
     function runtimeLabel(agent) {
       const model = modelLabel(agent.llm);
       const speed = speedLabel(agent.speed);
       const reasoning = reasoningLabel(agent.reasoning);
-      return [model, speed, reasoning].filter(Boolean).join(" / ");
+      const access = accessModeLabel(agent.accessMode);
+      return [model, speed, reasoning, access].filter(Boolean).join(" / ");
     }
 
     function responseRuntimeMeta(agent) {
@@ -1665,6 +1689,7 @@
         llm: preset.llm,
         speed: preset.speed,
         reasoning: preset.reasoning,
+        accessMode: preset.accessMode,
       };
 
       const head = document.createElement("div");
@@ -1738,6 +1763,7 @@
           llm: agent.llm || DEFAULT_LLM,
           speed: agent.speed || "fast",
           reasoning: agent.reasoning || "low",
+          accessMode: normalizeAccessMode(agent.accessMode),
           workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
           workPackageTranslations: normalizeWorkPackageTranslations(agent.workPackageTranslations),
           x: Math.round(rect.left - canvasRect.left),
@@ -1773,7 +1799,7 @@
           const failure = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "failure").length;
           return [
             `${agent.name || agent.role} (${optionLabel(AGENT_PRESET_OPTIONS, agent.preset)})`,
-            `${agent.llm} | скорость: ${agent.speed} | размышление: ${agent.reasoning}`,
+            `${agent.llm} | скорость: ${agent.speed} | размышление: ${agent.reasoning} | доступ: ${agent.accessMode}`,
             `рабочий пакет: ${WORK_PACKAGE_FIELDS.length} полей`,
             `входящих стрелок: ${incoming} | успех: ${success} | не успех: ${failure}`,
           ];
@@ -1842,6 +1868,7 @@
         llm: preset.llm,
         speed: preset.speed,
         reasoning: preset.reasoning,
+        accessMode: normalizeAccessMode(preset.accessMode),
         workPackage: cloneWorkPackage(preset.workPackage),
         workPackageTranslations: normalizeWorkPackageTranslations(preset.workPackageTranslations),
         x: 360 + (count % 3) * 42,
@@ -1995,6 +2022,7 @@
         llm: preset.llm,
         speed: preset.speed,
         reasoning: preset.reasoning,
+        accessMode: normalizeAccessMode(preset.accessMode),
         workPackage: cloneWorkPackage(preset.workPackage),
         workPackageTranslations: normalizeWorkPackageTranslations(preset.workPackageTranslations),
       });
@@ -2126,6 +2154,7 @@
         selectField("LLM", agent.llm, MODEL_OPTIONS, (value) => updateAgent(agent.id, { llm: value })),
         selectField("Скорость LLM", agent.speed, SPEED_OPTIONS, (value) => updateAgent(agent.id, { speed: value })),
         selectField("Размышление", agent.reasoning, REASONING_OPTIONS, (value) => updateAgent(agent.id, { reasoning: value })),
+        selectField("Доступ", normalizeAccessMode(agent.accessMode), ACCESS_MODE_OPTIONS, (value) => updateAgent(agent.id, { accessMode: value })),
         workPackageButton,
         renderMiniChat(agent),
       );
@@ -2217,6 +2246,10 @@
         }),
         selectField("Размышление", settingsDraft.reasoning, REASONING_OPTIONS, (value) => {
           settingsDraft.reasoning = value;
+          renderAgentSettings();
+        }),
+        selectField("Доступ", normalizeAccessMode(settingsDraft.accessMode), ACCESS_MODE_OPTIONS, (value) => {
+          settingsDraft.accessMode = value;
           renderAgentSettings();
         }),
       );
@@ -2380,6 +2413,7 @@
         llm: settingsDraft.llm,
         speed: settingsDraft.speed,
         reasoning: settingsDraft.reasoning,
+        accessMode: normalizeAccessMode(settingsDraft.accessMode),
         workPackage: normalizeWorkPackage(settingsDraft.workPackage, settingsDraft.preset),
         workPackageTranslations: normalizeWorkPackageTranslations(settingsDraft.workPackageTranslations),
       });
@@ -2543,6 +2577,7 @@
         llm: agent.llm,
         speed: agent.speed,
         reasoning: agent.reasoning,
+        accessMode: normalizeAccessMode(agent.accessMode),
         workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
       };
     }
@@ -2613,7 +2648,7 @@
         }
         const responseAgent = payload.agent || {};
         const responseMeta = responseAgent.llm
-          ? `${responseAgent.name || agent.name || "Agent"} · ${modelLabel(responseAgent.llm)} / ${speedLabel(responseAgent.speed)} / ${reasoningLabel(responseAgent.reasoning)}`
+          ? `${responseAgent.name || agent.name || "Agent"} · ${modelLabel(responseAgent.llm)} / ${speedLabel(responseAgent.speed)} / ${reasoningLabel(responseAgent.reasoning)} / ${accessModeLabel(responseAgent.accessMode)}`
           : responseRuntimeMeta(agent);
         history.push({ speaker: agent.name || "agent", meta: responseMeta, text: payload.message });
       } catch (error) {

@@ -14,6 +14,25 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Visual Agent Access Mode
+
+Goal: let each visual-agent card choose the Codex runtime access mode used by
+its app-server thread/turn, with full access as the temporary default.
+
+Planned changes:
+
+- [x] Add an access selector to agent cards and settings.
+- [x] Persist access mode in agent card snapshots and mini-chat payloads.
+- [x] Map access mode to Codex app-server `approvalPolicy`, thread `sandbox`,
+  and turn `sandboxPolicy`.
+- [x] Verify focused UI/API tests and syntax checks.
+
+Risks or dependencies:
+
+- Full access intentionally removes Codex sandbox boundaries. This is a
+  temporary local default for workflow testing and should stay visible in the
+  card UI.
+
 ### Live Runs Dashboard MVP
 
 Goal: make the current mini-orchestrator UI show Symphony-style daemon run
@@ -30,6 +49,33 @@ Risks or dependencies:
 
 - This is an observability surface only. It must not claim WorkNest tasks, bind
   new ports, or launch real Codex workers until the daemon lifecycle is added.
+
+### Live Workflow Progress Gap
+
+Goal: make an approved dispatcher workflow visible end-to-end in the UI, not
+only as a synchronous final JSON response.
+
+Observed during calculator smoke on 2026-06-18:
+
+- [x] Real plan preview reached a planner worker and returned an approval plan.
+- [x] Route UI dispatcher requests through UTF-8 task files so Russian task
+  text reaches worker prompts without question marks.
+- [!] Full real chain reached the executor but stopped on Codex file-change
+  approval; the parent API timed out while waiting for the turn.
+- [x] The open UI tab polls dispatcher JSONL live-run state instead of relying
+  only on the synchronous response from the initiating request.
+- [x] Add a live run-state model for dispatcher events, approvals, worker
+  status, and final artifacts.
+- [x] Use the calculator task as the recurring smoke test for plan, run-state,
+  approval visibility, and reviewer verification.
+- [x] Verify a background dry-run calculator chain reaches `done` in Live Runs.
+- [x] Verify a real read-only calculator inspection chain shows planner ->
+  executor -> reviewer progress and reaches `done` in Live Runs.
+
+Risks or dependencies:
+
+- Real file-writing workers need an explicit approval strategy. The UI should
+  either surface the approval gate or run only approved/safe dry-run demos.
 
 ### Codex Worker Chat Project Routing
 

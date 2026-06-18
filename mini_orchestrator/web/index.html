@@ -258,7 +258,8 @@
     }
 
     .run-status.blocked,
-    .run-status.failed {
+    .run-status.failed,
+    .run-status.waiting_approval {
       border-color: #e2aaaa;
       color: var(--danger);
       background: #fff1f1;
@@ -885,10 +886,11 @@
         const detailGrid = document.createElement("div");
         detailGrid.className = "run-detail-grid";
         const details = [
-          ["Role", profile.role || "-"],
+          ["Role", run.currentAgent || profile.role || "-"],
+          ["Mode", run.mode || "-"],
           ["Model", profile.model || "-"],
           ["Tokens", run.tokens?.total ?? 0],
-          ["Turns", run.thread?.turnCount ?? 0],
+          ["Approval", run.approval?.required ? "Required" : "No"],
           ["Thread", run.thread?.threadId || "-"],
           ["Log", run.artifacts?.eventLogPath || "-"],
         ];
@@ -1025,10 +1027,13 @@
         const payload = await postJson("/api/dispatcher/run", {
           task: lastPlanTask,
           approved: true,
+          background: true,
+          mode: planMode.value,
         });
         renderPayload(payload);
-        activeTab("agents");
-        setMessage("Workflow завершен.", "ok");
+        activeTab("tech");
+        await loadLiveRuns();
+        setMessage("Workflow started. Watch Live Runs for agent progress.", "ok");
       } catch (error) {
         statusDot.className = "dot error";
         setMessage(error.message, "error");
@@ -1078,7 +1083,7 @@
       tab.addEventListener("click", () => activeTab(tab.dataset.tab));
     });
     loadLiveRuns();
-    window.setInterval(loadLiveRuns, 15000);
+    window.setInterval(loadLiveRuns, 3000);
   </script>
 </body>
 </html>

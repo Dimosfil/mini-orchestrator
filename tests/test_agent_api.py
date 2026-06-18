@@ -27,6 +27,7 @@ def test_agent_chat_runs_dispatcher_with_task_file_and_model() -> None:
         task = task_file.read_text(encoding="utf-8")
         assert "orchestrator executor" in task
         assert "Agent name: Executor 1" in task
+        assert "Access mode: workspace-write" in task
         assert "constraints: Stay focused." in task
         assert "User message:\nПривет" in task
         return {
@@ -45,6 +46,7 @@ def test_agent_chat_runs_dispatcher_with_task_file_and_model() -> None:
                 "llm": "gpt-5.4",
                 "speed": "balanced",
                 "reasoning": "medium",
+                "accessMode": "workspace-write",
                 "workPackage": {"constraints": "Stay focused."},
             },
             "message": "Привет",
@@ -54,6 +56,7 @@ def test_agent_chat_runs_dispatcher_with_task_file_and_model() -> None:
 
     assert response.payload["message"] == "Готово"
     assert response.payload["agent"]["llm"] == "gpt-5.4"
+    assert response.payload["agent"]["accessMode"] == "workspace-write"
     assert calls
     args, timeout = calls[0]
     assert timeout == 150

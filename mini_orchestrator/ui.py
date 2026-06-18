@@ -9,13 +9,14 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 import time
 import webbrowser
 from urllib.parse import urlparse
 
 from .agent_api import AgentApiError, VisualAgentApi
 from .codex_dispatcher_service import PersistentCodexDispatcher
-from .daemon_runs import build_demo_daemon_runs
+from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
 
 
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
 MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
+TASK_FILE_DIR = ROOT / ".mini_orchestrator" / "dispatcher-tasks"
 
 
 @dataclass
@@ -223,6 +225,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     dispatcher_service: PersistentCodexDispatcher
     web_root: Path
     service_id: str = "mini-orchestrator"
+    dispatcher_processes: dict[str, subprocess.Popen[Any]] = {}
 
     def _path(self) -> str:
         return urlparse(self.path).path
@@ -249,6 +252,52 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def _http_error(self, status: int, message: str) -> None:
         self._json_response(status, {"error": message})
+
+    def _write_task_file(self, task: str, run_id: str | None = None) -> tuple[list[str], str | None]:
+        selected_run_id = run_id or f"task-{uuid.uuid4().hex[:12]}"
+        TASK_FILE_DIR.mkdir(parents=True, exist_ok=True)
+        task_path = TASK_FILE_DIR / f"{selected_run_id}.txt"
+        task_path.write_text(task, encoding="utf-8")
+        return ["--task-file", str(task_path.relative_to(ROOT))], selected_run_id
+
+    def _start_dispatcher_background(self, args: list[str], run_id: str) -> Dict[str, Any]:
+        if not DISPATCHER.exists():
+            raise RuntimeError(f"Dispatcher script is missing: {DISPATCHER}")
+
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["MINI_ORCHESTRATOR_DISPATCHER_BEST_EFFORT_LOGS"] = "1"
+        output_dir = ROOT / ".mini_orchestrator" / "dispatcher-processes"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = output_dir / f"{run_id}.stdout.json"
+        stderr_path = output_dir / f"{run_id}.stderr.txt"
+        stdout_handle = stdout_path.open("w", encoding="utf-8")
+        stderr_handle = stderr_path.open("w", encoding="utf-8")
+        process = subprocess.Popen(
+            [sys.executable, str(DISPATCHER), *args],
+            cwd=str(ROOT),
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        stdout_handle.close()
+        stderr_handle.close()
+        self.dispatcher_processes[run_id] = process
+        log_value = str((ROOT / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl").relative_to(ROOT))
+        return {
+            "status": "running",
+            "runId": run_id,
+            "log": log_value,
+            "mode": "chain",
+            "planOnly": False,
+            "background": True,
+            "processId": process.pid,
+            "stdout": str(stdout_path.relative_to(ROOT)),
+            "stderr": str(stderr_path.relative_to(ROOT)),
+        }
 
     def _run_dispatcher(self, args: list[str], timeout_seconds: int) -> Dict[str, Any]:
         persistent_result = self._try_run_persistent_dispatcher(args)
@@ -417,7 +466,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if mode not in {"dry-run", "real"}:
                     self._http_error(400, "Field 'mode' must be 'dry-run' or 'real'.")
                     return
-                dispatcher_args = ["--task", task, "--plan-only"]
+                task_args, _ = self._write_task_file(task)
+                dispatcher_args = [*task_args, "--plan-only"]
                 if mode == "dry-run":
                     dispatcher_args.append("--dry-run")
                 result = self._run_dispatcher(
@@ -441,8 +491,18 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if payload.get("approved") is not True:
                     self._http_error(400, "Field 'approved' must be true before running the workflow.")
                     return
+                if payload.get("background") is True:
+                    run_id = "ui-" + uuid.uuid4().hex[:12]
+                    task_args, _ = self._write_task_file(task, run_id)
+                    dispatcher_args = [*task_args, "--run-id", run_id, "--chain"]
+                    if str(payload.get("mode") or "").strip().casefold() == "dry-run":
+                        dispatcher_args.append("--dry-run")
+                    result = self._start_dispatcher_background(dispatcher_args, run_id)
+                    result["tech"] = build_dispatcher_tech_summary(result, ROOT)
+                    self._json_response(202, result)
+                    return
                 result = self._run_dispatcher(
-                    ["--task", task, "--chain"],
+                    [*self._write_task_file(task)[0], "--chain"],
                     timeout_seconds=300,
                 )
                 result["tech"] = build_dispatcher_tech_summary(result, ROOT)
@@ -559,7 +619,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self._path()
         if path == "/api/daemon/runs":
-            self._json_response(200, build_demo_daemon_runs())
+            self._json_response(200, build_dispatcher_live_runs(ROOT))
             return
         static_pages = {
             "/": "index.html",
@@ -594,6 +654,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Open the dashboard and agent builder UI.",
                         "Run dispatcher plan preview through /api/dispatcher/plan.",
                         "Run approved dispatcher workflows through /api/dispatcher/run.",
+                        "Start approved dispatcher workflows in background mode and poll /api/daemon/runs for live state.",
                         "Test one visual agent card through /api/agents/chat.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read demo daemon run-state records through /api/daemon/runs.",
@@ -637,6 +698,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "POST",
                             "path": "/api/dispatcher/run",
                             "required": ["task", "approved"],
+                            "optional": ["background", "mode"],
                         },
                         "agentMiniChat": {
                             "method": "POST",
@@ -651,7 +713,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "daemonRuns": {
                             "method": "GET",
                             "path": "/api/daemon/runs",
-                            "mode": "read-only-demo",
+                            "mode": "dispatcher-jsonl-live",
                         },
                     },
                     "capabilities": [

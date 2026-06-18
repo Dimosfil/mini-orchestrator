@@ -17,7 +17,7 @@ DISPATCHER_TOOLS = ROOT / "tools" / "codex-dispatcher"
 if str(DISPATCHER_TOOLS) not in sys.path:
     sys.path.insert(0, str(DISPATCHER_TOOLS))
 
-from codex_app import CodexAppServer  # type: ignore  # noqa: E402
+from codex_app import CodexAppServer, normalize_access_mode  # type: ignore  # noqa: E402
 from events import write_event  # type: ignore  # noqa: E402
 from models import Worker  # type: ignore  # noqa: E402
 from prompts import build_worker_prompt  # type: ignore  # noqa: E402
@@ -203,6 +203,7 @@ class PersistentCodexDispatcher:
         self._timing(log_path, "persistent_server_ready", server_started)
 
         profile = _visual_agent_profile(agent)
+        access_mode = str(profile.get("accessMode") or "danger-full-access")
         profile_hash = hashlib.sha256(
             json.dumps(profile, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()[:16]
@@ -227,6 +228,7 @@ class PersistentCodexDispatcher:
             thread_id = server.start_thread(
                 worker,
                 developer_instructions=_visual_agent_developer_instructions(profile),
+                access_mode=access_mode,
             )
             self._thread_cache[thread_cache_key] = thread_id
             self._timing(log_path, "codex_thread_started", thread_started, agent=name)
@@ -242,6 +244,7 @@ class PersistentCodexDispatcher:
             **self._routing_metadata(server),
             "threadReused": thread_reused,
             "profileHash": profile_hash,
+            "accessMode": access_mode,
         }
 
     def _run_visual_agent_chat_locked(
@@ -276,6 +279,7 @@ class PersistentCodexDispatcher:
         self._timing(log_path, "persistent_server_ready", server_started)
 
         profile = _visual_agent_profile(agent)
+        access_mode = str(profile.get("accessMode") or "danger-full-access")
         profile_hash = hashlib.sha256(
             json.dumps(profile, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()[:16]
@@ -300,6 +304,7 @@ class PersistentCodexDispatcher:
             thread_id = server.start_thread(
                 worker,
                 developer_instructions=_visual_agent_developer_instructions(profile),
+                access_mode=access_mode,
             )
             self._thread_cache[thread_cache_key] = thread_id
             self._timing(log_path, "codex_thread_started", thread_started, agent=name)
@@ -310,9 +315,10 @@ class PersistentCodexDispatcher:
             to=name,
             prompt=message,
             profileHash=profile_hash,
+            accessMode=access_mode,
         )
         turn_started = time.perf_counter()
-        output = server.run_turn(thread_id, worker, message, effort=reasoning)
+        output = server.run_turn(thread_id, worker, message, effort=reasoning, access_mode=access_mode)
         self._timing(log_path, "codex_turn_completed", turn_started, agent=name)
 
         outputs = {name: output}
@@ -329,6 +335,7 @@ class PersistentCodexDispatcher:
             **self._routing_metadata(server),
             "threadReused": thread_reused,
             "profileHash": profile_hash,
+            "accessMode": access_mode,
         }
 
     def _run_single_locked(
@@ -422,12 +429,14 @@ def _normalized_reasoning(value: str) -> str:
 def _visual_agent_profile(agent: dict[str, Any]) -> dict[str, Any]:
     work_package_value = agent.get("workPackage", {})
     work_package = work_package_value if isinstance(work_package_value, dict) else {}
+    access_mode = normalize_access_mode(str(agent.get("accessMode") or "danger-full-access"))
     return {
         "name": str(agent.get("name") or "Agent").strip()[:80],
         "role": str(agent.get("role") or "Agent").strip()[:80],
         "model": str(agent.get("llm") or "gpt-5.4-mini").strip()[:80],
         "speed": str(agent.get("speed") or "balanced").strip()[:40],
         "reasoning": _normalized_reasoning(str(agent.get("reasoning") or "medium")),
+        "accessMode": access_mode or "danger-full-access",
         "workPackage": {
             key: str(work_package.get(key) or "").strip()[:1200]
             for _, key in WORK_PACKAGE_FIELDS
@@ -452,6 +461,7 @@ def _visual_agent_developer_instructions(profile: dict[str, Any]) -> str:
         f"Selected model: {profile['model']}\n"
         f"Preferred speed: {profile['speed']}\n"
         f"Reasoning level: {profile['reasoning']}\n\n"
+        f"Access mode: {profile['accessMode']}\n\n"
         f"Agent work package:\n{package_text}\n\n"
         "Use this work package as your operating contract for the conversation. "
         "Answer as this configured agent, keep responses concise unless the user asks for detail, "

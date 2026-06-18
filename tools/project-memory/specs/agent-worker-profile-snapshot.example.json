@@ -25,10 +25,10 @@
     "expectedOutput": "Implementation summary, changed files, checks, blockers."
   },
   "runtimePolicy": {
-    "sandboxMode": "workspace-write",
+    "sandboxMode": "danger-full-access",
     "approvalPolicy": "never",
     "networkAccess": true,
-    "workspaceRootPolicy": "isolated-generated-workspace",
+    "workspaceRootPolicy": "project-root",
     "maxTurns": 12
   },
   "codexAppServer": {

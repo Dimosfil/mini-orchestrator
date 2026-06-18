@@ -28,6 +28,7 @@ MOJIBAKE_MARKERS = (
     "РІвЂћ",
     "Г‚",
 )
+ACCESS_MODES = {"danger-full-access", "workspace-write", "read-only"}
 
 
 def mojibake_score(text: str) -> int:
@@ -93,6 +94,37 @@ def resolve_worker_chat_root(root: Path, configured: str | Path | None = None) -
     if candidate == root.resolve():
         return None
     return candidate
+
+
+def normalize_access_mode(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().casefold()
+    return normalized if normalized in ACCESS_MODES else "danger-full-access"
+
+
+def approval_policy_for_access(access_mode: str | None) -> str | None:
+    normalized = normalize_access_mode(access_mode)
+    if normalized == "danger-full-access":
+        return "never"
+    if normalized in {"workspace-write", "read-only"}:
+        return "on-request"
+    return None
+
+
+def thread_sandbox_for_access(access_mode: str | None) -> str | None:
+    return normalize_access_mode(access_mode)
+
+
+def turn_sandbox_policy_for_access(access_mode: str | None) -> dict[str, Any] | None:
+    normalized = normalize_access_mode(access_mode)
+    if normalized == "danger-full-access":
+        return {"type": "dangerFullAccess"}
+    if normalized == "workspace-write":
+        return {"type": "workspaceWrite", "networkAccess": False, "writableRoots": []}
+    if normalized == "read-only":
+        return {"type": "readOnly", "networkAccess": False}
+    return None
 
 
 class CodexAppServer:
@@ -237,8 +269,12 @@ class CodexAppServer:
         worker: Worker,
         developer_instructions: str | None = None,
         base_instructions: str | None = None,
+        access_mode: str | None = None,
     ) -> str:
         thread_cwd = self.worker_chat_root or self.root
+        approval_policy = approval_policy_for_access(access_mode)
+        approvals_reviewer = "user" if approval_policy else None
+        sandbox = thread_sandbox_for_access(access_mode)
         result = self.request(
             "thread/start",
             {
@@ -246,9 +282,9 @@ class CodexAppServer:
                 "modelProvider": None,
                 "cwd": str(thread_cwd),
                 "runtimeWorkspaceRoots": [str(thread_cwd)],
-                "approvalPolicy": None,
-                "approvalsReviewer": None,
-                "sandbox": None,
+                "approvalPolicy": approval_policy,
+                "approvalsReviewer": approvals_reviewer,
+                "sandbox": sandbox,
                 "permissions": None,
                 "config": None,
                 "serviceName": None,
@@ -273,6 +309,7 @@ class CodexAppServer:
             threadId=thread_id,
             targetWorkspace=str(self.root),
             workerChatRoot=str(self.worker_chat_root) if self.worker_chat_root else None,
+            accessMode=normalize_access_mode(access_mode),
         )
         return thread_id
 
@@ -282,7 +319,11 @@ class CodexAppServer:
         worker: Worker,
         prompt: str,
         effort: str | None = None,
+        access_mode: str | None = None,
     ) -> str:
+        approval_policy = approval_policy_for_access(access_mode)
+        approvals_reviewer = "user" if approval_policy else None
+        sandbox_policy = turn_sandbox_policy_for_access(access_mode)
         result = self.request(
             "turn/start",
             {
@@ -294,9 +335,9 @@ class CodexAppServer:
                 "environments": None,
                 "cwd": str(self.root),
                 "runtimeWorkspaceRoots": [str(self.root)],
-                "approvalPolicy": None,
-                "approvalsReviewer": None,
-                "sandboxPolicy": None,
+                "approvalPolicy": approval_policy,
+                "approvalsReviewer": approvals_reviewer,
+                "sandboxPolicy": sandbox_policy,
                 "permissions": None,
                 "model": None,
                 "effort": effort,
@@ -307,7 +348,14 @@ class CodexAppServer:
             },
         )
         turn_id = result.get("turn", {}).get("id")
-        write_event(self.log_path, "agent_turn_started", agent=worker.name, threadId=thread_id, turnId=turn_id)
+        write_event(
+            self.log_path,
+            "agent_turn_started",
+            agent=worker.name,
+            threadId=thread_id,
+            turnId=turn_id,
+            accessMode=normalize_access_mode(access_mode),
+        )
         return self.collect_final_response(turn_id)
 
     def collect_final_response(self, turn_id: str | None) -> str:

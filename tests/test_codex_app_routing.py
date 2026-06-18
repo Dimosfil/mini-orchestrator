@@ -63,3 +63,24 @@ def test_thread_uses_worker_chat_root_and_turn_uses_target_workspace(tmp_path):
     assert thread_params["runtimeWorkspaceRoots"] == [str(worker_root)]
     assert turn_params["cwd"] == str(root.resolve())
     assert turn_params["runtimeWorkspaceRoots"] == [str(root.resolve())]
+
+
+def test_full_access_mode_maps_to_app_server_approval_and_sandbox(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    log_path = root / "run.jsonl"
+    worker = Worker("executor", "gpt-5.4", "medium", root / "executor.toml")
+
+    server = CapturingCodexAppServer(log_path, root=root)
+    thread_id = server.start_thread(worker, access_mode="danger-full-access")
+    output = server.run_turn(thread_id, worker, "write files", access_mode="danger-full-access")
+
+    assert output == "done:turn-1"
+    thread_params = server.requests[0][1]
+    turn_params = server.requests[1][1]
+    assert thread_params["approvalPolicy"] == "never"
+    assert thread_params["approvalsReviewer"] == "user"
+    assert thread_params["sandbox"] == "danger-full-access"
+    assert turn_params["approvalPolicy"] == "never"
+    assert turn_params["approvalsReviewer"] == "user"
+    assert turn_params["sandboxPolicy"] == {"type": "dangerFullAccess"}

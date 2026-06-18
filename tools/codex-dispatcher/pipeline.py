@@ -115,13 +115,14 @@ def run_pipeline(
     *,
     root: Path,
     runs_dir: Path,
+    run_id: str | None = None,
     chain: bool = False,
     plan_only: bool = False,
     codex_server_factory: CodexServerFactory = CodexAppServer,
 ) -> tuple[Path, dict[str, str], DispatchDecision]:
     runs_dir.mkdir(parents=True, exist_ok=True)
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-    log_path = runs_dir / f"{run_id}.jsonl"
+    selected_run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    log_path = runs_dir / f"{selected_run_id}.jsonl"
     write_event(
         log_path,
         "task_created",
@@ -158,7 +159,11 @@ def run_pipeline(
                 use_worker_models=use_worker_models,
             ) as server:
                 thread_id = server.start_thread(planner)
-                output = server.run_turn(thread_id, planner, prompt)
+                try:
+                    output = server.run_turn(thread_id, planner, prompt)
+                except Exception as exc:
+                    write_event(log_path, "error", agent=planner.name, error=str(exc), planOnly=True)
+                    raise
         outputs = {"planner": output}
         write_event(log_path, "agent_result", agent=planner.name, output=output, planOnly=True)
         write_event(log_path, "final", outputs=outputs, planOnly=True)
@@ -184,7 +189,11 @@ def run_pipeline(
                 prior = build_chain_prior(outputs)
                 prompt = build_worker_prompt(worker, decision.next_input, prior=prior)
                 write_event(log_path, "handoff", to=worker.name, prompt=prompt, chain=True)
-                output = server.run_turn(thread_id, worker, prompt)
+                try:
+                    output = server.run_turn(thread_id, worker, prompt)
+                except Exception as exc:
+                    write_event(log_path, "error", agent=worker.name, error=str(exc), chain=True)
+                    raise
                 outputs[worker.name] = output
                 write_event(log_path, "agent_result", agent=worker.name, output=output, chain=True)
 
@@ -208,7 +217,11 @@ def run_pipeline(
         thread_id = server.start_thread(selected_worker)
         prompt = build_worker_prompt(selected_worker, decision.next_input)
         write_event(log_path, "handoff", to=selected_worker.name, prompt=prompt)
-        output = server.run_turn(thread_id, selected_worker, prompt)
+        try:
+            output = server.run_turn(thread_id, selected_worker, prompt)
+        except Exception as exc:
+            write_event(log_path, "error", agent=selected_worker.name, error=str(exc))
+            raise
         outputs[selected_worker.name] = output
         write_event(log_path, "agent_result", agent=selected_worker.name, output=output)
 

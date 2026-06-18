@@ -1,14 +1,16 @@
-{
-  "commit_message_languages": {
-    "primary": "English",
-    "additional": [],
-    "available": [
-      "English",
-      "Russian",
-      "Spanish",
-      "German",
-      "French"
-    ],
-    "format": "selected_order"
-  }
+﻿{
+    "commit_message_languages":  {
+                                     "primary":  "English",
+                                     "additional":  [
+                                                        "Russian"
+                                                    ],
+                                     "available":  [
+                                                       "English",
+                                                       "Russian",
+                                                       "Spanish",
+                                                       "German",
+                                                       "French"
+                                                   ],
+                                     "format":  "selected_order"
+                                 }
 }

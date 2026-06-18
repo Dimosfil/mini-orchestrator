@@ -31,6 +31,7 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
     parser = argparse.ArgumentParser(description="Run Codex-native dispatcher.")
     parser.add_argument("--task", help="Task to classify and route to one dispatcher worker.")
     parser.add_argument("--task-file", help="UTF-8 text file containing the task to classify and route.")
+    parser.add_argument("--run-id", help="Stable run id used for the generated JSONL log filename.")
     parser.add_argument("--dry-run", action="store_true", help="Write dispatcher events without starting Codex.")
     parser.add_argument("--chain", action="store_true", help="Run planner -> executor -> reviewer instead of one selected worker.")
     parser.add_argument("--plan-only", action="store_true", help="Return only a chat approval plan without writing project files.")
@@ -89,10 +90,11 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
             args.use_worker_models,
             root=root,
             runs_dir=runs_dir,
+            run_id=args.run_id,
             chain=args.chain,
             plan_only=args.plan_only,
         )
-    except (RuntimeError, ValueError) as exc:
+    except (RuntimeError, ValueError, TimeoutError) as exc:
         print_json(
             {
                 "status": "error",

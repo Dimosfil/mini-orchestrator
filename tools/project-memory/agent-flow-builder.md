@@ -30,12 +30,13 @@ until a backend save/validate/run contract is implemented.
   - `llm`
   - `speed`
   - `reasoning`
+  - `accessMode`
   - `workPackage`
   - `x`
   - `y`
 - Built-in presets are `planner`, `executor`, `reviewer`, `agent`, and
   `custom`. A preset defines the default role, name prefix, model, speed,
-  reasoning level, and initial work-package text.
+  reasoning level, access mode, and initial work-package text.
 - Each card has an agent settings dialog. The dialog exposes runtime settings
   and the work-package prompt fields:
   - `role/instructions`
@@ -80,6 +81,11 @@ until a backend save/validate/run contract is implemented.
 - Supported MVP `speed` values are `fast`, `balanced`, and `careful`.
 - Supported MVP `reasoning` values are `low`, `medium`, `high`, and
   `very_high`.
+- Supported MVP `accessMode` values are `danger-full-access`,
+  `workspace-write`, and `read-only`. The temporary default is
+  `danger-full-access` so real file-writing Codex app-server workflow tests do
+  not stop at the file-change approval gate. The card UI must keep this visible
+  because full access removes sandbox boundaries.
 - Cards can be moved within the workspace and persist their positions.
 - Cards can be deleted with the mini `×` button in the card header or with the
   `Delete` key when the card is selected and focus is not inside a text field
@@ -114,6 +120,8 @@ until a backend save/validate/run contract is implemented.
   card's work-package fields into thread developer instructions, and sends
   ordinary user messages as turns in that thread. It must not route each
   mini-chat message through a cold `orchestrator planner` dispatcher wrapper.
+  The profile hash includes `accessMode`, so changing card access creates a new
+  Codex thread with matching app-server sandbox/approval settings.
   Opening a mini-chat may call `/api/agents/chat-warmup` to create the thread
   before the first message; full priming turns are a separate latency trade-off
   because they add hidden conversation state and can make immediate sends wait

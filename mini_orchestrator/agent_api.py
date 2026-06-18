@@ -85,6 +85,7 @@ class VisualAgentApi:
                     "llm": model,
                     "speed": str(agent_value.get("speed") or "balanced"),
                     "reasoning": str(agent_value.get("reasoning") or "medium"),
+                    "accessMode": str(agent_value.get("accessMode") or "danger-full-access"),
                 },
                 "message": response_text,
                 "dispatcher": {
@@ -194,6 +195,7 @@ class VisualAgentApi:
         model = str(agent.get("llm") or "unknown").strip()[:80]
         speed = str(agent.get("speed") or "balanced").strip()[:40]
         reasoning = str(agent.get("reasoning") or "medium").strip()[:40]
+        access_mode = str(agent.get("accessMode") or "danger-full-access").strip()[:80]
         dispatcher_role = self._agent_role_for_dispatcher(role)
         work_package_value = agent.get("workPackage", {})
         work_package = work_package_value if isinstance(work_package_value, dict) else {}
@@ -230,7 +232,8 @@ class VisualAgentApi:
             f"Agent role: {role}\n"
             f"Selected model: {model}\n"
             f"Preferred speed: {speed}\n"
-            f"Reasoning level: {reasoning}\n\n"
+            f"Reasoning level: {reasoning}\n"
+            f"Access mode: {access_mode}\n\n"
             f"Agent work package:\n{package_text}\n\n"
             "Keep the answer concise and useful for checking this agent's style. "
             "If the user asks who you are or which model/settings are selected, answer from these agent settings. "
