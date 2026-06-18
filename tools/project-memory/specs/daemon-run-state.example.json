@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-example",
+  "task": {
+    "taskId": "worknest-task-example",
+    "sprintId": "sprint-example",
+    "project": "mini-orchestrator"
+  },
+  "profileSnapshotId": "profile-snapshot-example",
+  "status": "running",
+  "workspacePath": "generated-workspaces/run-example",
+  "thread": {
+    "threadId": "codex-thread-example",
+    "currentTurnId": "codex-turn-example",
+    "turnCount": 1
+  },
+  "tokens": {
+    "input": 1200,
+    "output": 400,
+    "total": 1600
+  },
+  "lastEvent": "turn_started",
+  "lastError": null,
+  "artifacts": {
+    "eventLogPath": "runtime/daemon-runs/run-example.jsonl",
+    "workspaceGenerated": true,
+    "durableProjectMemory": false,
+    "privateRuntimeData": true
+  },
+  "createdAt": "2026-06-18T00:00:00Z",
+  "updatedAt": "2026-06-18T00:01:00Z"
+}

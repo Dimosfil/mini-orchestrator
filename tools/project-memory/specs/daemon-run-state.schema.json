@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mini-orchestrator.daemon-run-state.v1",
+  "title": "Daemon Run State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "task",
+    "profileSnapshotId",
+    "status",
+    "workspacePath",
+    "thread",
+    "tokens",
+    "lastEvent",
+    "lastError",
+    "artifacts",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "sprintId",
+        "project"
+      ],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sprintId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "profileSnapshotId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "claimed",
+        "running",
+        "blocked",
+        "retrying",
+        "done",
+        "failed"
+      ]
+    },
+    "workspacePath": {
+      "type": "string"
+    },
+    "thread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "threadId",
+        "currentTurnId",
+        "turnCount"
+      ],
+      "properties": {
+        "threadId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "currentTurnId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "turnCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "output",
+        "total"
+      ],
+      "properties": {
+        "input": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "lastEvent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lastError": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventLogPath",
+        "workspaceGenerated",
+        "durableProjectMemory",
+        "privateRuntimeData"
+      ],
+      "properties": {
+        "eventLogPath": {
+          "type": "string"
+        },
+        "workspaceGenerated": {
+          "type": "boolean"
+        },
+        "durableProjectMemory": {
+          "type": "boolean"
+        },
+        "privateRuntimeData": {
+          "type": "boolean"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

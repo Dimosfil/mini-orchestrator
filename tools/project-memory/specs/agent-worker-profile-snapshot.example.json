@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "snapshotId": "profile-snapshot-example",
+  "source": {
+    "flowId": "flow-example",
+    "flowVersion": 1,
+    "sourceCardId": "agent-executor-1",
+    "compiledAt": "2026-06-18T00:00:00Z",
+    "approvalId": "approval-example"
+  },
+  "displayName": "Executor 1",
+  "role": "Executor",
+  "model": {
+    "name": "gpt-5.4",
+    "reasoning": "medium",
+    "speed": "balanced"
+  },
+  "workPackage": {
+    "instructions": "Perform the bounded implementation step.",
+    "currentObjective": "Implement the approved task.",
+    "inputsArtifacts": "WorkNest task context and approved flow manifest.",
+    "constraints": "Stay inside the selected workspace and allowed actions.",
+    "previousOutputs": "Planner output, if this is not the first node.",
+    "allowedTools": "Read, edit, run focused tests.",
+    "expectedOutput": "Implementation summary, changed files, checks, blockers."
+  },
+  "runtimePolicy": {
+    "sandboxMode": "workspace-write",
+    "approvalPolicy": "never",
+    "networkAccess": true,
+    "workspaceRootPolicy": "isolated-generated-workspace",
+    "maxTurns": 12
+  },
+  "codexAppServer": {
+    "workerName": "executor",
+    "developerInstructions": "Role, constraints, allowed actions, and output contract compiled from the approved card.",
+    "initialUserMessage": "WorkNest task context plus current objective and expected output."
+  }
+}

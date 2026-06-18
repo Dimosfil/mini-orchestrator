@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mini-orchestrator.agent-worker-profile-snapshot.v1",
+  "title": "Agent Worker Profile Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "source",
+    "displayName",
+    "role",
+    "model",
+    "workPackage",
+    "runtimePolicy",
+    "codexAppServer"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flowId",
+        "flowVersion",
+        "sourceCardId",
+        "compiledAt"
+      ],
+      "properties": {
+        "flowId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flowVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceCardId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "compiledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "approvalId": {
+          "type": "string"
+        }
+      }
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "reasoning",
+        "speed"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasoning": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "very_high"
+          ]
+        },
+        "speed": {
+          "enum": [
+            "fast",
+            "balanced",
+            "careful"
+          ]
+        }
+      }
+    },
+    "workPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instructions",
+        "currentObjective",
+        "inputsArtifacts",
+        "constraints",
+        "previousOutputs",
+        "allowedTools",
+        "expectedOutput"
+      ],
+      "properties": {
+        "instructions": {
+          "type": "string"
+        },
+        "currentObjective": {
+          "type": "string"
+        },
+        "inputsArtifacts": {
+          "type": "string"
+        },
+        "constraints": {
+          "type": "string"
+        },
+        "previousOutputs": {
+          "type": "string"
+        },
+        "allowedTools": {
+          "type": "string"
+        },
+        "expectedOutput": {
+          "type": "string"
+        }
+      }
+    },
+    "runtimePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sandboxMode",
+        "approvalPolicy",
+        "networkAccess",
+        "workspaceRootPolicy"
+      ],
+      "properties": {
+        "sandboxMode": {
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "danger-full-access"
+          ]
+        },
+        "approvalPolicy": {
+          "enum": [
+            "never",
+            "on-request",
+            "on-failure"
+          ]
+        },
+        "networkAccess": {
+          "type": "boolean"
+        },
+        "workspaceRootPolicy": {
+          "enum": [
+            "project-root",
+            "isolated-generated-workspace"
+          ]
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "codexAppServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workerName",
+        "developerInstructions",
+        "initialUserMessage"
+      ],
+      "properties": {
+        "workerName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "developerInstructions": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initialUserMessage": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
