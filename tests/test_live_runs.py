@@ -45,6 +45,8 @@ def test_dispatcher_live_runs_surface_approval_gate(tmp_path):
     assert run["status"] == "waiting_approval"
     assert run["currentAgent"] == "executor"
     assert run["approval"]["required"] is True
+    assert [stage["agent"] for stage in run["stages"]] == ["planner", "executor", "reviewer"]
+    assert run["stages"][1]["status"] == "waiting_approval"
     assert payload["summary"]["blocked"] == 1
 
 
@@ -68,4 +70,56 @@ def test_dispatcher_live_runs_surface_completed_chain(tmp_path):
     assert run["status"] == "done"
     assert run["currentAgent"] == "reviewer"
     assert run["outputs"]["executor"] == "done"
+    assert [stage["agent"] for stage in run["stages"]] == ["planner", "executor", "reviewer"]
+    assert [stage["status"] for stage in run["stages"]] == ["done", "done", "done"]
     assert payload["summary"]["done"] == 1
+
+
+def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
+    root = tmp_path
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / "visual-agent-run.jsonl"
+    log_path.parent.mkdir(parents=True)
+
+    write_event(
+        log_path,
+        {
+            "time": "2026-06-18T00:00:00Z",
+            "type": "task_created",
+            "task": "Create or improve a runnable dental CRM demo",
+            "mode": "visual-agent-task",
+            "profileSnapshotId": "worker-profile-dental-crm-builder-abc123",
+            "visualAgentName": "Dental CRM Builder",
+        },
+    )
+    write_event(
+        log_path,
+        {
+            "time": "2026-06-18T00:00:01Z",
+            "type": "agent_thread_started",
+            "agent": "Dental CRM Builder",
+            "model": "gpt-5.4",
+            "threadId": "thread-dental",
+            "profileSnapshotId": "worker-profile-dental-crm-builder-abc123",
+        },
+    )
+    write_event(
+        log_path,
+        {
+            "time": "2026-06-18T00:00:02Z",
+            "type": "agent_result",
+            "agent": "Dental CRM Builder",
+            "output": "Dental CRM demo verified.",
+        },
+    )
+    write_event(log_path, {"time": "2026-06-18T00:00:03Z", "type": "final"})
+
+    payload = build_dispatcher_live_runs(root)
+
+    run = payload["runs"][0]
+    assert run["status"] == "done"
+    assert run["mode"] == "visual-agent-task"
+    assert run["currentAgent"] == "Dental CRM Builder"
+    assert run["profileSnapshotId"] == "worker-profile-dental-crm-builder-abc123"
+    assert run["stages"][0]["agent"] == "Dental CRM Builder"
+    assert run["stages"][0]["status"] == "done"
+    assert run["outputs"]["Dental CRM Builder"] == "Dental CRM demo verified."

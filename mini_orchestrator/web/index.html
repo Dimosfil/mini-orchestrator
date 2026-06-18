@@ -200,6 +200,285 @@
       gap: 10px;
     }
 
+    .pipeline-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .runs-board {
+      display: block;
+    }
+
+    .kanban-board {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(190px, 1fr));
+      gap: 10px;
+      min-height: 308px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .kanban-column {
+      min-width: 190px;
+      min-height: 308px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+      overflow: hidden;
+    }
+
+    .kanban-column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .kanban-count {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .kanban-list {
+      display: grid;
+      gap: 8px;
+      min-height: 260px;
+      padding: 9px;
+      align-content: start;
+    }
+
+    .kanban-card {
+      display: grid;
+      gap: 9px;
+      min-height: 120px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(21, 29, 37, 0.04);
+      animation: card-lift 220ms ease-out;
+    }
+
+    @keyframes card-lift {
+      from {
+        transform: translateY(5px);
+        opacity: 0.72;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .kanban-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .kanban-stage-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .kanban-stage-chip {
+      min-width: 0;
+      padding: 5px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      background: #fbfcfd;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .kanban-stage-chip.running,
+    .kanban-stage-chip.queued,
+    .kanban-stage-chip.planning {
+      border-color: #caa757;
+      color: var(--warn);
+      background: #fff8e6;
+    }
+
+    .kanban-stage-chip.waiting_approval,
+    .kanban-stage-chip.failed {
+      border-color: #e2aaaa;
+      color: var(--danger);
+      background: #fff1f1;
+    }
+
+    .kanban-stage-chip.done {
+      border-color: #9bc7ad;
+      color: var(--ok);
+      background: #edf8f1;
+    }
+
+    .kanban-empty {
+      min-height: 76px;
+      padding: 18px 10px;
+      border: 1px dashed var(--line);
+      border-radius: 7px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .pipeline-panel,
+    .done-column {
+      min-height: 278px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .pipeline-panel {
+      padding: 10px;
+    }
+
+    .pipeline-panel .empty {
+      min-height: 256px;
+      border-radius: 6px;
+    }
+
+    .done-column {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .done-column-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }
+
+    .pipeline-run {
+      display: grid;
+      gap: 12px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .pipeline-run-header,
+    .done-run {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .pipeline-stages {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }
+
+    .pipeline-stage {
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      gap: 8px;
+      min-height: 88px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+    }
+
+    .stage-mark {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      border: 2px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+    }
+
+    .pipeline-stage.running .stage-mark,
+    .pipeline-stage.queued .stage-mark,
+    .pipeline-stage.planning .stage-mark {
+      border-color: var(--warn);
+      background: #fff8e6;
+    }
+
+    .pipeline-stage.waiting_approval .stage-mark,
+    .pipeline-stage.failed .stage-mark {
+      border-color: var(--danger);
+      background: #fff1f1;
+    }
+
+    .pipeline-stage.done .stage-mark {
+      border-color: var(--ok);
+      background: #edf8f1;
+    }
+
+    .stage-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .stage-meta,
+    .done-meta {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .stage-event {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .done-count {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .done-list {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 10px 12px 12px;
+    }
+
+    .done-run {
+      min-height: 54px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+    }
+
     .run-card {
       display: grid;
       gap: 10px;
@@ -599,6 +878,10 @@
         grid-template-columns: 1fr 1fr;
       }
 
+      .kanban-board {
+        grid-template-columns: repeat(2, minmax(190px, 1fr));
+      }
+
       .summary-grid {
         grid-template-columns: 1fr 1fr;
       }
@@ -623,7 +906,14 @@
 
       .runs-overview,
       .run-grid,
-      .run-detail-grid {
+      .run-detail-grid,
+      .kanban-board {
+        grid-template-columns: 1fr;
+      }
+
+      .pipeline-run-header,
+      .done-run {
+        display: grid;
         grid-template-columns: 1fr;
       }
 
@@ -688,8 +978,10 @@
         </div>
       </div>
 
-      <div id="live-runs-list" class="run-grid"></div>
-      <div id="live-runs-empty" class="empty runs-empty" hidden>No daemon runs yet.</div>
+      <div class="runs-board">
+        <div id="live-runs-list" class="kanban-board" aria-label="Live run Kanban"></div>
+        <div id="live-runs-empty" class="empty runs-empty" hidden>No daemon runs yet.</div>
+      </div>
     </section>
 
     <section class="layout">
@@ -849,6 +1141,201 @@
       return String(status || "unknown").toLowerCase().replace(/[^a-z0-9_-]/g, "");
     }
 
+    function runDisplayTitle(run, profile) {
+      return run.task?.title || profile.displayName || run.profileSnapshotId || run.runId || "Run";
+    }
+
+    function stageStatusLabel(status) {
+      const labels = {
+        pending: "Pending",
+        queued: "Queued",
+        planning: "Planning",
+        running: "Running",
+        waiting_approval: "Waiting approval",
+        failed: "Failed",
+        done: "Done",
+      };
+      return labels[status] || textOf(status);
+    }
+
+    function stagesForRun(run, profile) {
+      if (Array.isArray(run.stages) && run.stages.length) {
+        return run.stages;
+      }
+      return [
+        {
+          agent: run.currentAgent || profile.role || "worker",
+          label: profile.displayName || run.currentAgent || "Worker",
+          status: run.status || "unknown",
+          statusLabel: stageStatusLabel(run.status),
+          model: profile.model || "",
+          threadId: run.thread?.threadId || "",
+          turnCount: run.thread?.turnCount || 0,
+          tokens: run.tokens?.total || 0,
+          lastEvent: run.lastEvent || "",
+        },
+      ];
+    }
+
+    function renderPipelineRun(run, profile) {
+      const status = runStatusClass(run.status);
+      const article = document.createElement("article");
+      article.className = "pipeline-run";
+
+      const header = document.createElement("div");
+      header.className = "pipeline-run-header";
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("h3");
+      title.className = "run-title";
+      title.textContent = runDisplayTitle(run, profile);
+      const subtitle = document.createElement("p");
+      subtitle.className = "run-subtitle";
+      subtitle.textContent = `${run.runId || "-"} / ${run.artifacts?.eventLogPath || "-"}`;
+      titleWrap.append(title, subtitle);
+      const pill = document.createElement("span");
+      pill.className = `run-status ${status}`;
+      pill.textContent = run.status || "unknown";
+      header.append(titleWrap, pill);
+
+      const stages = document.createElement("div");
+      stages.className = "pipeline-stages";
+      for (const stage of stagesForRun(run, profile)) {
+        const stageStatus = runStatusClass(stage.status || "pending");
+        const item = document.createElement("section");
+        item.className = `pipeline-stage ${stageStatus}`;
+
+        const mark = document.createElement("span");
+        mark.className = "stage-mark";
+        mark.setAttribute("aria-hidden", "true");
+
+        const body = document.createElement("div");
+        const stageTitle = document.createElement("h4");
+        stageTitle.className = "stage-title";
+        stageTitle.textContent = stage.label || stage.agent || "Worker";
+        const meta = document.createElement("p");
+        meta.className = "stage-meta";
+        const model = stage.model ? ` - ${stage.model}` : "";
+        const tokens = stage.tokens ? ` - ${stage.tokens} tokens` : "";
+        meta.textContent = `${stage.statusLabel || stageStatusLabel(stage.status)}${model}${tokens}`;
+        const event = document.createElement("p");
+        event.className = "stage-event";
+        event.textContent = stage.lastEvent || (stage.threadId ? `Thread ${stage.threadId}` : "");
+        body.append(stageTitle, meta);
+        if (event.textContent) {
+          body.append(event);
+        }
+        item.append(mark, body);
+        stages.append(item);
+      }
+
+      const event = document.createElement("p");
+      event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
+      event.textContent = run.lastError || `Last event: ${run.lastEvent || "-"}`;
+
+      article.append(header, stages, event);
+      return article;
+    }
+
+    function renderDoneRun(run, profile) {
+      const item = document.createElement("article");
+      item.className = "done-run";
+
+      const body = document.createElement("div");
+      const title = document.createElement("h3");
+      title.className = "run-title";
+      title.textContent = runDisplayTitle(run, profile);
+      const meta = document.createElement("p");
+      meta.className = "done-meta";
+      meta.textContent = `${run.runId || "-"} / ${run.lastEvent || "-"}`;
+      body.append(title, meta);
+
+      const pill = document.createElement("span");
+      pill.className = "run-status done";
+      pill.textContent = "done";
+      item.append(body, pill);
+      return item;
+    }
+
+    const KANBAN_COLUMNS = [
+      { id: "backlog", title: "Backlog" },
+      { id: "todo", title: "Todo" },
+      { id: "in_progress", title: "In Progress" },
+      { id: "human_review", title: "Human Review" },
+      { id: "done", title: "Done" },
+    ];
+
+    function runKanbanColumnId(run, profile) {
+      const status = runStatusClass(run.status);
+      const stages = stagesForRun(run, profile);
+      if (status === "done") {
+        return "done";
+      }
+      if (status === "waiting_approval" || stages.some((stage) => runStatusClass(stage.status) === "waiting_approval")) {
+        return "human_review";
+      }
+      if (status === "failed") {
+        return "human_review";
+      }
+
+      const activeStage = stages.find((stage) => {
+        const stageStatus = runStatusClass(stage.status);
+        return stageStatus === "running" || stageStatus === "planning" || stageStatus === "queued";
+      });
+      const activeAgent = runStatusClass(activeStage?.agent || run.currentAgent || "");
+      if (activeAgent === "reviewer") {
+        return "human_review";
+      }
+      if (activeAgent === "executor") {
+        return "in_progress";
+      }
+      if (activeAgent === "planner" || status === "planning") {
+        return "todo";
+      }
+      if (status === "queued") {
+        return "backlog";
+      }
+      return "in_progress";
+    }
+
+    function renderKanbanRunCard(run, profile) {
+      const status = runStatusClass(run.status);
+      const article = document.createElement("article");
+      article.className = "kanban-card";
+
+      const header = document.createElement("div");
+      header.className = "kanban-card-header";
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("h3");
+      title.className = "run-title";
+      title.textContent = runDisplayTitle(run, profile);
+      const subtitle = document.createElement("p");
+      subtitle.className = "run-subtitle";
+      subtitle.textContent = run.runId || "-";
+      titleWrap.append(title, subtitle);
+      const pill = document.createElement("span");
+      pill.className = `run-status ${status}`;
+      pill.textContent = run.status || "unknown";
+      header.append(titleWrap, pill);
+
+      const stageRow = document.createElement("div");
+      stageRow.className = "kanban-stage-row";
+      for (const stage of stagesForRun(run, profile).slice(0, 3)) {
+        const chipStatus = runStatusClass(stage.status || "pending");
+        const chip = document.createElement("span");
+        chip.className = `kanban-stage-chip ${chipStatus}`;
+        chip.title = `${stage.label || stage.agent || "Worker"}: ${stage.statusLabel || stageStatusLabel(stage.status)}`;
+        chip.textContent = stage.label || stage.agent || "Worker";
+        stageRow.append(chip);
+      }
+
+      const event = document.createElement("p");
+      event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
+      event.textContent = run.lastError || run.lastEvent || run.artifacts?.eventLogPath || "-";
+
+      article.append(header, stageRow, event);
+      return article;
+    }
+
     function renderLiveRuns(payload) {
       const summary = payload.summary || {};
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
@@ -862,60 +1349,45 @@
       liveRunsStatus.textContent = runs.length ? "Ready" : "Empty";
 
       liveRunsList.innerHTML = "";
+      const columnRuns = Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, []]));
       for (const run of runs) {
         const profile = profiles[run.profileSnapshotId] || {};
-        const status = runStatusClass(run.status);
-        const card = document.createElement("article");
-        card.className = "run-card";
+        const columnId = runKanbanColumnId(run, profile);
+        columnRuns[columnId].push({ run, profile });
+      }
+
+      for (const column of KANBAN_COLUMNS) {
+        const section = document.createElement("section");
+        section.className = `kanban-column ${column.id}`;
 
         const header = document.createElement("div");
-        header.className = "run-card-header";
-        const titleWrap = document.createElement("div");
-        const title = document.createElement("h3");
-        title.className = "run-title";
-        title.textContent = profile.displayName || run.profileSnapshotId || "Worker";
-        const subtitle = document.createElement("p");
-        subtitle.className = "run-subtitle";
-        subtitle.textContent = `${run.task?.taskId || "-"} / ${run.runId || "-"}`;
-        titleWrap.append(title, subtitle);
-        const pill = document.createElement("span");
-        pill.className = `run-status ${status}`;
-        pill.textContent = run.status || "unknown";
-        header.append(titleWrap, pill);
+        header.className = "kanban-column-header";
+        const title = document.createElement("span");
+        title.textContent = column.title;
+        const count = document.createElement("span");
+        count.className = "kanban-count";
+        count.textContent = textOf(columnRuns[column.id].length);
+        header.append(title, count);
 
-        const detailGrid = document.createElement("div");
-        detailGrid.className = "run-detail-grid";
-        const details = [
-          ["Role", run.currentAgent || profile.role || "-"],
-          ["Mode", run.mode || "-"],
-          ["Model", profile.model || "-"],
-          ["Tokens", run.tokens?.total ?? 0],
-          ["Approval", run.approval?.required ? "Required" : "No"],
-          ["Thread", run.thread?.threadId || "-"],
-          ["Log", run.artifacts?.eventLogPath || "-"],
-        ];
-        for (const [label, value] of details) {
-          const detail = document.createElement("div");
-          detail.className = "run-detail";
-          const detailLabel = document.createElement("div");
-          detailLabel.className = "run-detail-label";
-          detailLabel.textContent = label;
-          const detailValue = document.createElement("div");
-          detailValue.className = "run-detail-value";
-          detailValue.textContent = textOf(value);
-          detail.append(detailLabel, detailValue);
-          detailGrid.append(detail);
+        const list = document.createElement("div");
+        list.className = "kanban-list";
+        if (columnRuns[column.id].length) {
+          for (const item of columnRuns[column.id]) {
+            list.append(renderKanbanRunCard(item.run, item.profile));
+          }
+        } else {
+          const empty = document.createElement("div");
+          empty.className = "kanban-empty";
+          empty.textContent = "No cards";
+          list.append(empty);
         }
-
-        const event = document.createElement("p");
-        event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
-        event.textContent = run.lastError || `Last event: ${run.lastEvent || "-"}`;
-
-        card.append(header, detailGrid, event);
-        liveRunsList.append(card);
+        section.append(header, list);
+        liveRunsList.append(section);
       }
+
       liveRunsList.hidden = runs.length === 0;
       liveRunsEmpty.hidden = runs.length > 0;
+      liveRunsEmpty.textContent = "No daemon runs yet.";
     }
 
     async function loadLiveRuns() {

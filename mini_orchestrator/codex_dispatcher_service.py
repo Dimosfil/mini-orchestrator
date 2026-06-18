@@ -172,6 +172,32 @@ class PersistentCodexDispatcher:
                 self._close_unlocked()
                 return self._warm_visual_agent_chat_locked(agent, turn_timeout_seconds)
 
+    def run_visual_agent_task(
+        self,
+        agent: dict[str, Any],
+        task: str,
+        profile_snapshot_id: str = "",
+        turn_timeout_seconds: float = 240,
+    ) -> dict[str, Any]:
+        with self._lock:
+            try:
+                return self._run_visual_agent_task_locked(
+                    agent,
+                    task,
+                    profile_snapshot_id,
+                    turn_timeout_seconds,
+                )
+            except RuntimeError as exc:
+                if "app-server" not in str(exc) and "Codex" not in str(exc):
+                    raise
+                self._close_unlocked()
+                return self._run_visual_agent_task_locked(
+                    agent,
+                    task,
+                    profile_snapshot_id,
+                    turn_timeout_seconds,
+                )
+
     def _warm_visual_agent_chat_locked(
         self,
         agent: dict[str, Any],
@@ -335,6 +361,104 @@ class PersistentCodexDispatcher:
             **self._routing_metadata(server),
             "threadReused": thread_reused,
             "profileHash": profile_hash,
+            "accessMode": access_mode,
+        }
+
+    def _run_visual_agent_task_locked(
+        self,
+        agent: dict[str, Any],
+        task: str,
+        profile_snapshot_id: str,
+        turn_timeout_seconds: float,
+    ) -> dict[str, Any]:
+        started = time.perf_counter()
+        log_path = self._new_log_path()
+        name = str(agent.get("name") or "Agent").strip()[:80] or "Agent"
+        write_event(
+            log_path,
+            "task_created",
+            task=task,
+            dryRun=False,
+            chain=False,
+            planOnly=False,
+            mode="visual-agent-task",
+            profileSnapshotId=profile_snapshot_id,
+            visualAgentName=name,
+        )
+
+        model = str(agent.get("llm") or "gpt-5.4-mini").strip()
+        reasoning = _normalized_reasoning(str(agent.get("reasoning") or "medium"))
+        worker = Worker(name, model, reasoning, ROOT / ".codex" / "agents" / "visual-agent.toml")
+
+        server_started = time.perf_counter()
+        server = self._ensure_server(
+            log_path,
+            request_timeout_seconds=30,
+            turn_timeout_seconds=turn_timeout_seconds,
+            use_worker_models=True,
+        )
+        self._timing(log_path, "persistent_server_ready", server_started)
+
+        profile = _visual_agent_profile(agent)
+        access_mode = str(profile.get("accessMode") or "danger-full-access")
+        profile_hash = hashlib.sha256(
+            json.dumps(profile, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
+        agent_id = str(agent.get("id") or name).strip()[:80] or name
+        thread_cache_key = f"visual-task:{agent_id}:{profile_hash}"
+        thread_id = self._thread_cache.get(thread_cache_key)
+        thread_reused = False
+        if thread_id:
+            thread_reused = True
+            write_event(
+                log_path,
+                "agent_thread_started",
+                agent=name,
+                model=model,
+                threadId=thread_id,
+                reused=True,
+                profileSnapshotId=profile_snapshot_id,
+                **self._routing_metadata(server),
+            )
+            self._timing(log_path, "codex_thread_reused", time.perf_counter(), agent=name)
+        else:
+            thread_started = time.perf_counter()
+            thread_id = server.start_thread(
+                worker,
+                developer_instructions=_visual_agent_developer_instructions(profile),
+                access_mode=access_mode,
+            )
+            self._thread_cache[thread_cache_key] = thread_id
+            self._timing(log_path, "codex_thread_started", thread_started, agent=name)
+
+        write_event(
+            log_path,
+            "handoff",
+            to=name,
+            prompt=task,
+            profileHash=profile_hash,
+            profileSnapshotId=profile_snapshot_id,
+            accessMode=access_mode,
+        )
+        turn_started = time.perf_counter()
+        output = server.run_turn(thread_id, worker, task, effort=reasoning, access_mode=access_mode)
+        self._timing(log_path, "codex_turn_completed", turn_started, agent=name)
+
+        outputs = {name: output}
+        write_event(log_path, "agent_result", agent=name, output=output)
+        write_event(log_path, "final", outputs=outputs)
+        duration = round(time.perf_counter() - started, 2)
+        return {
+            "status": "ok",
+            "log": str(log_path.relative_to(self.root)),
+            "durationSeconds": duration,
+            "mode": "visual-agent-task",
+            "agents": outputs,
+            "runtime": "persistent-codex-app-server",
+            **self._routing_metadata(server),
+            "threadReused": thread_reused,
+            "profileHash": profile_hash,
+            "profileSnapshotId": profile_snapshot_id,
             "accessMode": access_mode,
         }
 

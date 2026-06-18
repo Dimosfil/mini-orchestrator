@@ -14,6 +14,43 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Symphony-Style Kanban Live Run Cards
+
+Goal: make the main dashboard show dispatcher live runs as task cards moving
+through a compact Kanban board, so smoke tasks such as a dentistry CRM are
+visible in the same mental model as Symphony/WorkNest cards.
+
+Planned changes:
+
+- [x] Render Live Runs as Backlog, Todo, In Progress, Human Review, and Done
+  columns.
+- [x] Place each dispatcher run card in the column implied by its current
+  event/stage state.
+- [x] Start a background dentistry CRM task and verify it moves through Todo,
+  In Progress, Human Review, and Done.
+
+Risks or dependencies:
+
+- This remains dispatcher JSONL observability, not a real Symphony daemon or
+  WorkNest task movement lifecycle.
+
+### Live Runs Current Pipeline UX
+
+Goal: make the dashboard emphasize the current task pipeline while keeping
+completed runs available in a compact Done area.
+
+Planned changes:
+
+- [x] Add normalized run stage state for planner, executor, and reviewer.
+- [x] Render active/current runs as a pipeline instead of debug cards.
+- [x] Move completed runs into a compact Done folder/list.
+- [x] Verify focused tests and UI smoke.
+
+Risks or dependencies:
+
+- Dispatcher logs are still the source of truth; the UI must not invent worker
+  progress beyond recorded events.
+
 ### Visual Agent Access Mode
 
 Goal: let each visual-agent card choose the Codex runtime access mode used by
@@ -716,3 +753,59 @@ Planned changes:
 Verification:
 
 - [x] Run focused syntax/compile checks.
+
+### Runnable Dental CRM Demo
+
+Goal: create a standalone dental CRM demo that shows the product surface agents
+should eventually generate and modify.
+
+Planned changes:
+
+- [x] Add `.mini_orchestrator/test-runs/dental-crm-demo/index.html`.
+- [x] Include seed patients, appointments, treatment statuses, and admin-task
+  Kanban.
+- [x] Keep it runnable by opening `index.html` directly in a browser.
+- [x] Document demo usage next to the HTML file.
+- [x] Verify the HTML and inline JavaScript parse cleanly.
+
+Definition of done:
+
+- [x] A user can open the demo and see patient cards, schedule, treatment
+  progress, and admin tasks without starting a server.
+- [x] The demo is suitable as the visible product target for the next
+  visual-agent-card execution layer.
+
+Verification:
+
+- [x] `node -e "<inline script parse check>"`
+- [x] `python -m pytest tests`
+
+### Default Visual Agent Card Execution
+
+Goal: choose one default visual agent card and run the dental CRM task through
+that card as a compiled worker profile.
+
+Planned changes:
+
+- [x] Define a default `Dental CRM Builder` visual agent card.
+- [x] Persist the selected card on the backend.
+- [x] Validate and compile the card into an immutable worker-profile snapshot.
+- [x] Add a run path that executes the dental CRM task through the compiled
+  visual agent profile.
+- [x] Make the resulting JSONL run visible in Live Runs as the selected card.
+
+Definition of done:
+
+- [x] The default card can be retrieved, persisted, compiled, and run from the
+  backend.
+- [x] A dental CRM task run produces a dispatcher JSONL event log with the
+  selected card name as the worker stage.
+- [x] Focused tests and syntax checks pass.
+
+Verification:
+
+- [x] `python -m pytest tests`
+- [x] `python -m compileall mini_orchestrator`
+- [x] Dental CRM run through `Dental CRM Builder` completed with
+  `mode=visual-agent-task` and profile snapshot
+  `worker-profile-dental-crm-builder-5301d5ba3d6ea2b0`.

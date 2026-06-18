@@ -531,6 +531,14 @@ Current MVP note:
 - [x] Added a main dashboard `Live Runs` section showing active, blocked,
       done, and total counts plus run cards with profile, status, tokens,
       thread, log, and last event/error.
+- [x] Updated `Live Runs` to emphasize current work as a pipeline. Dispatcher
+      JSONL replay now returns normalized per-run stages, chain runs predeclare
+      `planner -> executor -> reviewer`, approval gates attach to the relevant
+      stage, and completed runs move into a compact `Done` folder/list instead
+      of filling the main dashboard.
+- [x] Changed the `Done` area from a collapsed folder into a persistent
+      scrollable column next to the current/last pipeline so fast completed
+      runs remain visible without expanding a control.
 - [x] Marked the endpoint as `read-only-demo` in the mini-orchestrator
       service contract. This MVP does not claim WorkNest tasks, query a daemon
       service, bind another port, or launch Codex workers.

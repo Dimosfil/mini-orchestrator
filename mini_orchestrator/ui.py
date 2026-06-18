@@ -15,6 +15,15 @@ import webbrowser
 from urllib.parse import urlparse
 
 from .agent_api import AgentApiError, VisualAgentApi
+from .agent_profiles import (
+    AgentProfileError,
+    DEFAULT_DENTAL_CRM_TASK,
+    compile_worker_profile,
+    default_dental_crm_agent_card,
+    load_or_create_default_agent_card,
+    persist_agent_card,
+    visual_agent_task_prompt,
+)
 from .codex_dispatcher_service import PersistentCodexDispatcher
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
@@ -430,6 +439,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/dispatcher/run",
             "/api/agents/chat",
             "/api/agents/chat-warmup",
+            "/api/agents/default-card",
+            "/api/agents/compile",
+            "/api/agents/run",
             "/api/agents/translate-work-package",
             "/api/agents/translation-log",
         }:
@@ -552,6 +564,60 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._http_error(500, str(exc))
             return
 
+        if path == "/api/agents/default-card":
+            try:
+                card_value = payload.get("agent")
+                if isinstance(card_value, dict):
+                    result = persist_agent_card(card_value, ROOT)
+                else:
+                    result = persist_agent_card(default_dental_crm_agent_card(ROOT), ROOT)
+                self._json_response(200, result)
+            except AgentProfileError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/agents/compile":
+            try:
+                card_value = payload.get("agent")
+                card = card_value if isinstance(card_value, dict) else load_or_create_default_agent_card(ROOT)
+                task = str(payload.get("task") or DEFAULT_DENTAL_CRM_TASK).strip()
+                persist_agent_card(card, ROOT)
+                profile = compile_worker_profile(card, task, ROOT)
+                self._json_response(200, {"profile": profile})
+            except AgentProfileError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/agents/run":
+            try:
+                if payload.get("approved") is not True:
+                    self._http_error(400, "Field 'approved' must be true before running the visual agent.")
+                    return
+                card_value = payload.get("agent")
+                card = card_value if isinstance(card_value, dict) else load_or_create_default_agent_card(ROOT)
+                task = str(payload.get("task") or DEFAULT_DENTAL_CRM_TASK).strip()
+                persist_agent_card(card, ROOT)
+                profile = compile_worker_profile(card, task, ROOT)
+                result = self.dispatcher_service.run_visual_agent_task(
+                    profile["agent"],
+                    visual_agent_task_prompt(profile),
+                    str(profile["snapshotId"]),
+                )
+                result["profile"] = profile
+                result["tech"] = build_dispatcher_tech_summary(result, ROOT)
+                self._json_response(200, result)
+            except AgentProfileError as exc:
+                self._http_error(400, str(exc))
+            except subprocess.TimeoutExpired:
+                self._http_error(504, "Visual agent run timed out.")
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
         if path == "/api/agents/translation-log":
             event = str(payload.get("event") or "translation-log").strip()[:80]
             field = str(payload.get("field") or "").strip()[:80]
@@ -621,6 +687,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if path == "/api/daemon/runs":
             self._json_response(200, build_dispatcher_live_runs(ROOT))
             return
+        if path == "/api/agents/default-card":
+            try:
+                card = load_or_create_default_agent_card(ROOT)
+                self._json_response(200, {"card": card})
+            except AgentProfileError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
         static_pages = {
             "/": "index.html",
             "/index.html": "index.html",
@@ -656,6 +731,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Run approved dispatcher workflows through /api/dispatcher/run.",
                         "Start approved dispatcher workflows in background mode and poll /api/daemon/runs for live state.",
                         "Test one visual agent card through /api/agents/chat.",
+                        "Compile and run a selected visual agent card through /api/agents/compile and /api/agents/run.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read demo daemon run-state records through /api/daemon/runs.",
                     ],
@@ -705,6 +781,26 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "path": "/api/agents/chat",
                             "required": ["agent", "message"],
                         },
+                        "defaultAgentCard": {
+                            "method": "GET",
+                            "path": "/api/agents/default-card",
+                        },
+                        "persistDefaultAgentCard": {
+                            "method": "POST",
+                            "path": "/api/agents/default-card",
+                            "optional": ["agent"],
+                        },
+                        "compileAgentCard": {
+                            "method": "POST",
+                            "path": "/api/agents/compile",
+                            "optional": ["agent", "task"],
+                        },
+                        "runAgentCard": {
+                            "method": "POST",
+                            "path": "/api/agents/run",
+                            "required": ["approved"],
+                            "optional": ["agent", "task"],
+                        },
                         "agentWorkPackageTranslation": {
                             "method": "POST",
                             "path": "/api/agents/translate-work-package",
@@ -721,6 +817,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "dispatcher-plan-preview",
                         "approved-dispatcher-workflow",
                         "agent-card-mini-chat",
+                        "agent-card-compile-run",
                         "agent-work-package-translation",
                         "daemon-runs-demo-dashboard",
                     ],

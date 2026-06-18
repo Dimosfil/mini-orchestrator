@@ -7,6 +7,7 @@ import json
 
 
 ACTIVE_STATUSES = {"queued", "planning", "running", "waiting_approval"}
+CHAIN_AGENTS = ["planner", "executor", "reviewer"]
 
 
 def _utc_now() -> str:
@@ -69,6 +70,98 @@ def _compact_task(task: str, limit: int = 160) -> str:
     return task[: limit - 1].rstrip() + "..."
 
 
+def _stage_label(agent: str) -> str:
+    labels = {
+        "planner": "Planner",
+        "executor": "Executor",
+        "reviewer": "Reviewer",
+        "dispatcher": "Dispatcher",
+        "visual-agent": "Visual Agent",
+    }
+    return labels.get(agent, agent.replace("-", " ").title())
+
+
+def _stage_status_label(status: str) -> str:
+    labels = {
+        "pending": "Pending",
+        "running": "Running",
+        "waiting_approval": "Waiting approval",
+        "done": "Done",
+        "failed": "Failed",
+    }
+    return labels.get(status, status.replace("_", " ").title())
+
+
+def _ensure_stage(
+    stage_map: Dict[str, Dict[str, Any]],
+    stage_order: list[str],
+    agent: str,
+) -> Dict[str, Any]:
+    if agent not in stage_map:
+        stage_map[agent] = {
+            "agent": agent,
+            "label": _stage_label(agent),
+            "status": "pending",
+            "statusLabel": "Pending",
+            "startedAt": None,
+            "completedAt": None,
+            "threadId": None,
+            "turnCount": 0,
+            "model": None,
+            "tokens": 0,
+            "lastEvent": "",
+            "output": "",
+        }
+        stage_order.append(agent)
+    return stage_map[agent]
+
+
+def _set_stage_status(stage: Dict[str, Any], status: str, event_time: str) -> None:
+    current_status = str(stage.get("status") or "pending")
+    if current_status == "done" and status not in {"failed", "waiting_approval"}:
+        return
+    if current_status == "waiting_approval" and status == "running":
+        return
+    stage["status"] = status
+    stage["statusLabel"] = _stage_status_label(status)
+    if status in {"running", "waiting_approval"} and not stage.get("startedAt"):
+        stage["startedAt"] = event_time or None
+    if status in {"done", "failed"}:
+        stage["completedAt"] = event_time or None
+
+
+def _touch_stage(
+    stage_map: Dict[str, Dict[str, Any]],
+    stage_order: list[str],
+    agent: str,
+    status: str,
+    event_time: str,
+    *,
+    model: Any = None,
+    thread_id: str = "",
+    last_event: str = "",
+    output: str = "",
+    tokens: int | None = None,
+    turn_increment: int = 0,
+) -> None:
+    if not agent:
+        return
+    stage = _ensure_stage(stage_map, stage_order, agent)
+    _set_stage_status(stage, status, event_time)
+    if model:
+        stage["model"] = model
+    if thread_id:
+        stage["threadId"] = thread_id
+    if last_event:
+        stage["lastEvent"] = last_event
+    if output:
+        stage["output"] = output
+    if tokens is not None:
+        stage["tokens"] = tokens
+    if turn_increment:
+        stage["turnCount"] = int(stage.get("turnCount") or 0) + turn_increment
+
+
 def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
     status = "queued"
     mode = "single"
@@ -84,6 +177,9 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
     thread_to_agent: dict[str, str] = {}
     outputs: dict[str, str] = {}
     event_counts: dict[str, int] = {}
+    stage_map: Dict[str, Dict[str, Any]] = {}
+    stage_order: list[str] = []
+    profile_snapshot_id = ""
     approval_count = 0
     turn_count = 0
     token_total = 0
@@ -95,12 +191,23 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
 
         if event_type == "task_created":
             task = str(event.get("task") or "")
-            if event.get("planOnly"):
+            profile_snapshot_id = str(event.get("profileSnapshotId") or profile_snapshot_id)
+            event_mode = str(event.get("mode") or "")
+            if event_mode == "visual-agent-task":
+                mode = "visual-agent-task"
+                status = "queued"
+                visual_agent_name = str(event.get("visualAgentName") or "")
+                if visual_agent_name:
+                    _ensure_stage(stage_map, stage_order, visual_agent_name)
+            elif event.get("planOnly"):
                 mode = "plan"
                 status = "planning"
+                _ensure_stage(stage_map, stage_order, "planner")
             elif event.get("chain"):
                 mode = "chain"
                 status = "queued"
+                for agent in CHAIN_AGENTS:
+                    _ensure_stage(stage_map, stage_order, agent)
             elif event.get("dryRun"):
                 mode = "dry-run"
                 status = "queued"
@@ -109,10 +216,14 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             last_event = "Task accepted"
         elif event_type == "dispatch_decision":
             last_event = f"Dispatch: {event.get('role') or '-'}"
+            role = str(event.get("role") or "")
+            if role:
+                _ensure_stage(stage_map, stage_order, role)
         elif event_type == "agent_started":
             current_agent = str(event.get("agent") or current_agent)
             status = "running"
             last_event = f"{current_agent} started"
+            _touch_stage(stage_map, stage_order, current_agent, "running", last_event_time, last_event=last_event)
         elif event_type == "agent_thread_started":
             current_agent = str(event.get("agent") or current_agent)
             status = "running"
@@ -124,18 +235,42 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
                     "agent": current_agent,
                     "model": event.get("model"),
                     "threadId": thread_id or None,
+                    "profileSnapshotId": event.get("profileSnapshotId") or profile_snapshot_id or None,
                 }
             )
+            profile_snapshot_id = str(event.get("profileSnapshotId") or profile_snapshot_id)
             last_event = f"{current_agent} thread started"
+            _touch_stage(
+                stage_map,
+                stage_order,
+                current_agent,
+                "running",
+                last_event_time,
+                model=event.get("model"),
+                thread_id=thread_id,
+                last_event=last_event,
+            )
         elif event_type == "handoff":
             current_agent = str(event.get("to") or current_agent)
+            profile_snapshot_id = str(event.get("profileSnapshotId") or profile_snapshot_id)
             status = "running"
             last_event = f"Handoff to {current_agent}"
+            _touch_stage(stage_map, stage_order, current_agent, "running", last_event_time, last_event=last_event)
         elif event_type == "agent_turn_started":
             current_agent = str(event.get("agent") or current_agent)
             status = "running"
             turn_count += 1
             last_event = f"{current_agent} turn started"
+            _touch_stage(
+                stage_map,
+                stage_order,
+                current_agent,
+                "running",
+                last_event_time,
+                thread_id=str(event.get("threadId") or ""),
+                last_event=last_event,
+                turn_increment=1,
+            )
         elif event_type == "codex_notification":
             method = _notification_method(event)
             item_type = _notification_item_type(event)
@@ -147,6 +282,14 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
                 waiting_approval = True
                 status = "waiting_approval"
                 last_event = f"{current_agent or 'worker'} waiting for file-change approval"
+                _touch_stage(
+                    stage_map,
+                    stage_order,
+                    current_agent or "worker",
+                    "waiting_approval",
+                    last_event_time,
+                    last_event=last_event,
+                )
             elif method == "thread/tokenUsage/updated":
                 message = event.get("message")
                 params = message.get("params", {}) if isinstance(message, dict) else {}
@@ -154,8 +297,25 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
                 total = usage.get("total", {}) if isinstance(usage, dict) else {}
                 token_total = int(total.get("totalTokens") or token_total or 0)
                 last_event = "Token usage updated"
+                _touch_stage(
+                    stage_map,
+                    stage_order,
+                    current_agent or "worker",
+                    "running",
+                    last_event_time,
+                    last_event=last_event,
+                    tokens=token_total,
+                )
             elif item_type:
                 last_event = f"{current_agent or 'worker'} {item_type}"
+                _touch_stage(
+                    stage_map,
+                    stage_order,
+                    current_agent or "worker",
+                    "running",
+                    last_event_time,
+                    last_event=last_event,
+                )
             elif method:
                 last_event = method
         elif event_type == "agent_result":
@@ -164,20 +324,68 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             outputs[current_agent] = output
             status = "running"
             last_event = f"{current_agent} result returned"
+            _touch_stage(
+                stage_map,
+                stage_order,
+                current_agent,
+                "done",
+                last_event_time,
+                last_event=last_event,
+                output=output,
+            )
         elif event_type == "final":
             has_final = True
             status = "done"
             last_event = "Workflow completed"
+            final_outputs = event.get("outputs")
+            if isinstance(final_outputs, dict):
+                for agent, output in final_outputs.items():
+                    agent_name = str(agent)
+                    output_text = str(output or "")
+                    outputs[agent_name] = output_text
+                    _touch_stage(
+                        stage_map,
+                        stage_order,
+                        agent_name,
+                        "done",
+                        last_event_time,
+                        last_event=f"{agent_name} result returned",
+                        output=output_text,
+                    )
         elif event_type == "error":
             has_error = True
             last_error = str(event.get("error") or event.get("message") or "Dispatcher error")
             status = "failed"
             last_event = "Workflow failed"
+            _touch_stage(
+                stage_map,
+                stage_order,
+                current_agent or "dispatcher",
+                "failed",
+                last_event_time,
+                last_event=last_error,
+            )
 
     if waiting_approval and not has_final:
         status = "waiting_approval"
         if has_error and "Timed out" in last_error:
             last_event = "Executor approval gate is still visible in worker thread"
+        _touch_stage(
+            stage_map,
+            stage_order,
+            current_agent or "worker",
+            "waiting_approval",
+            last_event_time,
+            last_event=last_event,
+        )
+
+    if has_final:
+        for agent in stage_order:
+            stage = stage_map[agent]
+            if stage.get("status") in {"running", "waiting_approval"}:
+                _set_stage_status(stage, "done", last_event_time)
+
+    stages = [stage_map[agent] for agent in stage_order]
 
     try:
         log_value = str(path.relative_to(root))
@@ -194,7 +402,7 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             "title": _compact_task(task) or path.stem,
             "raw": task,
         },
-        "profileSnapshotId": current_agent or "dispatcher",
+        "profileSnapshotId": profile_snapshot_id or current_agent or "dispatcher",
         "thread": {
             "threadId": workers[-1]["threadId"] if workers else None,
             "turnCount": turn_count,
@@ -208,6 +416,7 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             "required": waiting_approval and not has_final,
             "count": approval_count,
         },
+        "stages": stages,
         "eventTypes": event_counts,
         "updatedAt": last_event_time,
         "outputs": outputs,
