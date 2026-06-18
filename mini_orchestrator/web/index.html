@@ -134,6 +134,185 @@
       align-items: start;
     }
 
+    .live-runs-section {
+      margin-bottom: 16px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .section-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .mini-button {
+      min-height: 32px;
+      padding: 5px 9px;
+      font-size: 13px;
+    }
+
+    .runs-overview {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .run-stat {
+      min-height: 64px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .run-stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .run-stat-value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .run-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .run-card {
+      display: grid;
+      gap: 10px;
+      min-height: 210px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .run-card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .run-title {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.3;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .run-subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .run-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--surface-muted);
+      font-size: 12px;
+      font-weight: 700;
+      flex: 0 0 auto;
+      text-transform: uppercase;
+    }
+
+    .run-status.running,
+    .run-status.claimed,
+    .run-status.queued,
+    .run-status.retrying {
+      border-color: #caa757;
+      color: var(--warn);
+      background: #fff8e6;
+    }
+
+    .run-status.blocked,
+    .run-status.failed {
+      border-color: #e2aaaa;
+      color: var(--danger);
+      background: #fff1f1;
+    }
+
+    .run-status.done {
+      border-color: #9bc7ad;
+      color: var(--ok);
+      background: #edf8f1;
+    }
+
+    .run-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .run-detail {
+      min-width: 0;
+    }
+
+    .run-detail-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .run-detail-value {
+      font-size: 13px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .run-event {
+      margin: 0;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .run-error {
+      color: var(--danger);
+    }
+
+    .runs-empty {
+      min-height: 96px;
+    }
+
     .panel {
       background: var(--surface);
       border: 1px solid var(--line);
@@ -408,6 +587,17 @@
         display: grid;
       }
 
+      .section-header {
+        align-items: flex-start;
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .runs-overview,
+      .run-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
       .summary-grid {
         grid-template-columns: 1fr 1fr;
       }
@@ -427,6 +617,12 @@
       }
 
       .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .runs-overview,
+      .run-grid,
+      .run-detail-grid {
         grid-template-columns: 1fr;
       }
 
@@ -456,6 +652,44 @@
         </div>
       </div>
     </header>
+
+    <section class="live-runs-section" aria-labelledby="live-runs-title">
+      <div class="section-header">
+        <div>
+          <h2 id="live-runs-title" class="section-title">Live Runs</h2>
+          <p id="live-runs-source" class="subtitle">Loading daemon run state...</p>
+        </div>
+        <div class="section-actions">
+          <div class="status-pill" aria-live="polite">
+            <span id="live-runs-dot" class="dot busy"></span>
+            <span id="live-runs-status">Loading</span>
+          </div>
+          <button id="refresh-runs-button" class="btn-secondary mini-button" type="button">Refresh</button>
+        </div>
+      </div>
+
+      <div class="runs-overview" aria-label="Run summary">
+        <div class="run-stat">
+          <div class="run-stat-label">Active</div>
+          <div id="runs-active" class="run-stat-value">-</div>
+        </div>
+        <div class="run-stat">
+          <div class="run-stat-label">Blocked</div>
+          <div id="runs-blocked" class="run-stat-value">-</div>
+        </div>
+        <div class="run-stat">
+          <div class="run-stat-label">Done</div>
+          <div id="runs-done" class="run-stat-value">-</div>
+        </div>
+        <div class="run-stat">
+          <div class="run-stat-label">Total</div>
+          <div id="runs-total" class="run-stat-value">-</div>
+        </div>
+      </div>
+
+      <div id="live-runs-list" class="run-grid"></div>
+      <div id="live-runs-empty" class="empty runs-empty" hidden>No daemon runs yet.</div>
+    </section>
 
     <section class="layout">
       <form id="task-form" class="panel">
@@ -544,6 +778,16 @@
   <script>
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
+    const refreshRunsButton = document.querySelector("#refresh-runs-button");
+    const liveRunsSource = document.querySelector("#live-runs-source");
+    const liveRunsDot = document.querySelector("#live-runs-dot");
+    const liveRunsStatus = document.querySelector("#live-runs-status");
+    const runsActive = document.querySelector("#runs-active");
+    const runsBlocked = document.querySelector("#runs-blocked");
+    const runsDone = document.querySelector("#runs-done");
+    const runsTotal = document.querySelector("#runs-total");
+    const liveRunsList = document.querySelector("#live-runs-list");
+    const liveRunsEmpty = document.querySelector("#live-runs-empty");
     const taskInput = document.querySelector("#task");
     const planMode = document.querySelector("#plan-mode");
     const planButton = document.querySelector("#plan-button");
@@ -598,6 +842,95 @@
         return value || "-";
       }
       return JSON.stringify(value, null, 2);
+    }
+
+    function runStatusClass(status) {
+      return String(status || "unknown").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    }
+
+    function renderLiveRuns(payload) {
+      const summary = payload.summary || {};
+      const runs = Array.isArray(payload.runs) ? payload.runs : [];
+      const profiles = payload.profiles || {};
+      runsActive.textContent = textOf(summary.active);
+      runsBlocked.textContent = textOf(summary.blocked);
+      runsDone.textContent = textOf(summary.done);
+      runsTotal.textContent = textOf(summary.total);
+      liveRunsSource.textContent = `${payload.source || "unknown"} source - ${payload.generatedAt || ""}`.trim();
+      liveRunsDot.className = `dot ${summary.blocked || summary.failed ? "busy" : "ok"}`;
+      liveRunsStatus.textContent = runs.length ? "Ready" : "Empty";
+
+      liveRunsList.innerHTML = "";
+      for (const run of runs) {
+        const profile = profiles[run.profileSnapshotId] || {};
+        const status = runStatusClass(run.status);
+        const card = document.createElement("article");
+        card.className = "run-card";
+
+        const header = document.createElement("div");
+        header.className = "run-card-header";
+        const titleWrap = document.createElement("div");
+        const title = document.createElement("h3");
+        title.className = "run-title";
+        title.textContent = profile.displayName || run.profileSnapshotId || "Worker";
+        const subtitle = document.createElement("p");
+        subtitle.className = "run-subtitle";
+        subtitle.textContent = `${run.task?.taskId || "-"} / ${run.runId || "-"}`;
+        titleWrap.append(title, subtitle);
+        const pill = document.createElement("span");
+        pill.className = `run-status ${status}`;
+        pill.textContent = run.status || "unknown";
+        header.append(titleWrap, pill);
+
+        const detailGrid = document.createElement("div");
+        detailGrid.className = "run-detail-grid";
+        const details = [
+          ["Role", profile.role || "-"],
+          ["Model", profile.model || "-"],
+          ["Tokens", run.tokens?.total ?? 0],
+          ["Turns", run.thread?.turnCount ?? 0],
+          ["Thread", run.thread?.threadId || "-"],
+          ["Log", run.artifacts?.eventLogPath || "-"],
+        ];
+        for (const [label, value] of details) {
+          const detail = document.createElement("div");
+          detail.className = "run-detail";
+          const detailLabel = document.createElement("div");
+          detailLabel.className = "run-detail-label";
+          detailLabel.textContent = label;
+          const detailValue = document.createElement("div");
+          detailValue.className = "run-detail-value";
+          detailValue.textContent = textOf(value);
+          detail.append(detailLabel, detailValue);
+          detailGrid.append(detail);
+        }
+
+        const event = document.createElement("p");
+        event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
+        event.textContent = run.lastError || `Last event: ${run.lastEvent || "-"}`;
+
+        card.append(header, detailGrid, event);
+        liveRunsList.append(card);
+      }
+      liveRunsList.hidden = runs.length === 0;
+      liveRunsEmpty.hidden = runs.length > 0;
+    }
+
+    async function loadLiveRuns() {
+      liveRunsDot.className = "dot busy";
+      liveRunsStatus.textContent = "Loading";
+      try {
+        const response = await fetch("/api/daemon/runs", { headers: { Accept: "application/json" } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || response.statusText);
+        }
+        renderLiveRuns(payload);
+      } catch (error) {
+        liveRunsDot.className = "dot error";
+        liveRunsStatus.textContent = "Error";
+        liveRunsSource.textContent = error.message;
+      }
     }
 
     function updateSummary(payload) {
@@ -727,6 +1060,7 @@
     }
 
     form.addEventListener("submit", createPlan);
+    refreshRunsButton.addEventListener("click", loadLiveRuns);
     agentsBuilderButton.addEventListener("click", () => {
       window.open("/agents-builder", "mini-orchestrator-agents-builder");
     });
@@ -743,6 +1077,8 @@
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => activeTab(tab.dataset.tab));
     });
+    loadLiveRuns();
+    window.setInterval(loadLiveRuns, 15000);
   </script>
 </body>
 </html>

@@ -14,6 +14,23 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Live Runs Dashboard MVP
+
+Goal: make the current mini-orchestrator UI show Symphony-style daemon run
+state before a real daemon loop exists.
+
+Planned changes:
+
+- [x] Add a small API surface for daemon run-state records.
+- [x] Render active run cards on the main dashboard.
+- [x] Keep the MVP read-only and backed by demo/schema-shaped run states.
+- [x] Verify Python syntax, focused tests, and HTTP smoke.
+
+Risks or dependencies:
+
+- This is an observability surface only. It must not claim WorkNest tasks, bind
+  new ports, or launch real Codex workers until the daemon lifecycle is added.
+
 ### Codex Worker Chat Project Routing
 
 Goal: route Codex worker chats spawned by the mini-orchestrator UI into a

@@ -524,6 +524,17 @@ Tasks:
 - [ ] Add mini-orchestrator API proxy endpoints under `/api/daemon/*`.
 - [ ] Add UI panel for running/retrying/blocked/done summary.
 
+Current MVP note:
+
+- [x] Added a read-only `/api/daemon/runs` endpoint backed by local demo
+      run-state records shaped like `daemon-run-state.v1`.
+- [x] Added a main dashboard `Live Runs` section showing active, blocked,
+      done, and total counts plus run cards with profile, status, tokens,
+      thread, log, and last event/error.
+- [x] Marked the endpoint as `read-only-demo` in the mini-orchestrator
+      service contract. This MVP does not claim WorkNest tasks, query a daemon
+      service, bind another port, or launch Codex workers.
+
 Definition of done:
 
 - [ ] UI can show daemon state from a configured service.

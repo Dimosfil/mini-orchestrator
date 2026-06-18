@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from .agent_api import AgentApiError, VisualAgentApi
 from .codex_dispatcher_service import PersistentCodexDispatcher
+from .daemon_runs import build_demo_daemon_runs
 from .orchestrator import Orchestrator
 
 
@@ -557,6 +558,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self._path()
+        if path == "/api/daemon/runs":
+            self._json_response(200, build_demo_daemon_runs())
+            return
         static_pages = {
             "/": "index.html",
             "/index.html": "index.html",
@@ -592,11 +596,13 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Run approved dispatcher workflows through /api/dispatcher/run.",
                         "Test one visual agent card through /api/agents/chat.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
+                        "Read demo daemon run-state records through /api/daemon/runs.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
+                        "Do not treat demo daemon runs as claimed WorkNest tasks or live Codex workers.",
                     ],
                     "startup": {
                         "requiresConfigService": True,
@@ -642,6 +648,11 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "path": "/api/agents/translate-work-package",
                             "required": ["text", "language"],
                         },
+                        "daemonRuns": {
+                            "method": "GET",
+                            "path": "/api/daemon/runs",
+                            "mode": "read-only-demo",
+                        },
                     },
                     "capabilities": [
                         "orchestrator-dashboard",
@@ -649,6 +660,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "approved-dispatcher-workflow",
                         "agent-card-mini-chat",
                         "agent-work-package-translation",
+                        "daemon-runs-demo-dashboard",
                     ],
                 },
             )
