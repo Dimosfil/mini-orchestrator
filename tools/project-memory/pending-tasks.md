@@ -14,6 +14,49 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Codex Worker Primary LLM Path
+
+Goal: make the Codex app-server dispatcher the primary LLM channel for visual
+agent UI helpers while OpenAI API keys/direct Responses calls remain deferred.
+
+Planned changes:
+
+- [x] Record that work-package translation uses dispatcher/Codex worker first.
+- [x] Remove direct OpenAI translation from the active UI translation path.
+- [x] Research dispatcher/Codex worker latency and optimization options.
+- [x] Verify focused tests for the agent API and dispatcher-facing UI path.
+
+Verification:
+
+- [x] Run focused agent API tests.
+- [x] Run Python syntax checks for changed modules.
+
+### Persistent Codex App-Server Experiment
+
+Goal: reduce visual-agent helper latency by reusing one Codex app-server process
+inside the UI runtime.
+
+Planned changes:
+
+- [x] Skip transient translation cache; future successful translations belong
+  in durable DB storage.
+- [x] Add a persistent Codex dispatcher manager for single-worker UI helper
+  requests.
+- [x] Keep plan-only, dry-run, and full-chain workflows on the isolated
+  subprocess dispatcher path.
+- [x] Add timing events around persistent app-server readiness, thread start,
+  and turn completion.
+- [x] Add compact prompt and helper-thread reuse only for translation helper
+  requests.
+- [x] Verify persistent translation behavior against a running Codex app-server.
+
+Verification:
+
+- [x] Run focused agent API tests.
+- [x] Run Python syntax checks for changed modules.
+- [x] Run a live two-translation smoke through `PersistentCodexDispatcher`:
+  first request 12.87s, second request 1.37s with helper-thread reuse.
+
 ### Bootstrap Instruction Kit
 
 Goal: initialize local agent instructions from `D:\AI\general-instructions`.
@@ -454,6 +497,46 @@ Planned changes:
 Verification:
 
 - [x] Run focused syntax/compile checks.
+
+### Translation Helper Runtime Boundary
+
+Goal: keep work-package translation as application UI helper behavior instead
+of inheriting the model selected for workflow agent cards.
+
+Planned changes:
+
+- [x] Make the backend choose a dedicated translation helper model.
+- [x] Stop sending the selected card LLM as the translation model from the UI.
+- [x] Update focused tests and project-memory behavior notes.
+
+Verification:
+
+- [x] Run focused agent API tests.
+- [x] Run compile checks for touched Python modules.
+
+### Persistent Visual Agent Mini-Chat
+
+Goal: make mini-chat exercise the actual selected visual agent without routing
+each message through a cold dispatcher/planner wrapper.
+
+Planned changes:
+
+- [x] Add a persistent per-card Codex thread path for mini-chat.
+- [x] Put card/work-package instructions into thread developer instructions.
+- [x] Send ordinary user messages to the existing thread instead of wrapping
+      every turn in a full dispatcher worker prompt.
+- [x] Keep dispatcher fallback for tests and non-UI callers.
+
+Verification:
+
+- [x] Run focused agent API tests.
+- [x] Run compile checks for touched Python modules and dispatcher transport.
+
+Follow-up decision:
+
+- [ ] Decide whether mini-chat warmup should run a hidden priming turn. This
+      makes the next real user message fast, but it adds hidden conversation
+      state and can make immediate sends wait longer.
 
 ### GI Refactor Sprint
 

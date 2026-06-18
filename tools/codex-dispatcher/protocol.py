@@ -14,6 +14,7 @@ EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "codex_notification",
         "agent_started",
         "agent_result",
+        "timing",
         "final",
         "error",
     }

@@ -9,6 +9,8 @@ import tempfile
 DispatcherRunner = Callable[[list[str], int], dict[str, Any]]
 FailureDetailProvider = Callable[[dict[str, Any]], str]
 DirectTranslator = Callable[[str, str, str], str]
+VisualAgentChatRunner = Callable[[dict[str, Any], str, int], dict[str, Any]]
+TRANSLATION_HELPER_MODEL = "gpt-5.4-mini"
 
 
 @dataclass(frozen=True)
@@ -34,10 +36,14 @@ class VisualAgentApi:
         run_dispatcher: DispatcherRunner,
         failure_detail: FailureDetailProvider,
         direct_translator: DirectTranslator | None = None,
+        prefer_direct_translator: bool = False,
+        visual_agent_chat: VisualAgentChatRunner | None = None,
     ) -> None:
         self._run_dispatcher = run_dispatcher
         self._failure_detail = failure_detail
         self._direct_translator = direct_translator
+        self._prefer_direct_translator = prefer_direct_translator
+        self._visual_agent_chat = visual_agent_chat
 
     def chat(self, payload: dict[str, Any]) -> AgentChatResponse:
         agent_value = payload.get("agent", {})
@@ -56,8 +62,11 @@ class VisualAgentApi:
 
         history_value = payload.get("history", [])
         history = history_value if isinstance(history_value, list) else []
-        task = self._agent_chat_task(agent_value, message[:4000], history)
-        result = self._run_agent_task(task, model)
+        if self._visual_agent_chat:
+            result = self._visual_agent_chat(agent_value, message[:4000], 150)
+        else:
+            task = self._agent_chat_task(agent_value, message[:4000], history)
+            result = self._run_agent_task(task, model)
         agents = result.get("agents") if isinstance(result, dict) else {}
         if not isinstance(agents, dict) or not agents:
             raise AgentApiError(502, "Dispatcher did not return an agent response.")
@@ -100,7 +109,7 @@ class VisualAgentApi:
             )
 
         field_label = str(payload.get("field") or "work-package field").strip()[:80]
-        if self._direct_translator:
+        if self._prefer_direct_translator and self._direct_translator:
             try:
                 translated = self._direct_translator(text[:4000], language, field_label)
             except Exception:
@@ -114,12 +123,8 @@ class VisualAgentApi:
                     }
                 )
 
-        model = str(payload.get("model") or "").strip()
-        if not model or model.casefold() == "rules":
-            model = "gpt-5.4-mini"
-
         task = self._translation_task(text[:4000], language, field_label)
-        result = self._run_agent_task(task, model)
+        result = self._run_agent_task(task, TRANSLATION_HELPER_MODEL)
         agents = result.get("agents") if isinstance(result, dict) else {}
         if not isinstance(agents, dict) or not agents:
             raise AgentApiError(502, "Dispatcher did not return a translation.")
@@ -139,6 +144,7 @@ class VisualAgentApi:
                     "mode": result.get("mode"),
                     "log": result.get("log"),
                     "dispatchDecision": result.get("dispatchDecision"),
+                    "model": TRANSLATION_HELPER_MODEL,
                 },
             }
         )

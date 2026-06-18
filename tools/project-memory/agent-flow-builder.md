@@ -58,10 +58,14 @@ until a backend save/validate/run contract is implemented.
   when it returns. Saving settings persists the edited work-package text and
   its generated translation together under `workPackageTranslations`, so the
   new text/translation pair becomes the current UI helper state.
-- Work-package translation is latency-sensitive UI helper behavior. The backend
-  should try a direct OpenAI Responses API translation first using
-  `MINI_ORCHESTRATOR_TRANSLATION_MODEL` (default `gpt-4.1-mini`) and fall back
-  to the dispatcher/Codex-agent path only when the direct client is unavailable.
+- Work-package translation is latency-sensitive UI helper behavior, but the
+  active LLM channel is the dispatcher/Codex-agent path. Direct OpenAI Responses
+  API translation and API-key provisioning are deferred and must not be the
+  default runtime path until that decision is reopened.
+- Work-package translation uses an application-owned helper model, currently
+  `gpt-5.4-mini`, and must not inherit the selected `llm` value from an agent
+  card. A card's `llm` is content/runtime configuration for the workflow being
+  designed; the translator is UI infrastructure owned by the builder.
 - Work-package fields are prompt text. They are stored with the visual card and
   should be passed to future orchestrator execution as a structured handoff
   package instead of forwarding the whole mini-chat history.
@@ -105,6 +109,15 @@ until a backend save/validate/run contract is implemented.
   The mini chat calls `/api/agents/chat` only for live LLM models; `rules` cards
   show a local fallback notice. Empty dispatcher output is an error and must be
   shown in the mini chat instead of rendering a blank assistant message.
+- Mini-chat is a real visual-agent runtime check, not a lightweight helper. The
+  UI path keeps one persistent Codex thread per card/profile hash, puts the
+  card's work-package fields into thread developer instructions, and sends
+  ordinary user messages as turns in that thread. It must not route each
+  mini-chat message through a cold `orchestrator planner` dispatcher wrapper.
+  Opening a mini-chat may call `/api/agents/chat-warmup` to create the thread
+  before the first message; full priming turns are a separate latency trade-off
+  because they add hidden conversation state and can make immediate sends wait
+  longer.
 - Mini-chat tasks with non-ASCII text are passed to the dispatcher through a
   UTF-8 task file, and dispatcher JSON responses are written to stdout as UTF-8
   bytes. This preserves Cyrillic user messages and agent responses on Windows.
@@ -182,5 +195,7 @@ plan -> execute -> validate lifecycle only after validation succeeds.
 
 - Backend static route: `mini_orchestrator/ui.py`
 - Visual agent chat API behavior: `mini_orchestrator/agent_api.py`
+- Persistent Codex app-server and visual-agent mini-chat runtime:
+  `mini_orchestrator/codex_dispatcher_service.py`
 - Main UI entry button: `mini_orchestrator/web/index.html`
 - Builder MVP page: `mini_orchestrator/web/agents-builder.html`

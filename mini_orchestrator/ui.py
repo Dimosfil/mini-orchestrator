@@ -9,10 +9,12 @@ import json
 import os
 import subprocess
 import sys
+import time
 import webbrowser
 from urllib.parse import urlparse
 
 from .agent_api import AgentApiError, VisualAgentApi
+from .codex_dispatcher_service import PersistentCodexDispatcher
 from .orchestrator import Orchestrator
 
 
@@ -35,6 +37,7 @@ class _ThreadedHttpServer(ThreadingMixIn, HTTPServer):
 
 class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     orchestrator: Orchestrator
+    dispatcher_service: PersistentCodexDispatcher
     web_root: Path
     service_id: str = "mini-orchestrator"
 
@@ -65,6 +68,10 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         self._json_response(status, {"error": message})
 
     def _run_dispatcher(self, args: list[str], timeout_seconds: int) -> Dict[str, Any]:
+        persistent_result = self._try_run_persistent_dispatcher(args)
+        if persistent_result is not None:
+            return persistent_result
+
         if not DISPATCHER.exists():
             raise RuntimeError(f"Dispatcher script is missing: {DISPATCHER}")
 
@@ -96,6 +103,48 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if stderr and isinstance(payload, dict):
             payload.setdefault("stderr", stderr)
         return payload
+
+    def _try_run_persistent_dispatcher(self, args: list[str]) -> Dict[str, Any] | None:
+        if any(flag in args for flag in ("--dry-run", "--chain", "--plan-only", "--from-worknest")):
+            return None
+        task = ""
+        if "--task-file" in args:
+            index = args.index("--task-file")
+            if index + 1 >= len(args):
+                return None
+            task_path = Path(args[index + 1])
+            if not task_path.is_absolute():
+                task_path = (ROOT / task_path).resolve()
+            task = task_path.read_text(encoding="utf-8-sig")
+        elif "--task" in args:
+            index = args.index("--task")
+            if index + 1 >= len(args):
+                return None
+            task = args[index + 1]
+        if not task.strip():
+            return None
+        is_translation_helper = "Translate one mini-orchestrator work-package field" in task
+
+        model = None
+        if "--model" in args:
+            index = args.index("--model")
+            if index + 1 < len(args):
+                model = args[index + 1]
+
+        turn_timeout_seconds = 120.0
+        if "--turn-timeout-seconds" in args:
+            index = args.index("--turn-timeout-seconds")
+            if index + 1 < len(args):
+                turn_timeout_seconds = float(args[index + 1])
+
+        return self.dispatcher_service.run_single(
+            task,
+            model=model,
+            turn_timeout_seconds=turn_timeout_seconds,
+            use_worker_models="--use-codex-default-models" not in args,
+            reuse_thread=is_translation_helper,
+            compact_prompt=is_translation_helper,
+        )
 
     def _dispatcher_failure_detail(self, result: Dict[str, Any]) -> str:
         stderr = str(result.get("stderr") or "").strip()
@@ -148,7 +197,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/dispatcher/plan",
             "/api/dispatcher/run",
             "/api/agents/chat",
+            "/api/agents/chat-warmup",
             "/api/agents/translate-work-package",
+            "/api/agents/translation-log",
         }:
             self._http_error(404, "Unknown endpoint.")
             return
@@ -224,6 +275,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 response = VisualAgentApi(
                     self._run_dispatcher,
                     self._dispatcher_failure_detail,
+                    visual_agent_chat=self.dispatcher_service.run_visual_agent_chat,
                 ).chat(payload)
                 self._json_response(200, response.payload)
             except AgentApiError as exc:
@@ -234,19 +286,88 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._http_error(500, str(exc))
             return
 
+        if path == "/api/agents/chat-warmup":
+            try:
+                agent_value = payload.get("agent", {})
+                if not isinstance(agent_value, dict):
+                    self._http_error(400, "Field 'agent' must be an object.")
+                    return
+                model = str(agent_value.get("llm") or "").strip()
+                if not model:
+                    self._http_error(400, "Agent field 'llm' is required.")
+                    return
+                if model.casefold() == "rules":
+                    self._json_response(200, {"status": "skipped", "reason": "rules"})
+                    return
+                result = self.dispatcher_service.warm_visual_agent_chat(agent_value)
+                self._json_response(200, result)
+            except subprocess.TimeoutExpired:
+                self._http_error(504, "Agent mini chat warmup timed out.")
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/agents/translation-log":
+            event = str(payload.get("event") or "translation-log").strip()[:80]
+            field = str(payload.get("field") or "").strip()[:80]
+            request_id = str(payload.get("requestId") or "").strip()[:40]
+            elapsed = payload.get("elapsedMs")
+            detail = str(payload.get("detail") or "").strip()[:160]
+            print(
+                "[translation-ui-log] "
+                f"event={event} field={field} requestId={request_id} "
+                f"elapsedMs={elapsed} detail={detail}",
+                flush=True,
+            )
+            self._json_response(200, {"status": "ok"})
+            return
+
         if path == "/api/agents/translate-work-package":
+            started = time.perf_counter()
+            field = str(payload.get("field") or "").strip()[:80]
+            text_length = len(str(payload.get("text") or ""))
+            print(
+                "[translation-backend] "
+                f"request-start field={field} textLength={text_length}",
+                flush=True,
+            )
             try:
                 response = VisualAgentApi(
                     self._run_dispatcher,
                     self._dispatcher_failure_detail,
-                    self.orchestrator.llm_client.translate_work_package_field,
                 ).translate_work_package(payload)
+                elapsed_ms = round((time.perf_counter() - started) * 1000)
+                response.payload.setdefault("timing", {})["backendElapsedMs"] = elapsed_ms
+                print(
+                    "[translation-backend] "
+                    f"response-send field={field} elapsedMs={elapsed_ms} "
+                    f"source={response.payload.get('source')}",
+                    flush=True,
+                )
                 self._json_response(200, response.payload)
             except AgentApiError as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000)
+                print(
+                    "[translation-backend] "
+                    f"agent-error field={field} elapsedMs={elapsed_ms} message={exc.message}",
+                    flush=True,
+                )
                 self._http_error(exc.status, exc.message)
             except subprocess.TimeoutExpired:
+                elapsed_ms = round((time.perf_counter() - started) * 1000)
+                print(
+                    "[translation-backend] "
+                    f"timeout field={field} elapsedMs={elapsed_ms}",
+                    flush=True,
+                )
                 self._http_error(504, "Agent work-package translation timed out.")
             except Exception as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000)
+                print(
+                    "[translation-backend] "
+                    f"error field={field} elapsedMs={elapsed_ms} message={exc}",
+                    flush=True,
+                )
                 self._http_error(500, str(exc))
             return
 
@@ -286,7 +407,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Run dispatcher plan preview through /api/dispatcher/plan.",
                         "Run approved dispatcher workflows through /api/dispatcher/run.",
                         "Test one visual agent card through /api/agents/chat.",
-                        "Translate edited work-package helper text through /api/agents/translate-work-package.",
+                        "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
@@ -360,6 +481,7 @@ def run_ui_server(orchestrator: Orchestrator, ui_config: UiConfig) -> int:
 
     handler = _OrchestratorUIHandler
     handler.orchestrator = orchestrator
+    handler.dispatcher_service = PersistentCodexDispatcher(ROOT)
     handler.web_root = web_root
     handler.service_id = ui_config.service_id
     address = (ui_config.host, ui_config.port)
@@ -377,6 +499,7 @@ def run_ui_server(orchestrator: Orchestrator, ui_config: UiConfig) -> int:
     except KeyboardInterrupt:
         print("Shutting down UI.")
     finally:
+        handler.dispatcher_service.close()
         httpd.shutdown()
         httpd.server_close()
     return 0

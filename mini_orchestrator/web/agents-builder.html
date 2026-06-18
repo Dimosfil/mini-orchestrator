@@ -1348,6 +1348,8 @@
     const chatBusyAgents = new Set();
     let translationRequestSerial = 0;
     const openMiniChats = new Set();
+    const warmingMiniChatProfiles = new Set();
+    const warmedMiniChatProfiles = new Set();
 
     const flow = loadFlow();
 
@@ -1546,6 +1548,27 @@
       renderAgentSettings();
     }
 
+    function logTranslationEvent(event, detail = {}) {
+      const payload = {
+        event,
+        requestId: detail.requestId || "",
+        field: detail.field || "",
+        elapsedMs: Number.isFinite(detail.elapsedMs) ? Math.round(detail.elapsedMs) : null,
+        detail: detail.detail || "",
+      };
+      console.info("[translation]", payload);
+      try {
+        fetch("/api/agents/translation-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        // Logging must never block the editor.
+      }
+    }
+
     function workPackageTranslation(text, language, fieldKey, savedTranslations = {}) {
       const source = String(text || "").trim();
       if (!source) {
@@ -1565,11 +1588,18 @@
         source: translated ? "dictionary" : "missing",
       };
     }
-    async function fetchWorkPackageTranslation(text, language, field, model) {
+    async function fetchWorkPackageTranslation(text, language, field) {
+      const requestId = `tr-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const started = performance.now();
+      logTranslationEvent("fetch-start", {
+        requestId,
+        field,
+        detail: `language=${language} model=translation-helper textLength=${String(text || "").length}`,
+      });
       const response = await fetch("/api/agents/translate-work-package", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language, field, model }),
+        body: JSON.stringify({ text, language, field }),
       });
       let payload = {};
       try {
@@ -1578,12 +1608,30 @@
         payload = {};
       }
       if (!response.ok) {
+        logTranslationEvent("fetch-error", {
+          requestId,
+          field,
+          elapsedMs: performance.now() - started,
+          detail: payload.error || `HTTP ${response.status}`,
+        });
         throw new Error(payload.error || `Translation failed with HTTP ${response.status}.`);
       }
       const translated = String(payload.text || "").trim();
       if (!translated) {
+        logTranslationEvent("fetch-empty", {
+          requestId,
+          field,
+          elapsedMs: performance.now() - started,
+          detail: `source=${payload.source || ""}`,
+        });
         throw new Error("Translation endpoint returned an empty response.");
       }
+      logTranslationEvent("fetch-end", {
+        requestId,
+        field,
+        elapsedMs: performance.now() - started,
+        detail: `source=${payload.source || ""} backendMs=${payload.timing?.backendElapsedMs || ""}`,
+      });
       return translated;
     }
 
@@ -2198,6 +2246,10 @@
         const applyTranslation = (translated) => {
           translationText.textContent = translated.text;
           translation.classList.toggle("muted", translated.missing);
+          logTranslationEvent("apply-ui", {
+            field: labelText,
+            detail: `missing=${translated.missing ? "yes" : "no"}`,
+          });
         };
         const refreshTranslation = async (options = {}) => {
           const translated = workPackageTranslation(
@@ -2213,13 +2265,18 @@
           }
           const requestId = ++translationRequestSerial;
           activeTranslationRequest = requestId;
+          const remoteStarted = performance.now();
+          logTranslationEvent("remote-start", {
+            requestId: String(requestId),
+            field: labelText,
+            detail: `textLength=${source.length}`,
+          });
           applyTranslation({ text: "\u041f\u0435\u0440\u0435\u0432\u043e\u0436\u0443...", missing: true });
           try {
             const remoteText = await fetchWorkPackageTranslation(
               source,
               selectedTranslationLanguage,
               labelText,
-              settingsDraft.llm,
             );
             if (activeTranslationRequest === requestId && textarea.value.trim() === source) {
               settingsDraft.workPackageTranslations = normalizeWorkPackageTranslations({
@@ -2230,6 +2287,19 @@
                 },
               });
               applyTranslation({ text: remoteText, missing: false });
+              logTranslationEvent("remote-applied", {
+                requestId: String(requestId),
+                field: labelText,
+                elapsedMs: performance.now() - remoteStarted,
+                detail: "current-text-matched",
+              });
+            } else {
+              logTranslationEvent("remote-stale", {
+                requestId: String(requestId),
+                field: labelText,
+                elapsedMs: performance.now() - remoteStarted,
+                detail: "text-changed-before-response",
+              });
             }
           } catch (error) {
             if (activeTranslationRequest === requestId && textarea.value.trim() === source) {
@@ -2238,9 +2308,21 @@
                 text: `\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0435\u0440\u0435\u0432\u0435\u0441\u0442\u0438: ${message}`,
                 missing: true,
               });
+              logTranslationEvent("remote-error-applied", {
+                requestId: String(requestId),
+                field: labelText,
+                elapsedMs: performance.now() - remoteStarted,
+                detail: message,
+              });
             }
           }
         };
+        textarea.addEventListener("focus", () => {
+          logTranslationEvent("focus", {
+            field: labelText,
+            detail: `textLength=${String(textarea.value || "").length}`,
+          });
+        });
         textarea.addEventListener("input", () => {
           settingsDraft.workPackage[key] = textarea.value;
           for (const [language] of TRANSLATION_LANGUAGE_OPTIONS) {
@@ -2254,6 +2336,10 @@
         });
         textarea.addEventListener("blur", () => {
           settingsDraft.workPackage[key] = textarea.value;
+          logTranslationEvent("blur", {
+            field: labelText,
+            detail: `textLength=${String(textarea.value || "").length}`,
+          });
           refreshTranslation({ remote: true });
         });
         wrapper.append(caption, textarea);
@@ -2326,6 +2412,7 @@
           openMiniChats.delete(agent.id);
         } else {
           openMiniChats.add(agent.id);
+          warmMiniChatAgent(agent.id);
         }
         refreshMiniChat(agent.id);
       });
@@ -2448,6 +2535,48 @@
       }
     }
 
+    function miniChatAgentPayload(agent) {
+      return {
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        llm: agent.llm,
+        speed: agent.speed,
+        reasoning: agent.reasoning,
+        workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
+      };
+    }
+
+    function miniChatProfileKey(agent) {
+      return `${agent.id}:${JSON.stringify(miniChatAgentPayload(agent))}`;
+    }
+
+    async function warmMiniChatAgent(agentId) {
+      const agent = getAgent(agentId);
+      if (!agent || agent.llm === "rules") {
+        return;
+      }
+      const profileKey = miniChatProfileKey(agent);
+      if (warmedMiniChatProfiles.has(profileKey) || warmingMiniChatProfiles.has(profileKey)) {
+        return;
+      }
+      warmingMiniChatProfiles.add(profileKey);
+      try {
+        const response = await fetch("/api/agents/chat-warmup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent: miniChatAgentPayload(agent) }),
+        });
+        if (response.ok) {
+          warmedMiniChatProfiles.add(profileKey);
+        }
+      } catch {
+        // Warmup is a latency optimization; the normal send path reports real errors.
+      } finally {
+        warmingMiniChatProfiles.delete(profileKey);
+      }
+    }
+
     async function sendMiniChatMessage(agentId, rawText) {
       const agent = getAgent(agentId);
       const text = rawText.trim();
@@ -2470,15 +2599,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            agent: {
-              id: agent.id,
-              name: agent.name,
-              role: agent.role,
-              llm: agent.llm,
-              speed: agent.speed,
-              reasoning: agent.reasoning,
-              workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
-            },
+            agent: miniChatAgentPayload(agent),
             message: text,
             history: history.slice(-8),
           }),

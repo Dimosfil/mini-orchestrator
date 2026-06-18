@@ -191,7 +191,12 @@ class CodexAppServer:
                     raise RuntimeError(f"Codex request failed: {message['error']}")
                 return message["result"]
 
-    def start_thread(self, worker: Worker) -> str:
+    def start_thread(
+        self,
+        worker: Worker,
+        developer_instructions: str | None = None,
+        base_instructions: str | None = None,
+    ) -> str:
         result = self.request(
             "thread/start",
             {
@@ -205,8 +210,8 @@ class CodexAppServer:
                 "permissions": None,
                 "config": None,
                 "serviceName": None,
-                "baseInstructions": None,
-                "developerInstructions": None,
+                "baseInstructions": base_instructions,
+                "developerInstructions": developer_instructions,
                 "personality": None,
                 "ephemeral": None,
                 "sessionStartSource": None,
@@ -227,7 +232,13 @@ class CodexAppServer:
         )
         return thread_id
 
-    def run_turn(self, thread_id: str, worker: Worker, prompt: str) -> str:
+    def run_turn(
+        self,
+        thread_id: str,
+        worker: Worker,
+        prompt: str,
+        effort: str | None = None,
+    ) -> str:
         result = self.request(
             "turn/start",
             {
@@ -244,7 +255,7 @@ class CodexAppServer:
                 "sandboxPolicy": None,
                 "permissions": None,
                 "model": None,
-                "effort": None,
+                "effort": effort,
                 "summary": None,
                 "personality": None,
                 "outputSchema": None,
