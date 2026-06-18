@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
@@ -27,6 +28,7 @@ from .agent_profiles import (
 from .codex_dispatcher_service import PersistentCodexDispatcher
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
+from .symphony_daemon import SymphonyDaemonError, build_symphony_live_runs_from_url
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +36,16 @@ DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
 MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
 TASK_FILE_DIR = ROOT / ".mini_orchestrator" / "dispatcher-tasks"
+
+
+def build_live_runs_payload(root: Path = ROOT) -> Dict[str, Any]:
+    try:
+        return build_symphony_live_runs_from_url()
+    except SymphonyDaemonError as exc:
+        payload = build_dispatcher_live_runs(root)
+        payload["daemonError"] = str(exc)
+        payload["daemonSourceTried"] = "symphony-daemon"
+        return payload
 
 
 @dataclass
@@ -308,6 +320,17 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "stderr": str(stderr_path.relative_to(ROOT)),
         }
 
+    def _write_run_metadata_event(self, run_id: str, event_type: str, **payload: Any) -> None:
+        log_path = ROOT / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "type": event_type,
+            **payload,
+        }
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
     def _run_dispatcher(self, args: list[str], timeout_seconds: int) -> Dict[str, Any]:
         persistent_result = self._try_run_persistent_dispatcher(args)
         if persistent_result is not None:
@@ -510,6 +533,10 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     if str(payload.get("mode") or "").strip().casefold() == "dry-run":
                         dispatcher_args.append("--dry-run")
                     result = self._start_dispatcher_background(dispatcher_args, run_id)
+                    chain_preset = payload.get("chainPreset")
+                    if isinstance(chain_preset, dict):
+                        self._write_run_metadata_event(run_id, "chain_selected", chainPreset=chain_preset)
+                        result["chainPreset"] = chain_preset
                     result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                     self._json_response(202, result)
                     return
@@ -685,7 +712,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self._path()
         if path == "/api/daemon/runs":
-            self._json_response(200, build_dispatcher_live_runs(ROOT))
+            self._json_response(200, build_live_runs_payload(ROOT))
             return
         if path == "/api/agents/default-card":
             try:
@@ -731,15 +758,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Run approved dispatcher workflows through /api/dispatcher/run.",
                         "Start approved dispatcher workflows in background mode and poll /api/daemon/runs for live state.",
                         "Test one visual agent card through /api/agents/chat.",
-                        "Compile and run a selected visual agent card through /api/agents/compile and /api/agents/run.",
+                        "Compile visual agent cards through /api/agents/compile.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
-                        "Read demo daemon run-state records through /api/daemon/runs.",
+                        "Read Symphony daemon run-state records through /api/daemon/runs.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
-                        "Do not treat demo daemon runs as claimed WorkNest tasks or live Codex workers.",
+                        "Do not mutate Symphony daemon state through this read-only dashboard bridge.",
                     ],
                     "startup": {
                         "requiresConfigService": True,
@@ -809,7 +836,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "daemonRuns": {
                             "method": "GET",
                             "path": "/api/daemon/runs",
-                            "mode": "dispatcher-jsonl-live",
+                            "mode": "symphony-daemon-read-only",
                         },
                     },
                     "capabilities": [
@@ -817,9 +844,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "dispatcher-plan-preview",
                         "approved-dispatcher-workflow",
                         "agent-card-mini-chat",
-                        "agent-card-compile-run",
+                        "agent-card-compile",
                         "agent-work-package-translation",
-                        "daemon-runs-demo-dashboard",
+                        "symphony-daemon-dashboard",
                     ],
                 },
             )

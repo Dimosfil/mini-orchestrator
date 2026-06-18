@@ -120,16 +120,41 @@ This path uses the `plan -> execute -> validate` loop in `mini_orchestrator/`.
 The LLM coordinator is optional and falls back to rules unless OpenAI is
 configured.
 
-## Agent Builder Mini Chat
+## Agent Builder
 
 The **Настройка агентов** page stores visual agent cards in browser
 `localStorage`. Each card includes a mini chat for checking how that card talks
-through its selected `llm`, `speed`, and `reasoning` settings. The mini chat is
-a test conversation only; it does not execute the saved visual flow.
+through its selected `llm`, `speed`, and `reasoning` settings.
+
+Agent chains are browser-local presets. The builder includes a default
+`planner -> executor -> reviewer` chain in the chain dropdown, and saving the
+current canvas asks for a chain name so the visible cards and connections can be
+reused later as a named preset.
+
+The main dashboard task form has an **Исполнительная цепочка** dropdown backed
+by the same presets. Starting an approved workflow records the selected chain in
+the run log, and Live Runs shows it inside the single task card while the task
+is in progress.
+
+Live Runs first tries the read-only Symphony daemon bridge. The local-dev
+default state endpoint is `http://127.0.0.1:4000/api/v1/state`; override it with
+`MINI_ORCHESTRATOR_DAEMON_STATE_URL` when the daemon runs elsewhere. If the
+daemon is unavailable, the dashboard falls back to dispatcher JSONL replay and
+shows the daemon error in the source line.
 
 Mini chat requests call the application backend, which routes the message
 through `tools\codex-dispatcher\dispatcher.py` in real Codex app-server mode
 with the card's selected model. Cards set to `rules` do not call a live LLM.
+
+The builder is only a constructor for agent cards and chain presets. It saves
+the selected chain preset for later use; task execution belongs in the main
+dashboard/Kanban workflow, where the user chooses which chain preset should run
+the task through Live Runs.
+
+Completed agent runs appear in **Human Review** first. The user chooses
+**ToDone** to accept the result into final Done, or **Доработки** to mark that
+the task needs another pass. This review choice is currently a dashboard-local
+bridge until a task-manager state-transition endpoint exists.
 
 ## LLM Configuration
 
@@ -138,6 +163,7 @@ with the card's selected model. Cards set to `rules` do not call a live LLM.
 - `MINI_ORCHESTRATOR_COORDINATOR_MODEL`
 - `MINI_ORCHESTRATOR_EXECUTOR_MODEL`
 - `MINI_ORCHESTRATOR_OPENAI_BASE_URL`
+- `MINI_ORCHESTRATOR_DAEMON_STATE_URL`
 
 ## API Endpoints
 
@@ -148,6 +174,10 @@ with the card's selected model. Cards set to `rules` do not call a live LLM.
 - `POST /api/dispatcher/plan` - dispatcher plan preview
 - `POST /api/dispatcher/run` - approved local dispatcher workflow
 - `POST /api/agents/chat` - one-card mini chat through the selected model
+- `GET /api/agents/default-card` - load the temporary default visual agent card
+- `POST /api/agents/compile` - compile one visual card into a worker profile
+- `POST /api/agents/run` - run one approved selected visual card
+- `GET /api/daemon/runs` - normalized read-only Live Runs state from Symphony daemon or dispatcher fallback
 
 Plan preview request:
 

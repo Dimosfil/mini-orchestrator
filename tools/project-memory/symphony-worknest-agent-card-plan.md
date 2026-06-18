@@ -453,18 +453,21 @@ Run states:
 - `running`: Codex app-server worker has an active thread or turn.
 - `retrying`: previous worker attempt failed under a retryable policy and the
   daemon is preparing another bounded attempt.
+- `review`: daemon produced a ready agent result and is waiting for the user to
+  choose `ToDone` or `Доработки`.
 - `blocked`: execution needs user input, a missing service capability,
   approval, credentials, or another external state change. Report to WorkNest
   with blocked completion when the task cannot continue.
-- `done`: daemon produced accepted final output and reported completion to
-  WorkNest.
+- `done`: user accepted the reviewed result with `ToDone`, and the daemon or
+  task-manager reported completion to WorkNest.
 - `failed`: daemon hit a non-retryable infrastructure or contract error before
   a reliable blocked/done result could be reported.
 
 Allowed transitions:
 
 ```text
-queued -> claimed -> running -> done
+queued -> claimed -> running -> review -> done
+queued -> claimed -> running -> review -> retrying -> running
 queued -> claimed -> running -> blocked
 queued -> claimed -> running -> retrying -> running
 queued -> claimed -> failed
@@ -518,11 +521,11 @@ Tasks:
 
 - [ ] Add `symphony` or `mini-orchestrator-daemon` service lookup through
       config-service.
-- [ ] Add client for `GET /api/v1/state`.
+- [x] Add client for `GET /api/v1/state`.
 - [ ] Add client for `GET /api/v1/<task_or_issue_identifier>`.
 - [ ] Add client for `POST /api/v1/refresh`.
-- [ ] Add mini-orchestrator API proxy endpoints under `/api/daemon/*`.
-- [ ] Add UI panel for running/retrying/blocked/done summary.
+- [x] Add mini-orchestrator API proxy endpoints under `/api/daemon/*`.
+- [x] Add UI panel for running/retrying/blocked/done summary.
 
 Current MVP note:
 
@@ -542,17 +545,22 @@ Current MVP note:
 - [x] Marked the endpoint as `read-only-demo` in the mini-orchestrator
       service contract. This MVP does not claim WorkNest tasks, query a daemon
       service, bind another port, or launch Codex workers.
+- [x] Added a read-only Symphony daemon state bridge. `/api/daemon/runs` can
+      fetch `GET /api/v1/state` from a configured daemon state URL, normalize
+      `running`, `retrying`, and `blocked` entries into the Live Runs Kanban
+      payload, and fall back to dispatcher JSONL with a clear daemon error when
+      the daemon is unreachable.
 
 Definition of done:
 
-- [ ] UI can show daemon state from a configured service.
+- [x] UI can show daemon state from a configured service.
 - [ ] Missing service record produces a clear blocker.
 - [ ] No fallback port guessing exists.
 
 Verification:
 
-- [ ] Unit tests for daemon client success and JSON error envelopes.
-- [ ] UI/API smoke against a mocked daemon endpoint.
+- [x] Unit tests for daemon client success and JSON error envelopes.
+- [x] UI/API smoke against a mocked daemon endpoint.
 
 ### Sprint 2: Agent Cards Become Backend Worker Profiles
 

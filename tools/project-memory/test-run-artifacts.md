@@ -1,0 +1,36 @@
+# Test Run Artifacts
+
+## Purpose
+
+Generated task results used for testing, smoke checks, demos, or visual
+inspection must be kept as separate versions so earlier results remain
+inspectable.
+
+## Storage Contract
+
+- Store task-generated artifacts under `.mini_orchestrator/test-runs/`.
+- Use a stable task slug as the first folder level, for example:
+  - `.mini_orchestrator/test-runs/calculator/`
+  - `.mini_orchestrator/test-runs/rm/`
+  - `.mini_orchestrator/test-runs/dental-crm/`
+- Use a separate version folder for each task execution, such as `v001`,
+  `v002`, or a timestamp like `2026-06-18_23-40-00`.
+- Do not overwrite or delete older version folders during a new test run unless
+  the user explicitly asks for cleanup.
+- A stable `latest` folder, link, or copy is optional and may be updated only
+  when the user explicitly asks for a latest-style convenience target.
+
+## Required Metadata
+
+Each version folder should contain a short `README.md` or manifest that records:
+
+- the original user task or test prompt;
+- the run date/time;
+- the main entry point, such as `index.html`, command, or generated script;
+- verification performed;
+- known gaps or failures.
+
+## Current Implementation Map
+
+- Agent instruction rule: `AGENTS.md`
+- Default artifact root: `.mini_orchestrator/test-runs/`

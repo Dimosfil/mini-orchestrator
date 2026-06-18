@@ -809,3 +809,75 @@ Verification:
 - [x] Dental CRM run through `Dental CRM Builder` completed with
   `mode=visual-agent-task` and profile snapshot
   `worker-profile-dental-crm-builder-5301d5ba3d6ea2b0`.
+
+### Superseded: Agent Builder Selected Card Run
+
+Goal: let the Agent Builder UI start execution through the currently selected
+visual card instead of relying on an implicit backend default card.
+
+Decision update, 2026-06-18:
+
+- [x] Removed this as a user-facing Agent Builder workflow. The builder is now
+  only a constructor for saving agent-chain presets; execution belongs in the
+  main Kanban/Live Runs workflow where the user selects which chain preset runs
+  the task in `In Progress`.
+
+Historical implementation:
+
+- [x] Previously added a visible selected-card run action to the builder UI.
+- [x] Send the selected card's runtime settings and work package to
+  `/api/agents/run` with explicit approval.
+- [x] Keep the current default dental CRM card as the temporary runnable target
+  when the user has not built another card yet.
+- [x] Surface the returned visual-agent run id/profile in the builder status so
+  the dashboard daemon/live-runs view can observe it.
+
+Definition of done:
+
+- [x] Running from Agent Builder uses a selected visual card payload, producing
+  `mode=visual-agent-task` instead of the generic `/api/run` backend default
+  path.
+
+Verification:
+
+- [x] `node -e "<inline script parse check>"`
+- [x] `python -m pytest tests`
+- [x] `python -m compileall mini_orchestrator`
+
+Follow-up implementation:
+
+- [x] Add the same chain preset dropdown to the executable dashboard task form.
+- [x] Send the selected chain preset with approved workflow runs.
+- [x] Record selected chain metadata in dispatcher JSONL logs.
+- [x] Render selected chain stages inside the single Live Runs task card.
+- [x] Fix Builder load-chain feedback so the load message is not immediately
+  overwritten by the generic ready status.
+
+Follow-up verification:
+
+- [x] `node -e "<inline script parse check for index and agents-builder>"`
+- [x] `python -m pytest tests`
+- [x] `python -m compileall mini_orchestrator`
+
+### Agent Chain Presets
+
+Goal: make the configured agent chain a selectable preset, with a default chain
+and user-named saved chains from Agent Builder.
+
+Planned changes:
+
+- [x] Add a chain preset dropdown to Agent Builder.
+- [x] Provide a default planner -> executor -> reviewer chain.
+- [x] Save the current visible cards/connections as a named chain preset.
+- [x] Reload saved chain presets from browser storage.
+
+Definition of done:
+
+- [x] A user can choose the default chain or a saved named chain from the
+  dropdown, and saving the current chain adds or updates a named preset.
+
+Verification:
+
+- [x] `node -e "<inline script parse check>"`
+- [x] `python -m pytest tests`
+- [x] `python -m compileall mini_orchestrator`

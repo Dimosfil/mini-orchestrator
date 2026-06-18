@@ -45,17 +45,22 @@ project scope, privacy rules, and explicit user request.
 - Local folder: `D:\AI\symphony`.
 - Canonical Git/package/docs URLs:
   `https://github.com/openai/symphony.git`.
-- Service ID or runtime endpoints: not recorded yet.
+- Service ID or runtime endpoints: read-only local daemon state endpoint
+  `http://127.0.0.1:4000/api/v1/state`; mini-orchestrator reads it through the
+  configurable `MINI_ORCHESTRATOR_DAEMON_STATE_URL`.
 - Owner or source of truth: local reference workspace until a canonical source
   is documented.
-- Data/API contract: reference-only unless a future task defines an explicit
-  integration contract.
+- Data/API contract: reference workspace plus read-only `GET /api/v1/state`
+  runtime bridge for `running`, `retrying`, `blocked`, `codex_totals`, and
+  `rate_limits` snapshot data. Mini-orchestrator must not mutate Symphony state
+  through this bridge.
 - Setup, sync, build, test, or update commands: none approved from this project.
 - Version, branch, or update cadence: not recorded yet.
 - Privacy, secret, license, and access boundaries: agents may read and inspect
   this workspace for this project, but must not edit, delete, move, commit, or
   publish files there without a separate explicit user request.
-- Status and caveats: approved external reference workspace.
+- Status and caveats: approved external reference workspace and active
+  read-only local daemon integration for mini-orchestrator Kanban/Live Runs.
 - Reason this dependency still exists: supports Symphony-style orchestration
   research and design decisions for `mini-orchestrator`.
 

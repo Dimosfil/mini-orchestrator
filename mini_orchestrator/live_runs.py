@@ -180,6 +180,7 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
     stage_map: Dict[str, Dict[str, Any]] = {}
     stage_order: list[str] = []
     profile_snapshot_id = ""
+    chain_preset: dict[str, Any] = {}
     approval_count = 0
     turn_count = 0
     token_total = 0
@@ -214,6 +215,11 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             else:
                 status = "queued"
             last_event = "Task accepted"
+        elif event_type == "chain_selected":
+            value = event.get("chainPreset")
+            if isinstance(value, dict):
+                chain_preset = value
+                last_event = f"Chain selected: {value.get('name') or value.get('id') or 'agent chain'}"
         elif event_type == "dispatch_decision":
             last_event = f"Dispatch: {event.get('role') or '-'}"
             role = str(event.get("role") or "")
@@ -416,6 +422,7 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             "required": waiting_approval and not has_final,
             "count": approval_count,
         },
+        "chainPreset": chain_preset,
         "stages": stages,
         "eventTypes": event_counts,
         "updatedAt": last_event_time,

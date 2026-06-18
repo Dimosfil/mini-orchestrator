@@ -72,6 +72,24 @@ until a backend save/validate/run contract is implemented.
   package instead of forwarding the whole mini-chat history.
 - The flow model may also store `presetSettings`, a browser-local set of
   user-edited preset defaults used when creating new cards from the sidebar.
+- Agent chains are selectable presets. The builder has a chain preset dropdown
+  with a default `planner -> executor -> reviewer` chain. Saving the current
+  visible cards and connections asks for a chain name, stores the chain as a
+  browser-local preset, and adds it to the dropdown. Loading a chain preset
+  replaces the visible canvas with that preset's agents and connections. This
+  keeps a chain as a reusable workflow preset, while individual cards remain
+  editable inside the selected chain.
+- When saving while a user-created chain preset is selected or currently loaded,
+  the builder must ask whether to overwrite that preset or save the canvas as a
+  new preset. Overwrite keeps the selected preset id so the user can edit the
+  current chain instead of accidentally creating duplicates or silently
+  replacing data.
+- The executable dashboard also has an `Исполнительная цепочка` dropdown backed
+  by the same browser-local chain presets. When the user starts an approved
+  workflow, the selected chain preset is sent with the run request and recorded
+  in the dispatcher JSONL log as `chain_selected`. Live Runs then shows one task
+  card in `In Progress`, the current worker as `Current`, and the selected
+  chain's agents as stage chips inside that task card.
 - Supported MVP `llm` values include `gpt-5.5`, `gpt-5.4`,
   `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5`, `gpt-4.1-mini`,
   and `rules`. The default is `gpt-5.5`.
@@ -115,6 +133,16 @@ until a backend save/validate/run contract is implemented.
   The mini chat calls `/api/agents/chat` only for live LLM models; `rules` cards
   show a local fallback notice. Empty dispatcher output is an error and must be
   shown in the mini chat instead of rendering a blank assistant message.
+- The builder topbar is save/reset only. It is a constructor for agent cards and
+  chain presets, not a task execution surface. Running a task from the builder
+  is intentionally not user-facing; execution belongs in the main
+  dashboard/Kanban workflow where the user selects the chain preset that should
+  run the task.
+- When saved flow execution is added, Live Runs must represent the configured
+  agent chain as one task card in `In Progress`. The card should show the
+  current working visual card/agent as `currentAgent` and render the configured
+  stage chain inside the task card. Individual agents should not become
+  separate Kanban task cards for the same user task.
 - Mini-chat is a real visual-agent runtime check, not a lightweight helper. The
   UI path keeps one persistent Codex thread per card/profile hash, puts the
   card's work-package fields into thread developer instructions, and sends

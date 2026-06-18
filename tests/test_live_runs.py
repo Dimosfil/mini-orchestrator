@@ -75,6 +75,34 @@ def test_dispatcher_live_runs_surface_completed_chain(tmp_path):
     assert payload["summary"]["done"] == 1
 
 
+def test_dispatcher_live_runs_surface_selected_chain_preset(tmp_path):
+    root = tmp_path
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / "chain-run.jsonl"
+    log_path.parent.mkdir(parents=True)
+
+    write_event(
+        log_path,
+        {
+            "time": "2026-06-18T00:00:00Z",
+            "type": "chain_selected",
+            "chainPreset": {
+                "id": "chain-demo",
+                "name": "Demo chain",
+                "flow": {"agents": [{"name": "Planner"}, {"name": "Executor"}]},
+            },
+        },
+    )
+    write_event(log_path, {"time": "2026-06-18T00:00:01Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2026-06-18T00:00:02Z", "type": "agent_started", "agent": "planner"})
+
+    payload = build_dispatcher_live_runs(root)
+
+    run = payload["runs"][0]
+    assert run["chainPreset"]["id"] == "chain-demo"
+    assert run["chainPreset"]["name"] == "Demo chain"
+    assert run["status"] == "running"
+
+
 def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
     root = tmp_path
     log_path = root / "tools" / "codex-dispatcher" / "runs" / "visual-agent-run.jsonl"

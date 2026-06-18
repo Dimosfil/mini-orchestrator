@@ -29,7 +29,7 @@ WORK_PACKAGE_KEYS = (
     "expectedOutput",
 )
 
-ALLOWED_SPEEDS = {"fast", "balanced", "thorough"}
+ALLOWED_SPEEDS = {"fast", "balanced", "careful"}
 ALLOWED_REASONING = {"low", "medium", "high"}
 ALLOWED_ACCESS_MODES = {"read-only", "workspace-write", "danger-full-access"}
 
@@ -122,7 +122,7 @@ def validate_agent_card(card: dict[str, Any]) -> dict[str, Any]:
 
     speed = str(card.get("speed") or "balanced").strip().casefold()
     if speed not in ALLOWED_SPEEDS:
-        raise AgentProfileError("Agent field 'speed' must be fast, balanced, or thorough.")
+        raise AgentProfileError("Agent field 'speed' must be fast, balanced, or careful.")
 
     reasoning = str(card.get("reasoning") or "medium").strip().casefold().replace("very high", "high")
     if reasoning not in ALLOWED_REASONING:

@@ -284,14 +284,32 @@
       gap: 8px;
     }
 
+    .kanban-current-agent {
+      margin: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .kanban-current-agent span {
+      color: var(--accent);
+    }
+
     .kanban-stage-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 5px;
     }
 
     .kanban-stage-chip {
-      min-width: 0;
+      min-width: 82px;
+      max-width: 100%;
       padding: 5px 6px;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -307,12 +325,14 @@
 
     .kanban-stage-chip.running,
     .kanban-stage-chip.queued,
+    .kanban-stage-chip.retrying,
     .kanban-stage-chip.planning {
       border-color: #caa757;
       color: var(--warn);
       background: #fff8e6;
     }
 
+    .kanban-stage-chip.blocked,
     .kanban-stage-chip.waiting_approval,
     .kanban-stage-chip.failed {
       border-color: #e2aaaa;
@@ -324,6 +344,27 @@
       border-color: #9bc7ad;
       color: var(--ok);
       background: #edf8f1;
+    }
+
+    .run-review-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .run-review-actions button {
+      min-height: 32px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .run-review-note {
+      margin: 0;
+      color: var(--danger);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
     }
 
     .kanban-empty {
@@ -1001,6 +1042,10 @@
               <option value="dry-run">Dry-run smoke</option>
             </select>
           </div>
+          <div class="field">
+            <label for="run-chain-preset">Исполнительная цепочка</label>
+            <select id="run-chain-preset"></select>
+          </div>
 
           <div class="controls">
             <button id="plan-button" class="btn-primary" type="submit">План</button>
@@ -1069,6 +1114,9 @@
   </main>
 
   <script>
+    const RUN_REVIEW_DECISIONS_STORAGE_KEY = "mini-orchestrator-run-review-decisions-v1";
+    const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
+    const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
     const refreshRunsButton = document.querySelector("#refresh-runs-button");
@@ -1083,6 +1131,7 @@
     const liveRunsEmpty = document.querySelector("#live-runs-empty");
     const taskInput = document.querySelector("#task");
     const planMode = document.querySelector("#plan-mode");
+    const runChainPreset = document.querySelector("#run-chain-preset");
     const planButton = document.querySelector("#plan-button");
     const coreButton = document.querySelector("#core-button");
     const runButton = document.querySelector("#run-button");
@@ -1103,6 +1152,7 @@
     const jsonOutput = document.querySelector("#json-output");
     let lastPlanTask = "";
     let busy = false;
+    let runReviewDecisions = loadRunReviewDecisions();
 
     function setBusy(nextBusy, label = "Работаю") {
       busy = nextBusy;
@@ -1137,6 +1187,126 @@
       return JSON.stringify(value, null, 2);
     }
 
+    function loadRunReviewDecisions() {
+      try {
+        const raw = localStorage.getItem(RUN_REVIEW_DECISIONS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return {};
+        }
+        return Object.fromEntries(
+          Object.entries(parsed).filter(([, value]) => value === "done" || value === "rework"),
+        );
+      } catch {
+        return {};
+      }
+    }
+
+    function saveRunReviewDecisions() {
+      try {
+        localStorage.setItem(RUN_REVIEW_DECISIONS_STORAGE_KEY, JSON.stringify(runReviewDecisions));
+      } catch {
+        // Browser storage can be unavailable in private or restricted contexts.
+      }
+    }
+
+    function runReviewDecisionKey(run) {
+      return String(run.runId || run.task?.taskId || run.artifacts?.eventLogPath || "").trim();
+    }
+
+    function runReviewDecision(run) {
+      const key = runReviewDecisionKey(run);
+      return key ? runReviewDecisions[key] || "" : "";
+    }
+
+    function setRunReviewDecision(run, decision) {
+      const key = runReviewDecisionKey(run);
+      if (!key || (decision !== "done" && decision !== "rework")) {
+        return;
+      }
+      runReviewDecisions = { ...runReviewDecisions, [key]: decision };
+      saveRunReviewDecisions();
+      loadLiveRuns();
+    }
+
+    function defaultChainPreset() {
+      return {
+        id: DEFAULT_CHAIN_PRESET_ID,
+        name: "Default planner -> executor -> reviewer",
+        flow: {
+          agents: [
+            { id: "chain-default-planner", name: "Planner", preset: "planner", role: "Planner" },
+            { id: "chain-default-executor", name: "Executor", preset: "executor", role: "Executor" },
+            { id: "chain-default-reviewer", name: "Reviewer", preset: "reviewer", role: "Reviewer" },
+          ],
+          connections: [
+            { fromAgentId: "chain-default-planner", toAgentId: "chain-default-executor", fromPort: "success" },
+            { fromAgentId: "chain-default-executor", toAgentId: "chain-default-reviewer", fromPort: "success" },
+          ],
+        },
+      };
+    }
+
+    function normalizeChainPreset(value) {
+      if (!value || typeof value !== "object") {
+        return null;
+      }
+      const id = String(value.id || "").trim();
+      const name = String(value.name || "").trim();
+      const flow = value.flow && typeof value.flow === "object" ? value.flow : {};
+      if (!id || !name) {
+        return null;
+      }
+      const agents = Array.isArray(flow.agents)
+        ? flow.agents.map((agent) => ({
+            id: String(agent.id || agent.name || agent.role || "agent"),
+            name: String(agent.name || agent.role || "Agent"),
+            preset: String(agent.preset || ""),
+            role: String(agent.role || agent.preset || "Agent"),
+          }))
+        : [];
+      const connections = Array.isArray(flow.connections) ? flow.connections : [];
+      return {
+        id,
+        name: name.slice(0, 80),
+        flow: { agents, connections },
+      };
+    }
+
+    function loadChainPresets() {
+      const presets = [defaultChainPreset()];
+      try {
+        const raw = localStorage.getItem(CHAIN_PRESETS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const preset = normalizeChainPreset(item);
+            if (preset && preset.id !== DEFAULT_CHAIN_PRESET_ID) {
+              presets.push(preset);
+            }
+          }
+        }
+      } catch {
+        // Keep the built-in chain if browser-local presets are unavailable.
+      }
+      return presets;
+    }
+
+    function renderRunChainPresetSelect() {
+      const presets = loadChainPresets();
+      runChainPreset.replaceChildren(...presets.map((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.name;
+        return option;
+      }));
+    }
+
+    function selectedRunChainPreset() {
+      const presets = loadChainPresets();
+      return presets.find((preset) => preset.id === runChainPreset.value) || presets[0] || defaultChainPreset();
+    }
+
     function runStatusClass(status) {
       return String(status || "unknown").toLowerCase().replace(/[^a-z0-9_-]/g, "");
     }
@@ -1151,6 +1321,8 @@
         queued: "Queued",
         planning: "Planning",
         running: "Running",
+        retrying: "Retrying",
+        blocked: "Blocked",
         waiting_approval: "Waiting approval",
         failed: "Failed",
         done: "Done",
@@ -1175,6 +1347,41 @@
           lastEvent: run.lastEvent || "",
         },
       ];
+    }
+
+    function currentAgentLabel(run, profile) {
+      const stages = stagesForRun(run, profile);
+      const activeStage = stages.find((stage) => {
+        const status = runStatusClass(stage.status);
+        return status === "running" || status === "waiting_approval" || status === "planning" || status === "queued";
+      });
+      if (activeStage) {
+        return activeStage.label || activeStage.agent || "Worker";
+      }
+      return run.currentAgent || profile.displayName || profile.role || "";
+    }
+
+    function configuredChainStagesForRun(run, profile) {
+      const agents = run.chainPreset?.flow?.agents;
+      if (!Array.isArray(agents) || agents.length === 0) {
+        return stagesForRun(run, profile);
+      }
+      const runtimeStages = stagesForRun(run, profile);
+      return agents.map((agent) => {
+        const agentName = String(agent.name || agent.role || agent.preset || "Agent");
+        const agentRole = runStatusClass(agent.role || agent.preset || agentName);
+        const matched = runtimeStages.find((stage) => {
+          const stageAgent = runStatusClass(stage.agent || "");
+          const stageLabel = runStatusClass(stage.label || "");
+          return stageAgent === agentRole || stageLabel === runStatusClass(agentName);
+        });
+        return {
+          agent: agentName,
+          label: agentName,
+          status: matched?.status || "pending",
+          statusLabel: matched?.statusLabel || stageStatusLabel(matched?.status || "pending"),
+        };
+      });
     }
 
     function renderPipelineRun(run, profile) {
@@ -1268,9 +1475,12 @@
       const status = runStatusClass(run.status);
       const stages = stagesForRun(run, profile);
       if (status === "done") {
-        return "done";
+        return runReviewDecision(run) === "done" ? "done" : "human_review";
       }
-      if (status === "waiting_approval" || stages.some((stage) => runStatusClass(stage.status) === "waiting_approval")) {
+      if (status === "blocked" || status === "waiting_approval" || stages.some((stage) => {
+        const stageStatus = runStatusClass(stage.status);
+        return stageStatus === "blocked" || stageStatus === "waiting_approval";
+      })) {
         return "human_review";
       }
       if (status === "failed") {
@@ -1317,9 +1527,17 @@
       pill.textContent = run.status || "unknown";
       header.append(titleWrap, pill);
 
+      const current = document.createElement("p");
+      current.className = "kanban-current-agent";
+      const currentLabel = currentAgentLabel(run, profile);
+      current.append(document.createTextNode("Current: "));
+      const currentName = document.createElement("span");
+      currentName.textContent = currentLabel || "-";
+      current.append(currentName);
+
       const stageRow = document.createElement("div");
       stageRow.className = "kanban-stage-row";
-      for (const stage of stagesForRun(run, profile).slice(0, 3)) {
+      for (const stage of configuredChainStagesForRun(run, profile)) {
         const chipStatus = runStatusClass(stage.status || "pending");
         const chip = document.createElement("span");
         chip.className = `kanban-stage-chip ${chipStatus}`;
@@ -1332,7 +1550,31 @@
       event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
       event.textContent = run.lastError || run.lastEvent || run.artifacts?.eventLogPath || "-";
 
-      article.append(header, stageRow, event);
+      article.append(header, current, stageRow, event);
+      const decision = runReviewDecision(run);
+      if (status === "done" && decision !== "done") {
+        if (decision === "rework") {
+          const note = document.createElement("p");
+          note.className = "run-review-note";
+          note.textContent = "Выбрано: Доработки";
+          article.append(note);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "run-review-actions";
+        const doneButton = document.createElement("button");
+        doneButton.className = "btn-primary";
+        doneButton.type = "button";
+        doneButton.textContent = "ToDone";
+        doneButton.addEventListener("click", () => setRunReviewDecision(run, "done"));
+        const reworkButton = document.createElement("button");
+        reworkButton.className = "btn-secondary";
+        reworkButton.type = "button";
+        reworkButton.textContent = "Доработки";
+        reworkButton.addEventListener("click", () => setRunReviewDecision(run, "rework"));
+        actions.append(doneButton, reworkButton);
+        article.append(actions);
+      }
       return article;
     }
 
@@ -1344,7 +1586,10 @@
       runsBlocked.textContent = textOf(summary.blocked);
       runsDone.textContent = textOf(summary.done);
       runsTotal.textContent = textOf(summary.total);
-      liveRunsSource.textContent = `${payload.source || "unknown"} source - ${payload.generatedAt || ""}`.trim();
+      const sourceText = `${payload.source || "unknown"} source - ${payload.generatedAt || ""}`.trim();
+      liveRunsSource.textContent = payload.daemonError
+        ? `${sourceText} / daemon fallback: ${payload.daemonError}`
+        : sourceText;
       liveRunsDot.className = `dot ${summary.blocked || summary.failed ? "busy" : "ok"}`;
       liveRunsStatus.textContent = runs.length ? "Ready" : "Empty";
 
@@ -1494,13 +1739,15 @@
       }
 
       setBusy(true, "Запускаю");
-      setMessage("Выполняю approved workflow...");
+      const chainPreset = selectedRunChainPreset();
+      setMessage(`Выполняю approved workflow через цепочку: ${chainPreset.name}`);
       try {
         const payload = await postJson("/api/dispatcher/run", {
           task: lastPlanTask,
           approved: true,
           background: true,
           mode: planMode.value,
+          chainPreset,
         });
         renderPayload(payload);
         activeTab("tech");
@@ -1554,6 +1801,8 @@
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => activeTab(tab.dataset.tab));
     });
+    window.addEventListener("focus", renderRunChainPresetSelect);
+    renderRunChainPresetSelect();
     loadLiveRuns();
     window.setInterval(loadLiveRuns, 3000);
   </script>

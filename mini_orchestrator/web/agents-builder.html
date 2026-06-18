@@ -1077,6 +1077,17 @@
     <section class="workspace">
       <aside class="sidebar" aria-label="Контролы конструктора">
         <section class="section">
+          <h2>Цепочка агентов</h2>
+          <div class="preset-picker">
+            <div class="field">
+              <label for="chain-preset-select">Пресет цепочки</label>
+              <select id="chain-preset-select"></select>
+            </div>
+            <button id="load-chain-preset" class="btn-secondary" type="button">Загрузить цепочку</button>
+          </div>
+        </section>
+
+        <section class="section">
           <h2>Добавить агента</h2>
           <div class="preset-picker">
             <div class="field">
@@ -1156,6 +1167,8 @@
 
   <script>
     const STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
+    const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
+    const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const TRANSLATION_LANGUAGE_STORAGE_KEY = "mini-orchestrator-agent-translation-language";
     const DEFAULT_LLM = "gpt-5.5";
     const DEFAULT_ACCESS_MODE = "danger-full-access";
@@ -1340,6 +1353,8 @@
     const connectionTo = document.querySelector("#connection-to");
     const statusLine = document.querySelector("#status-line");
     const addAgentButton = document.querySelector("#add-agent");
+    const chainPresetSelect = document.querySelector("#chain-preset-select");
+    const loadChainPresetButton = document.querySelector("#load-chain-preset");
     const agentPresetSelect = document.querySelector("#agent-preset-select");
     const agentPresetPreview = document.querySelector("#agent-preset-preview");
     const settingsBackdrop = document.querySelector("#agent-settings");
@@ -1362,15 +1377,136 @@
     const warmingMiniChatProfiles = new Set();
     const warmedMiniChatProfiles = new Set();
 
+    let chainPresets = loadChainPresets();
     const flow = loadFlow();
 
-    function loadFlow() {
-      const fallback = {
-        agents: [],
-        connections: [],
-        nextAgentNumber: 1,
-        presetSettings: {},
+    function defaultChainPreset() {
+      const planner = {
+        id: "chain-default-planner",
+        name: "Planner",
+        preset: "planner",
+        role: AGENT_PRESETS.planner.role,
+        llm: AGENT_PRESETS.planner.llm,
+        speed: AGENT_PRESETS.planner.speed,
+        reasoning: AGENT_PRESETS.planner.reasoning,
+        accessMode: normalizeAccessMode(AGENT_PRESETS.planner.accessMode),
+        workPackage: cloneWorkPackage(AGENT_PRESETS.planner.workPackage),
+        workPackageTranslations: {},
+        x: 120,
+        y: 80,
       };
+      const executor = {
+        id: "chain-default-executor",
+        name: "Executor",
+        preset: "executor",
+        role: AGENT_PRESETS.executor.role,
+        llm: AGENT_PRESETS.executor.llm,
+        speed: AGENT_PRESETS.executor.speed,
+        reasoning: AGENT_PRESETS.executor.reasoning,
+        accessMode: normalizeAccessMode(AGENT_PRESETS.executor.accessMode),
+        workPackage: cloneWorkPackage(AGENT_PRESETS.executor.workPackage),
+        workPackageTranslations: {},
+        x: 500,
+        y: 80,
+      };
+      const reviewer = {
+        id: "chain-default-reviewer",
+        name: "Reviewer",
+        preset: "reviewer",
+        role: AGENT_PRESETS.reviewer.role,
+        llm: AGENT_PRESETS.reviewer.llm,
+        speed: AGENT_PRESETS.reviewer.speed,
+        reasoning: AGENT_PRESETS.reviewer.reasoning,
+        accessMode: normalizeAccessMode(AGENT_PRESETS.reviewer.accessMode),
+        workPackage: cloneWorkPackage(AGENT_PRESETS.reviewer.workPackage),
+        workPackageTranslations: {},
+        x: 880,
+        y: 80,
+      };
+      return {
+        id: DEFAULT_CHAIN_PRESET_ID,
+        name: "Default planner -> executor -> reviewer",
+        flow: {
+          name: "Default planner -> executor -> reviewer",
+          chainPresetId: DEFAULT_CHAIN_PRESET_ID,
+          agents: [planner, executor, reviewer],
+          connections: [
+            {
+              id: "chain-default-planner-to-executor",
+              fromAgentId: planner.id,
+              toAgentId: executor.id,
+              fromPort: "success",
+              toPort: "input",
+            },
+            {
+              id: "chain-default-executor-to-reviewer",
+              fromAgentId: executor.id,
+              toAgentId: reviewer.id,
+              fromPort: "success",
+              toPort: "input",
+            },
+          ],
+          nextAgentNumber: 4,
+          presetSettings: {},
+        },
+      };
+    }
+
+    function flowFromChainPreset(preset) {
+      const source = preset?.flow || defaultChainPreset().flow;
+      return {
+        name: String(source.name || preset?.name || "Agent chain").trim() || "Agent chain",
+        chainPresetId: String(preset?.id || source.chainPresetId || "").trim(),
+        agents: Array.isArray(source.agents) ? source.agents.map(normalizeAgent) : [],
+        connections: Array.isArray(source.connections) ? source.connections.map(normalizeConnection) : [],
+        nextAgentNumber: Number(source.nextAgentNumber || (Array.isArray(source.agents) ? source.agents.length + 1 : 1)),
+        presetSettings: normalizePresetSettings(source.presetSettings),
+      };
+    }
+
+    function normalizeChainPreset(value) {
+      if (!value || typeof value !== "object") {
+        return null;
+      }
+      const id = String(value.id || "").trim();
+      const name = String(value.name || "").trim();
+      if (!id || !name || !value.flow || typeof value.flow !== "object") {
+        return null;
+      }
+      return {
+        id,
+        name: name.slice(0, 80),
+        flow: flowFromChainPreset({ id, name, flow: value.flow }),
+        updatedAt: String(value.updatedAt || ""),
+      };
+    }
+
+    function loadChainPresets() {
+      const presets = [defaultChainPreset()];
+      try {
+        const raw = localStorage.getItem(CHAIN_PRESETS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const preset = normalizeChainPreset(item);
+            if (preset && preset.id !== DEFAULT_CHAIN_PRESET_ID) {
+              presets.push(preset);
+            }
+          }
+        }
+      } catch {
+        // Ignore broken browser-local presets and keep the built-in default.
+      }
+      return presets;
+    }
+
+    function saveChainPresets() {
+      const customPresets = chainPresets.filter((preset) => preset.id !== DEFAULT_CHAIN_PRESET_ID);
+      localStorage.setItem(CHAIN_PRESETS_STORAGE_KEY, JSON.stringify(customPresets));
+    }
+
+    function loadFlow() {
+      const fallback = flowFromChainPreset(chainPresets[0] || defaultChainPreset());
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) {
@@ -1381,6 +1517,8 @@
           return fallback;
         }
         return {
+          name: String(parsed.name || "Agent chain").trim() || "Agent chain",
+          chainPresetId: String(parsed.chainPresetId || "").trim(),
           agents: parsed.agents.map(normalizeAgent),
           connections: parsed.connections.map(normalizeConnection),
           nextAgentNumber: Number(parsed.nextAgentNumber || parsed.agents.length + 1),
@@ -1772,6 +1910,8 @@
       });
       const agentIds = new Set(agents.map((agent) => agent.id));
       return {
+        name: String(flow.name || "Agent chain").trim() || "Agent chain",
+        chainPresetId: String(flow.chainPresetId || "").trim(),
         agents,
         connections: flow.connections
           .filter((connection) => agentIds.has(connection.fromAgentId) && agentIds.has(connection.toAgentId))
@@ -1793,6 +1933,10 @@
 
     function renderFlowSummary(snapshot) {
       flowSummary.replaceChildren(
+        summaryGroup("Цепочка", [snapshot], (item) => [
+          item.name || "Agent chain",
+          item.chainPresetId ? `preset: ${item.chainPresetId}` : "unsaved local chain",
+        ]),
         summaryGroup("Агенты", snapshot.agents, (agent) => {
           const incoming = snapshot.connections.filter((connection) => connection.toAgentId === agent.id).length;
           const success = snapshot.connections.filter((connection) => connection.fromAgentId === agent.id && connection.fromPort === "success").length;
@@ -2569,10 +2713,11 @@
       }
     }
 
-    function miniChatAgentPayload(agent) {
+    function visualAgentPayload(agent) {
       return {
         id: agent.id,
         name: agent.name,
+        preset: agent.preset || "agent",
         role: agent.role,
         llm: agent.llm,
         speed: agent.speed,
@@ -2580,6 +2725,10 @@
         accessMode: normalizeAccessMode(agent.accessMode),
         workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
       };
+    }
+
+    function miniChatAgentPayload(agent) {
+      return visualAgentPayload(agent);
     }
 
     function miniChatProfileKey(agent) {
@@ -2888,8 +3037,120 @@
       }
     }
 
+    function chainPresetSlug(value) {
+      const slug = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return slug || "agent-chain";
+    }
+
+    function renderChainPresetSelect() {
+      chainPresetSelect.replaceChildren(...chainPresets.map((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.name;
+        option.selected = preset.id === flow.chainPresetId;
+        return option;
+      }));
+      if (flow.chainPresetId && !chainPresets.some((preset) => preset.id === flow.chainPresetId)) {
+        const option = document.createElement("option");
+        option.value = flow.chainPresetId;
+        option.textContent = flow.name || "Unsaved chain";
+        option.selected = true;
+        chainPresetSelect.append(option);
+      }
+    }
+
+    function loadSelectedChainPreset() {
+      const preset = chainPresets.find((item) => item.id === chainPresetSelect.value);
+      if (!preset) {
+        statusLine.textContent = "Цепочка не найдена.";
+        return;
+      }
+      const nextFlow = flowFromChainPreset(preset);
+      Object.assign(flow, nextFlow);
+      selectedAgentId = "";
+      selectedConnectionId = "";
+      renderChainPresetSelect();
+      render();
+      persistFlow(`Цепочка "${preset.name}" загружена.`);
+    }
+
+    function currentCustomChainPreset() {
+      const flowPreset = flow.chainPresetId && flow.chainPresetId !== DEFAULT_CHAIN_PRESET_ID
+        ? chainPresets.find((item) => item.id === flow.chainPresetId)
+        : null;
+      if (flowPreset) {
+        return flowPreset;
+      }
+      const selectedPresetId = chainPresetSelect?.value || "";
+      if (!selectedPresetId || selectedPresetId === DEFAULT_CHAIN_PRESET_ID) {
+        return null;
+      }
+      return chainPresets.find((item) => item.id === selectedPresetId) || null;
+    }
+
+    function saveModeForCurrentChain() {
+      const existingPreset = currentCustomChainPreset();
+      if (!existingPreset) {
+        return "new";
+      }
+      const choice = window.prompt(
+        `Текущая цепочка уже есть в списке: "${existingPreset.name}".\n\n1 - Перезаписать этот пресет\n2 - Сохранить как новый пресет\n\nВведите 1 или 2.`,
+        "1",
+      );
+      if (choice === null) {
+        return "";
+      }
+      const normalized = choice.trim();
+      if (normalized === "1") {
+        return "overwrite";
+      }
+      if (normalized === "2") {
+        return "new";
+      }
+      statusLine.textContent = "Сохранение отменено: выберите 1 для перезаписи или 2 для нового пресета.";
+      return "";
+    }
+
     function saveFlow() {
-      persistFlow("JSON флоу пересобран с экрана и сохранен в localStorage.");
+      const saveMode = saveModeForCurrentChain();
+      if (!saveMode) {
+        return;
+      }
+      const overwritePreset = saveMode === "overwrite" ? currentCustomChainPreset() : null;
+      const suggestedName = String(overwritePreset?.name || flow.name || "").trim() || "Agent chain";
+      const name = window.prompt("Название цепочки агентов", suggestedName);
+      if (name === null) {
+        statusLine.textContent = "Сохранение цепочки отменено.";
+        return;
+      }
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        statusLine.textContent = "Введите название цепочки перед сохранением.";
+        return;
+      }
+      const overwriteId = overwritePreset?.id || "";
+      flow.name = trimmedName.slice(0, 80);
+      flow.chainPresetId = overwriteId || `chain-${chainPresetSlug(trimmedName)}-${Date.now()}`;
+      const snapshot = buildFlowSnapshotFromCanvas();
+      const preset = {
+        id: flow.chainPresetId,
+        name: flow.name,
+        flow: snapshot,
+        updatedAt: new Date().toISOString(),
+      };
+      chainPresets = [
+        chainPresets[0] || defaultChainPreset(),
+        ...chainPresets
+          .filter((item) => item.id !== DEFAULT_CHAIN_PRESET_ID && item.id !== preset.id),
+        preset,
+      ];
+      saveChainPresets();
+      persistFlow(`Цепочка "${flow.name}" сохранена как пресет.`);
+      renderChainPresetSelect();
     }
 
     function resetFlow() {
@@ -2899,9 +3160,12 @@
       flow.agents = [];
       flow.connections = [];
       flow.nextAgentNumber = 1;
+      flow.name = "Agent chain";
+      flow.chainPresetId = "";
       selectedAgentId = "";
       selectedConnectionId = "";
       localStorage.removeItem(STORAGE_KEY);
+      renderChainPresetSelect();
       render();
       updateFlowPreview("Флоу очищен.");
     }
@@ -2914,6 +3178,7 @@
     }));
     addAgentButton.addEventListener("click", () => addAgent(agentPresetSelect.value || "agent"));
     agentPresetSelect.addEventListener("change", renderPresetPreview);
+    loadChainPresetButton.addEventListener("click", loadSelectedChainPreset);
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);
     document.querySelector("#close-settings").addEventListener("click", closeAgentSettings);
@@ -2938,6 +3203,7 @@
     canvas.addEventListener("pointerup", endDrag);
     window.addEventListener("resize", renderConnections);
     window.addEventListener("keydown", handleKeyboardShortcuts);
+    renderChainPresetSelect();
     renderPresetPreview();
     render();
   </script>

@@ -258,6 +258,7 @@ Inspect logs:
 - Source: repository root until a `src/` layout is chosen.
 - Tests: not created yet; use `tests/` unless the selected stack implies
   another standard layout.
+- Test-run artifacts: `.mini_orchestrator/test-runs/`
 - Tools: `tools/`
 - Summaries: `tools/summary/`
 - Project memory: `tools/project-memory/`
@@ -267,6 +268,32 @@ Inspect logs:
 - Do not revert user changes unless explicitly requested.
 - Treat dirty worktrees as normal.
 - Keep changes scoped to the current task.
+- When testing a task that creates a visible or runnable result, such as an
+  `rm`, calculator, CRM, or other generated demo, do not overwrite the previous
+  result folder. Create a separate versioned folder under
+  `.mini_orchestrator/test-runs/<task-slug>/`, for example
+  `.mini_orchestrator/test-runs/calculator/v001/` or
+  `.mini_orchestrator/test-runs/calculator/2026-06-18_23-40-00/`. Keep each
+  version self-contained enough to inspect later, and include a short README or
+  manifest with the original task, run date, entry point, and verification
+  notes. Update or replace a stable "latest" copy only when the user explicitly
+  asks for that.
+- When an agent finishes a task and returns a ready result, do not treat that as
+  final user acceptance. Put the task into a user review state with explicit
+  actions: `ToDone` for accepted work and `Доработки` for work that needs another
+  pass. Only the user's `ToDone` choice should move the task into final Done;
+  `Доработки` keeps or returns it to review/rework flow with the result and
+  artifacts still visible.
+- While a task is being executed by a configured agent chain, keep one task card
+  in `In Progress` rather than creating separate Kanban task cards for each
+  agent. The task card must show the current working agent (`currentAgent`) and
+  the configured chain/stages so the user can see which visual card or worker is
+  active now.
+- Treat configured agent chains as reusable presets, not only as an unnamed
+  transient canvas state. Agent Builder must keep a selectable default chain and
+  let saved user chains have names so they can be selected again from a dropdown.
+  The executable Kanban/dashboard must also expose a chain dropdown for selecting
+  which preset should run the next approved task.
 - When a feature has an agreed runtime workflow, loading order, branching state
   flow, background work, or user-visible guarantee, record it in project-local
   docs or project memory. Before changing that feature, read the relevant

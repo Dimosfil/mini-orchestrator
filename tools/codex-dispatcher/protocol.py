@@ -6,6 +6,7 @@ from typing import Final
 EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {
         "task_created",
+        "chain_selected",
         "dispatch_decision",
         "app_server_started",
         "agent_thread_started",
