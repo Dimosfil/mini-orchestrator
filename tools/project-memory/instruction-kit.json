@@ -1,5 +1,5 @@
 ﻿{
-    "instruction_kit_version":  "2026.06.17.1",
+    "instruction_kit_version":  "2026.06.18.4",
     "source":  "https://github.com/Dimosfil/general-instructions.git",
     "installed_at":  "2026-06-16",
     "update_check":  {
@@ -114,7 +114,13 @@
                                "2026.06.16.8__add_portable_project_memory_specifications",
                                "2026.06.16.9__add_gi_root_rebuild_command",
                                "2026.06.16.11__add_context7_external_docs_rule",
-                               "2026.06.17.1__allow_contract_based_service_self_registration"
+                               "2026.06.17.1__allow_contract_based_service_self_registration",
+                               "2026.06.17.2__verify_gi_reboot_startup_success",
+                               "2026.06.17.3__replace_root_rebuild_with_project_and_tools_rebuild",
+                               "2026.06.18.1__keep_handoff_summaries_substance_focused",
+                               "2026.06.18.2__reconcile_handoff_with_thread_conclusion",
+                               "2026.06.18.3__make_gi_summary_thematic_and_thesis_based",
+                               "2026.06.18.4__preserve_summary_intent_and_integration_mapping"
                            ],
-    "last_update_check_at":  "2026-06-17T13:34:16+03:00"
+    "last_update_check_at":  "2026-06-18T16:11:26+03:00"
 }

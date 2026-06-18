@@ -97,7 +97,7 @@
     }
   },
   "rebuild": {
-    "full_command": "gi root rebuild",
+    "full_command": "gi tools rebuild",
     "requires_confirmation": true,
     "confirmation_prompt_must_list": [
       "source_groups",
