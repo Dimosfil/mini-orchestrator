@@ -2,6 +2,7 @@
   "version": 1,
   "service_id": "mini-orchestrator",
   "self_registration": "off",
+  "workerChatRoot": "D:/AI/orchestrator-worker-chats",
   "configServiceUrl": null,
   "notes": "Web UI startup resolves host and port from GI config-service. Do not bind fallback ports when the service record is missing or incomplete."
 }

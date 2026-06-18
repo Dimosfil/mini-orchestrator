@@ -6,7 +6,7 @@ AI-agent workflows. The current UI exposes the project dispatcher flow:
 - create a chat-gated planner proposal
 - explicitly approve the proposal
 - run the real planner -> executor -> reviewer dispatcher chain
-- inspect planner, executor, reviewer, logs, and raw JSON
+- inspect planner, executor, reviewer, worker debug metadata, logs, and raw JSON
 
 The older Campaign Concept Studio page has been replaced by the orchestrator
 dashboard.
@@ -82,6 +82,19 @@ python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry
 
 Real planner preview returns structured API errors when Codex app-server or the
 selected model is unavailable.
+
+The **Tech** tab shows a compact dispatcher debug summary for plan previews and
+approved runs: runtime, log path, dispatch decision, worker thread/turn ids,
+timings, event counts, Codex notification counts, and recent compact events.
+Full prompts and outputs are not duplicated in the tech summary; use the log
+path for deeper replay when needed.
+
+Codex worker chats are grouped under the configured technical workspace
+`workerChatRoot` from `tools/project-memory/service-runtime.json`. For this
+project that path is `D:/AI/orchestrator-worker-chats`, so UI-spawned worker
+threads should appear in Codex under that project instead of `mini-orchestrator`.
+The worker turn still receives the real `mini-orchestrator` workspace as its
+target cwd; the **Tech** tab shows both paths.
 
 After review, check **План подтвержден** and click **Запустить workflow**. The UI
 calls:

@@ -14,6 +14,43 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Codex Worker Chat Project Routing
+
+Goal: route Codex worker chats spawned by the mini-orchestrator UI into a
+separate technical project folder while preserving the real project as the
+execution target.
+
+Planned changes:
+
+- [x] Configure `D:\AI\orchestrator-worker-chats` as the worker chat root.
+- [x] Start Codex app-server from the worker chat root when configured.
+- [x] Keep dispatcher turns pointed at the mini-orchestrator target workspace.
+- [x] Show worker chat root and target workspace in logs/Tech output.
+- [x] Verify focused tests and restart the UI.
+
+Risks or dependencies:
+
+- Codex sidebar grouping depends on app-server workspace behavior. The first
+  live real-planner smoke confirmed the transport starts from the technical
+  project and keeps `mini-orchestrator` as the target workspace.
+
+### Dispatcher Worker Debug Section
+
+Goal: keep the fast Codex app-server worker path visible and debuggable from
+the mini-orchestrator UI without hiding or slowing worker sessions.
+
+Planned changes:
+
+- [x] Add a technical/debug summary for dispatcher worker runs.
+- [x] Show worker runtime, log, timing, thread, and event metadata in a separate
+  UI tab.
+- [x] Verify focused syntax and UI/API checks.
+
+Risks or dependencies:
+
+- This does not hide worker chats from the Codex sidebar; it adds a dedicated
+  mini-orchestrator debug surface for the same fast execution path.
+
 ### Codex Worker Primary LLM Path
 
 Goal: make the Codex app-server dispatcher the primary LLM channel for visual

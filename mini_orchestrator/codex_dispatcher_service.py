@@ -74,6 +74,13 @@ class PersistentCodexDispatcher:
             **payload,
         )
 
+    def _routing_metadata(self, server: CodexAppServer) -> dict[str, Any]:
+        return {
+            "targetWorkspace": str(server.root),
+            "workerChatRoot": str(server.worker_chat_root) if server.worker_chat_root else None,
+            "processCwd": str(server.process_cwd),
+        }
+
     def _ensure_server(
         self,
         log_path: Path,
@@ -205,7 +212,15 @@ class PersistentCodexDispatcher:
         thread_reused = False
         if thread_id:
             thread_reused = True
-            write_event(log_path, "agent_thread_started", agent=name, model=model, threadId=thread_id, reused=True)
+            write_event(
+                log_path,
+                "agent_thread_started",
+                agent=name,
+                model=model,
+                threadId=thread_id,
+                reused=True,
+                **self._routing_metadata(server),
+            )
             self._timing(log_path, "codex_thread_reused", time.perf_counter(), agent=name)
         else:
             thread_started = time.perf_counter()
@@ -224,6 +239,7 @@ class PersistentCodexDispatcher:
             "durationSeconds": duration,
             "mode": "visual-agent-chat-warmup",
             "runtime": "persistent-codex-app-server",
+            **self._routing_metadata(server),
             "threadReused": thread_reused,
             "profileHash": profile_hash,
         }
@@ -269,7 +285,15 @@ class PersistentCodexDispatcher:
         thread_reused = False
         if thread_id:
             thread_reused = True
-            write_event(log_path, "agent_thread_started", agent=name, model=model, threadId=thread_id, reused=True)
+            write_event(
+                log_path,
+                "agent_thread_started",
+                agent=name,
+                model=model,
+                threadId=thread_id,
+                reused=True,
+                **self._routing_metadata(server),
+            )
             self._timing(log_path, "codex_thread_reused", time.perf_counter(), agent=name)
         else:
             thread_started = time.perf_counter()
@@ -302,6 +326,7 @@ class PersistentCodexDispatcher:
             "mode": "visual-agent-chat",
             "agents": outputs,
             "runtime": "persistent-codex-app-server",
+            **self._routing_metadata(server),
             "threadReused": thread_reused,
             "profileHash": profile_hash,
         }
@@ -340,7 +365,15 @@ class PersistentCodexDispatcher:
         thread_cache_key = f"{selected_worker.name}:{selected_worker.model}:{'compact' if compact_prompt else 'worker'}"
         thread_id = self._thread_cache.get(thread_cache_key) if reuse_thread else None
         if thread_id:
-            write_event(log_path, "agent_thread_started", agent=selected_worker.name, model=selected_worker.model, threadId=thread_id, reused=True)
+            write_event(
+                log_path,
+                "agent_thread_started",
+                agent=selected_worker.name,
+                model=selected_worker.model,
+                threadId=thread_id,
+                reused=True,
+                **self._routing_metadata(server),
+            )
             self._timing(log_path, "codex_thread_reused", time.perf_counter(), agent=selected_worker.name)
         else:
             thread_started = time.perf_counter()
@@ -373,6 +406,7 @@ class PersistentCodexDispatcher:
             },
             "agents": outputs,
             "runtime": "persistent-codex-app-server",
+            **self._routing_metadata(server),
         }
 
 

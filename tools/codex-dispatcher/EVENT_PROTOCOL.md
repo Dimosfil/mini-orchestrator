@@ -35,6 +35,9 @@ Worker-related events should include:
 - `model`: model used by the worker when known
 - `threadId`: Codex thread id when known
 - `turnId`: Codex turn id when known
+- `targetWorkspace`: project workspace the worker turn should operate on
+- `workerChatRoot`: technical workspace used to group worker chats in Codex
+- `processCwd`: app-server subprocess working directory when known
 
 Task-related events should include:
 

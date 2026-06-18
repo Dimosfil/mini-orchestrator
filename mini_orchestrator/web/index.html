@@ -515,6 +515,7 @@
         <div class="tabs" role="tablist" aria-label="Output views">
           <button class="tab active" type="button" data-tab="plan">План</button>
           <button class="tab" type="button" data-tab="agents">Агенты</button>
+          <button class="tab" type="button" data-tab="tech">Tech</button>
           <button class="tab" type="button" data-tab="json">JSON</button>
         </div>
 
@@ -526,6 +527,11 @@
         <div id="view-agents" class="view">
           <div id="agents-empty" class="empty">Результаты агентов появятся здесь.</div>
           <div id="agents-output" class="agent-list" hidden></div>
+        </div>
+
+        <div id="view-tech" class="view">
+          <div id="tech-empty" class="empty">Worker debug details will appear here.</div>
+          <pre id="tech-output" class="output" hidden></pre>
         </div>
 
         <div id="view-json" class="view">
@@ -555,6 +561,8 @@
     const planOutput = document.querySelector("#plan-output");
     const agentsEmpty = document.querySelector("#agents-empty");
     const agentsOutput = document.querySelector("#agents-output");
+    const techEmpty = document.querySelector("#tech-empty");
+    const techOutput = document.querySelector("#tech-output");
     const jsonOutput = document.querySelector("#json-output");
     let lastPlanTask = "";
     let busy = false;
@@ -625,6 +633,12 @@
       }
       agentsOutput.hidden = agentNames.length === 0;
       agentsEmpty.hidden = agentNames.length > 0;
+
+      const tech = payload.tech || {};
+      const hasTech = Object.keys(tech).length > 0;
+      techOutput.textContent = hasTech ? JSON.stringify(tech, null, 2) : "";
+      techOutput.hidden = !hasTech;
+      techEmpty.hidden = hasTech;
     }
 
     async function postJson(url, body) {

@@ -63,6 +63,38 @@ def resolve_codex_command() -> str:
     return shutil.which("codex") or "codex"
 
 
+def _load_worker_chat_root_from_config(root: Path) -> str:
+    config_path = root / "tools" / "project-memory" / "service-runtime.json"
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("workerChatRoot") or payload.get("worker_chat_root") or "").strip()
+
+
+def resolve_worker_chat_root(root: Path, configured: str | Path | None = None) -> Path | None:
+    value = str(configured or os.environ.get("MINI_ORCHESTRATOR_WORKER_CHAT_ROOT") or "").strip()
+    if not value:
+        value = _load_worker_chat_root_from_config(root)
+    if not value:
+        return None
+
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = (root / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+    if not candidate.exists():
+        raise RuntimeError(f"Configured worker chat root does not exist: {candidate}")
+    if not candidate.is_dir():
+        raise RuntimeError(f"Configured worker chat root is not a directory: {candidate}")
+    if candidate == root.resolve():
+        return None
+    return candidate
+
+
 class CodexAppServer:
     def __init__(
         self,
@@ -72,9 +104,12 @@ class CodexAppServer:
         request_timeout_seconds: float = 30,
         turn_timeout_seconds: float = 90,
         use_worker_models: bool = False,
+        worker_chat_root: str | Path | None = None,
     ) -> None:
         self.log_path = log_path
-        self.root = root
+        self.root = root.resolve()
+        self.worker_chat_root = resolve_worker_chat_root(self.root, worker_chat_root)
+        self.process_cwd = self.worker_chat_root or self.root
         self.codex_command = codex_command
         self.request_timeout_seconds = request_timeout_seconds
         self.turn_timeout_seconds = turn_timeout_seconds
@@ -89,7 +124,7 @@ class CodexAppServer:
     def __enter__(self) -> "CodexAppServer":
         self.proc = subprocess.Popen(
             [self.codex_command or resolve_codex_command(), "app-server"],
-            cwd=str(self.root),
+            cwd=str(self.process_cwd),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -123,7 +158,13 @@ class CodexAppServer:
             },
         )
         self.notify("initialized", {})
-        write_event(self.log_path, "app_server_started")
+        write_event(
+            self.log_path,
+            "app_server_started",
+            targetWorkspace=str(self.root),
+            workerChatRoot=str(self.worker_chat_root) if self.worker_chat_root else None,
+            processCwd=str(self.process_cwd),
+        )
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -197,13 +238,14 @@ class CodexAppServer:
         developer_instructions: str | None = None,
         base_instructions: str | None = None,
     ) -> str:
+        thread_cwd = self.worker_chat_root or self.root
         result = self.request(
             "thread/start",
             {
                 "model": worker.model if self.use_worker_models else None,
                 "modelProvider": None,
-                "cwd": None,
-                "runtimeWorkspaceRoots": None,
+                "cwd": str(thread_cwd),
+                "runtimeWorkspaceRoots": [str(thread_cwd)],
                 "approvalPolicy": None,
                 "approvalsReviewer": None,
                 "sandbox": None,
@@ -229,6 +271,8 @@ class CodexAppServer:
             agent=worker.name,
             model=result.get("model", worker.model),
             threadId=thread_id,
+            targetWorkspace=str(self.root),
+            workerChatRoot=str(self.worker_chat_root) if self.worker_chat_root else None,
         )
         return thread_id
 
@@ -248,8 +292,8 @@ class CodexAppServer:
                 "responsesapiClientMetadata": None,
                 "additionalContext": None,
                 "environments": None,
-                "cwd": None,
-                "runtimeWorkspaceRoots": None,
+                "cwd": str(self.root),
+                "runtimeWorkspaceRoots": [str(self.root)],
                 "approvalPolicy": None,
                 "approvalsReviewer": None,
                 "sandboxPolicy": None,

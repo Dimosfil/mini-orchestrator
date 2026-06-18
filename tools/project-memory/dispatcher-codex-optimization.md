@@ -110,3 +110,28 @@ Initial live smoke result:
 - Timing logs showed the removed cost directly: thread reuse avoided the
   roughly 5.15 second `codex_thread_started` step, and compact follow-up turn
   completed in roughly 1.36 seconds.
+
+## Worker Debug Visibility
+
+Speed remains the priority for real planner/executor/reviewer runs. Worker
+sessions may still appear in the Codex sidebar because the dispatcher uses
+Codex app-server instead of a fully hidden runtime. The mini-orchestrator UI
+therefore treats those sessions as visible technical artifacts rather than
+trying to hide them in this increment.
+
+For dispatcher plan previews and approved runs, the UI response includes a
+compact `tech` summary built from the generated JSONL log. The dashboard shows
+that summary in a separate **Tech** tab with runtime, log path, dispatch
+decision, worker thread/turn ids, timing events, event counts, Codex
+notification counts, and recent compact events. The summary intentionally
+stores prompt/output lengths instead of duplicating full prompt and model text;
+the log path remains the source for deeper replay.
+
+Worker chats are routed to a separate technical workspace through
+`tools/project-memory/service-runtime.json` `workerChatRoot`, currently
+`D:/AI/orchestrator-worker-chats`. Codex app-server starts from that folder and
+creates threads with that cwd so Codex sidebar grouping should move worker chats
+out of the `mini-orchestrator` project. Worker turns still receive the real
+mini-orchestrator path as `cwd` and `runtimeWorkspaceRoots` so executor/reviewer
+work remains targeted at the project. The `Tech` tab and JSONL events show both
+`workerChatRoot` and `targetWorkspace`.

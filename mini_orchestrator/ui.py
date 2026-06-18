@@ -20,6 +20,8 @@ from .orchestrator import Orchestrator
 
 ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
+MAX_TECH_EVENTS = 80
+MAX_TECH_LOG_LINES = 5000
 
 
 @dataclass
@@ -29,6 +31,186 @@ class UiConfig:
     open_browser: bool
     service_id: str = "mini-orchestrator"
     base_url: str = ""
+
+
+def _resolve_dispatcher_log_path(root: Path, log_value: str) -> Path | None:
+    if not log_value:
+        return None
+    raw_path = Path(log_value)
+    log_path = raw_path if raw_path.is_absolute() else root / raw_path
+    try:
+        resolved = log_path.resolve()
+        resolved.relative_to(root.resolve())
+    except (OSError, ValueError):
+        return None
+    return resolved
+
+
+def _compact_dispatcher_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    compact: Dict[str, Any] = {}
+    for key in (
+        "time",
+        "type",
+        "agent",
+        "model",
+        "threadId",
+        "turnId",
+        "reused",
+        "name",
+        "elapsedSeconds",
+        "to",
+        "role",
+        "reason",
+        "confidence",
+        "dryRun",
+        "chain",
+        "planOnly",
+        "targetWorkspace",
+        "workerChatRoot",
+        "processCwd",
+    ):
+        if key in event:
+            compact[key] = event[key]
+
+    if "prompt" in event:
+        compact["promptChars"] = len(str(event.get("prompt") or ""))
+    if "output" in event:
+        compact["outputChars"] = len(str(event.get("output") or ""))
+
+    if event.get("type") == "codex_notification":
+        message = event.get("message")
+        if isinstance(message, dict):
+            method = message.get("method")
+            if method:
+                compact["method"] = method
+            if "id" in message:
+                compact["id"] = message.get("id")
+            params = message.get("params")
+            if isinstance(params, dict):
+                item = params.get("item")
+                if isinstance(item, dict) and item.get("type"):
+                    compact["itemType"] = item.get("type")
+                turn = params.get("turn")
+                if isinstance(turn, dict) and turn.get("id"):
+                    compact["turnId"] = turn.get("id")
+    return compact
+
+
+def build_dispatcher_tech_summary(result: Dict[str, Any], root: Path = ROOT) -> Dict[str, Any]:
+    log_value = str(result.get("log") or "").strip()
+    tech: Dict[str, Any] = {
+        "runtime": result.get("runtime") or "dispatcher-subprocess",
+        "mode": result.get("mode"),
+        "previewMode": result.get("previewMode"),
+        "planOnly": result.get("planOnly"),
+        "durationSeconds": result.get("durationSeconds"),
+        "log": log_value or None,
+        "targetWorkspace": result.get("targetWorkspace"),
+        "workerChatRoot": result.get("workerChatRoot"),
+        "processCwd": result.get("processCwd"),
+        "logStatus": "not-provided",
+        "workerVisibility": (
+            "dry-run-no-codex-worker" if result.get("previewMode") == "dry-run" else "unknown"
+        ),
+        "dispatchDecision": result.get("dispatchDecision"),
+        "eventTypes": {},
+        "workers": [],
+        "turns": [],
+        "timings": [],
+        "codexNotifications": {},
+        "recentEvents": [],
+    }
+    log_path = _resolve_dispatcher_log_path(root, log_value)
+    if log_path is None:
+        return tech
+    if not log_path.exists():
+        tech["logStatus"] = "missing"
+        return tech
+
+    tech["logStatus"] = "available"
+    workers_by_thread: dict[str, Dict[str, Any]] = {}
+    recent_events: list[Dict[str, Any]] = []
+    line_count = 0
+    truncated = False
+
+    with log_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line_count += 1
+            if line_count > MAX_TECH_LOG_LINES:
+                truncated = True
+                break
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+
+            event_type = str(event.get("type") or "unknown")
+            event_types = tech["eventTypes"]
+            event_types[event_type] = int(event_types.get(event_type, 0)) + 1
+            compact = _compact_dispatcher_event(event)
+            recent_events.append(compact)
+            if len(recent_events) > MAX_TECH_EVENTS:
+                recent_events.pop(0)
+
+            if event.get("time"):
+                tech["lastEventTime"] = event.get("time")
+
+            if event_type == "app_server_started":
+                tech["runtime"] = "codex-app-server"
+                tech["workerVisibility"] = "codex-sidebar-visible"
+                tech["targetWorkspace"] = event.get("targetWorkspace")
+                tech["workerChatRoot"] = event.get("workerChatRoot")
+                tech["processCwd"] = event.get("processCwd")
+            elif event_type == "task_created" and event.get("dryRun") is True:
+                tech["workerVisibility"] = "dry-run-no-codex-worker"
+            elif event_type == "agent_thread_started":
+                if event.get("targetWorkspace"):
+                    tech["targetWorkspace"] = event.get("targetWorkspace")
+                if event.get("workerChatRoot"):
+                    tech["workerChatRoot"] = event.get("workerChatRoot")
+                    tech["workerVisibility"] = "codex-sidebar-visible"
+                thread_id = str(event.get("threadId") or "")
+                worker = {
+                    "agent": event.get("agent"),
+                    "model": event.get("model"),
+                    "threadId": thread_id or None,
+                    "reused": bool(event.get("reused")),
+                    "workerChatRoot": event.get("workerChatRoot"),
+                    "turnIds": [],
+                }
+                tech["workers"].append(worker)
+                if thread_id:
+                    workers_by_thread[thread_id] = worker
+            elif event_type == "agent_turn_started":
+                turn = {
+                    "agent": event.get("agent"),
+                    "threadId": event.get("threadId"),
+                    "turnId": event.get("turnId"),
+                }
+                tech["turns"].append(turn)
+                thread_id = str(event.get("threadId") or "")
+                worker = workers_by_thread.get(thread_id)
+                if worker and event.get("turnId"):
+                    worker.setdefault("turnIds", []).append(event.get("turnId"))
+            elif event_type == "timing":
+                tech["timings"].append(
+                    {
+                        "name": event.get("name"),
+                        "agent": event.get("agent"),
+                        "elapsedSeconds": event.get("elapsedSeconds"),
+                    }
+                )
+            elif event_type == "codex_notification":
+                method = compact.get("method") or "unknown"
+                notifications = tech["codexNotifications"]
+                notifications[method] = int(notifications.get(method, 0)) + 1
+
+    tech["eventCount"] = line_count - (1 if truncated else 0)
+    tech["truncated"] = truncated
+    tech["recentEvents"] = recent_events
+    return tech
 
 
 class _ThreadedHttpServer(ThreadingMixIn, HTTPServer):
@@ -242,6 +424,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     timeout_seconds=120 if mode == "real" else 30,
                 )
                 result.setdefault("previewMode", mode)
+                result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                 self._json_response(200, result)
             except ValueError as exc:
                 self._http_error(400, str(exc))
@@ -261,6 +444,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     ["--task", task, "--chain"],
                     timeout_seconds=300,
                 )
+                result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                 self._json_response(200, result)
             except ValueError as exc:
                 self._http_error(400, str(exc))
