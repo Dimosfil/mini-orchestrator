@@ -125,7 +125,7 @@ retrieval should be recommended, current, or stale. `gi sql` / `gi sqlite` and
 and recommendations without deploying external services, installing heavy
 dependencies, uploading data, or indexing private sources by default.
 
-Use `gi root rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
+Use `gi tools rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
 the configured project-memory/RAG retrieval system. Scoped node rebuilds should
 use documented node commands such as SQL, chunks, vector, manifest, and evals.
 Do not mark rebuild state current until rebuild and status checks succeed.
@@ -138,6 +138,18 @@ python .\tools\project-memory\build_project_memory_index.py export-chunks
 uv run --with chromadb python .\tools\project-memory\build_chroma_index.py rebuild
 ```
 
+Run local RAG health checks and retrieval evals:
+
+```powershell
+python .\tools\project-memory\rag_check.py run
+```
+
+The check verifies that `rag-system.json` is readable, generated indexes are
+ignored, SQLite chunks match the semantic corpus when chunking is enabled, and
+the reviewable eval cases in `retrieval-evals.json` return expected source
+paths in the configured top results. Do not make free-form model answer wording
+the primary eval target.
+
 ## Suggested Files
 
 - `pending-tasks.md`: active project-wide plans and multi-step work.
@@ -148,6 +160,11 @@ uv run --with chromadb python .\tools\project-memory\build_chroma_index.py rebui
   writeback configuration.
 - `semantic-retrieval-evals.md`: small eval set for semantic and hybrid
   retrieval quality.
+- `retrieval-evals.json`: machine-checkable retrieval eval cases for keyword,
+  semantic, and hybrid retrieval quality.
+- `rag_check.py`: optional health and retrieval eval runner.
+- `specs/integration-contracts/connected-projects.md`: register of external
+  repositories, services, libraries, docs, tools, and sibling workspaces.
 - `build_chroma_index.py`: optional local Chroma adapter when semantic
   retrieval is enabled.
 - `NOTES.md`: reviewable export of durable notes from local agent memory.

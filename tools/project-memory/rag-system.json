@@ -125,14 +125,30 @@
         "status_command": ""
       },
       "evals": {
-        "command": "",
-        "status_command": ""
+        "command": "python .\\tools\\project-memory\\rag_check.py run",
+        "status_command": "python .\\tools\\project-memory\\rag_check.py health"
       }
     },
     "state": {
       "last_full_rebuild_migration": "",
       "last_full_rebuild_at": "",
-      "last_node_rebuilds": {}
+      "last_node_rebuilds": {
+        "sqlite": {
+          "migration": "2026.06.18.6__add_connected_projects_register",
+          "rebuilt_at": "2026-06-18T16:25:08Z",
+          "status": "Files: 107; Chunks: 487; FTS5 enabled"
+        },
+        "chunks": {
+          "migration": "2026.06.18.6__add_connected_projects_register",
+          "rebuilt_at": "2026-06-18T16:25:08Z",
+          "status": "Exported chunks: 487"
+        },
+        "evals": {
+          "migration": "2026.06.18.6__add_connected_projects_register",
+          "rebuilt_at": "2026-06-18T16:25:08Z",
+          "status": "RAG health and 4 retrieval eval cases passed"
+        }
+      }
     }
   },
   "writeback": {

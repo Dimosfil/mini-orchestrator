@@ -319,6 +319,16 @@ Inspect logs:
   or arbitrary external folder unless the user gives an explicit concrete path
   and action. Use APIs, connectors, or task-manager endpoints for cross-project
   communication.
+- `D:\AI\symphony\` is an explicitly approved external reference workspace for
+  this project. Agents may read, search, inspect, and use it when designing or
+  implementing Symphony-style orchestration in `mini-orchestrator`. Do not edit,
+  delete, move, or commit files in that external workspace unless the user gives
+  a separate explicit action for that path.
+- Keep connected external projects in
+  `tools/project-memory/specs/integration-contracts/connected-projects.md`.
+  Read that register before touching integrations, nested repositories, cloned
+  examples, or external project folders. Update it when adding, removing,
+  replacing, relocating, or materially changing the role of a connected project.
 - Treat `.\others\` under the current workspace parent, or another
   project-local relative path named by local instructions, as the standard local
   parent folder for third-party projects, cloned external repositories, and
@@ -473,11 +483,15 @@ Inspect logs:
 - Treat `gi tools rebuild`, `gi rag rebuild`, `ги тулс ребилд`,
   `ги раг ребилд`, and equivalent full GI/RAG rebuild wording as requests to
   rebuild the current project's entire configured GI/RAG project-memory
-  retrieval system from approved sources. This is a heavy command and requires
+  retrieval system from approved sources: source manifest, SQLite/FTS or
+  structured memory indexes, chunk exports, vector indexes, adapter metadata,
+  and retrieval eval/status checks. This is a heavy command and requires
   explicit user confirmation immediately before running the full rebuild. Before
   asking, read `tools/project-memory/rag-system.json`, list configured rebuild
   nodes, generated paths that may be replaced, local scripts or adapters, and
-  privacy exclusions. After success, run configured stats/status/eval checks,
+  privacy exclusions. Do not include secrets, private runtime data, ignored
+  telemetry, or sources outside the current project root. After success, run
+  configured stats/status/eval checks,
   update local rebuild state such as `last_full_rebuild_migration` or per-node
   markers when present, and report generated artifacts without committing
   rebuildable indexes.
@@ -491,9 +505,13 @@ Inspect logs:
   `ги тулс ребилд чанки`, `ги раг ребилд чанки`,
   `ги тулс ребилд манифест`, `ги раг ребилд манифест`,
   `ги тулс ребилд тесты`, and `ги раг ребилд тесты` as requests to rebuild only
-  the named RAG node. Read `rag-system.json`, run only the documented node
+  the named GI/RAG node. Read `rag-system.json`, run only the documented node
   command or local helper, then verify that node's status. Ask one short
-  clarification question if the node is not configured.
+  clarification question if the node is not configured instead of guessing a
+  command. For an `evals` node, prefer machine-checkable retrieval checks that
+  verify index health, count consistency, and expected source paths in top
+  keyword, semantic, or hybrid results; do not treat an answer's wording as the
+  primary eval target.
 - During `gi обновить`, inspect each newly applied migration. If a migration
   changes RAG source rules, chunking, embedding metadata, SQLite/vector schemas,
   retrieval adapters, or project-memory index scripts, check `rag-system.json`

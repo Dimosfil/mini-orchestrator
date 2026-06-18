@@ -10,6 +10,16 @@
   project or arbitrary external folder unless the user gives an explicit
   concrete path and action. Use APIs, connectors, or task-manager endpoints for
   cross-project communication.
+- `D:\AI\symphony\` is an explicitly approved external reference workspace for
+  this project. Agents may read, search, inspect, and use it when designing or
+  implementing Symphony-style orchestration in `mini-orchestrator`. Do not edit,
+  delete, move, or commit files in that external workspace unless the user gives
+  a separate explicit action for that path.
+- Keep connected external projects in
+  `tools/project-memory/specs/integration-contracts/connected-projects.md`.
+  Read that register before touching integrations, nested repositories, cloned
+  examples, or external project folders. Update it when adding, removing,
+  replacing, relocating, or materially changing the role of a connected project.
 - Treat nested checkouts, vendored repositories, cloned examples, and
   third-party source trees as separate scope. Do not inspect them as part of the
   main project unless the user explicitly asks, the task is about that nested
@@ -222,10 +232,15 @@ or:
 - Use `gi rebuild` for the current project/application rebuild only, such as
   producing an executable, package, or documented build artifact. Use
   `gi tools rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
-  the current project's configured GI/RAG project-memory retrieval system. Use
-  node forms such as `gi tools rebuild sql`, `gi tools rebuild chunks`,
+  the current project's configured GI/RAG project-memory retrieval system:
+  source manifest, SQLite/FTS or structured memory indexes, chunk exports,
+  vector indexes, adapter metadata, and retrieval eval/status checks. Use node
+  forms such as `gi tools rebuild sql`, `gi tools rebuild chunks`,
   `gi tools rebuild vector`, and `gi tools rebuild evals` for scoped GI/RAG
-  rebuilds.
+  rebuilds. For an `evals` node, prefer machine-checkable retrieval checks that
+  verify index health, count consistency, and expected source paths in top
+  keyword, semantic, or hybrid results; do not treat an answer's wording as the
+  primary eval target.
   During `gi обновить`, migrations that change RAG rules, indexers, chunking,
   embedding metadata, or retrieval adapters must leave affected rebuild state
   stale until the documented rebuild and status checks succeed.

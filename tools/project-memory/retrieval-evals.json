@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "description": "Small reviewable retrieval eval set for the mini-orchestrator project-memory RAG.",
+  "defaults": {
+    "top_k": 8
+  },
+  "cases": [
+    {
+      "id": "orchestrator_chat_command",
+      "query": "оркестратор план executor reviewer dispatcher dry-run",
+      "mode": "keyword",
+      "expected_paths_any": [
+        "AGENTS.md",
+        "tools/project-memory/orchestrator-chat-command-contract.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Exact mini-orchestrator chat-command routing rules should be retrievable."
+    },
+    {
+      "id": "rag_eval_node_command",
+      "query": "gi tools rebuild evals retrieval eval checks expected source paths",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "AGENTS.md",
+        "tools/project-memory/README.md",
+        "tools/project-memory/rag-system.json"
+      ],
+      "min_any_hits": 1,
+      "why": "Agents need to find the scoped RAG eval command and its purpose."
+    },
+    {
+      "id": "connected_projects_register",
+      "query": "external project folders connected projects integration boundaries symphony general-instructions",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "AGENTS.md",
+        "tools/project-memory/specs/integration-contracts/connected-projects.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Agents should find the connected-projects register before touching external workspaces."
+    },
+    {
+      "id": "config_service_runtime_discovery",
+      "query": "config service runtime service URL resolve discovery record health endpoint",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "AGENTS.md",
+        "tools/project-memory/service-runtime.json"
+      ],
+      "min_any_hits": 1,
+      "why": "Service lookup rules are exact enough for keyword retrieval and central to local runtime safety."
+    }
+  ]
+}
