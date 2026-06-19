@@ -19,7 +19,7 @@ class Validator:
         lowered = message.lower()
         if not lowered:
             return False
-        return "timeout" in lowered or "command execution error" in lowered
+        return "timeout" in lowered or "timed out" in lowered or "command execution error" in lowered
 
     def validate(self, action: TaskAction, report: ExecutionReport) -> ValidationDecision:
         if report.result is None:

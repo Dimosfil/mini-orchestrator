@@ -13,8 +13,18 @@ import sys
 import uuid
 import time
 import webbrowser
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
+from .agent_flows import (
+    AgentFlowError,
+    compile_saved_agent_flow,
+    create_agent_flow,
+    list_agent_flows,
+    read_compiled_manifest,
+    read_agent_flow,
+    update_agent_flow,
+    validate_saved_agent_flow,
+)
 from .agent_api import AgentApiError, VisualAgentApi
 from .agent_profiles import (
     AgentProfileError,
@@ -26,9 +36,11 @@ from .agent_profiles import (
     visual_agent_task_prompt,
 )
 from .codex_dispatcher_service import PersistentCodexDispatcher
+from .daemon_runs import build_local_daemon_runs, run_manifest_dry_run, run_single_card_dry_run, set_run_review_decision
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
 from .symphony_daemon import SymphonyDaemonError, build_symphony_live_runs_from_url
+from .worknest_bridge import WorkNestBridgeError, WorkNestLifecycleBridge
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,16 +48,196 @@ DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
 MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
 TASK_FILE_DIR = ROOT / ".mini_orchestrator" / "dispatcher-tasks"
+LIVE_RUN_SOURCE_MODES = {"dispatcher", "symphony", "combined"}
+APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS = 300
 
 
-def build_live_runs_payload(root: Path = ROOT) -> Dict[str, Any]:
+def _empty_run_summary() -> Dict[str, int]:
+    return {"total": 0, "active": 0, "blocked": 0, "done": 0, "failed": 0, "stale": 0}
+
+
+def _merge_run_summaries(payloads: list[Dict[str, Any]]) -> Dict[str, int]:
+    summary = _empty_run_summary()
+    for payload in payloads:
+        payload_summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+        for key in summary:
+            summary[key] += int(payload_summary.get(key) or 0)
+    return summary
+
+
+def _stamp_run_source(payload: Dict[str, Any], source_key: str, source_label: str) -> Dict[str, Any]:
+    for run in payload.get("runs") if isinstance(payload.get("runs"), list) else []:
+        if isinstance(run, dict):
+            run["sourceKey"] = source_key
+            run["sourceLabel"] = source_label
+    return payload
+
+
+def _build_dispatcher_source_payload(root: Path) -> Dict[str, Any]:
+    local_payload = build_local_daemon_runs(root)
+    dispatcher_payload = build_dispatcher_live_runs(root)
+    _stamp_run_source(local_payload, "dispatcher", "Dispatcher")
+    _stamp_run_source(dispatcher_payload, "dispatcher", "Dispatcher")
+
+    payloads = [local_payload, dispatcher_payload]
+    runs = [
+        run
+        for payload in payloads
+        for run in (payload.get("runs") if isinstance(payload.get("runs"), list) else [])
+        if isinstance(run, dict)
+    ]
+    profiles: Dict[str, Any] = {}
+    for payload in payloads:
+        payload_profiles = payload.get("profiles")
+        if isinstance(payload_profiles, dict):
+            profiles.update(payload_profiles)
+    runs.sort(key=lambda run: str(run.get("updatedAt") or run.get("createdAt") or ""), reverse=True)
+    return {
+        "source": "dispatcher",
+        "sourceLabel": "Dispatcher",
+        "generatedAt": max(str(payload.get("generatedAt") or "") for payload in payloads),
+        "summary": _merge_run_summaries(payloads),
+        "profiles": profiles,
+        "runs": runs,
+        "sourceDetails": {
+            "localDaemon": {
+                "source": local_payload.get("source"),
+                "summary": local_payload.get("summary") or _empty_run_summary(),
+            },
+            "dispatcherJsonl": {
+                "source": dispatcher_payload.get("source"),
+                "summary": dispatcher_payload.get("summary") or _empty_run_summary(),
+            },
+        },
+    }
+
+
+def _build_symphony_source_payload() -> Dict[str, Any]:
+    payload = build_symphony_live_runs_from_url()
+    payload["sourceLabel"] = "Symphony"
+    return _stamp_run_source(payload, "symphony", "Symphony")
+
+
+def _source_state(payload: Dict[str, Any] | None, error: str = "") -> Dict[str, Any]:
+    summary = payload.get("summary") if payload and isinstance(payload.get("summary"), dict) else _empty_run_summary()
+    return {
+        "source": payload.get("source") if payload else None,
+        "summary": summary,
+        "available": not error,
+        "error": error,
+    }
+
+
+def _combined_live_runs_payload(
+    dispatcher_payload: Dict[str, Any],
+    symphony_payload: Dict[str, Any] | None,
+    symphony_error: str = "",
+) -> Dict[str, Any]:
+    payloads = [dispatcher_payload]
+    if symphony_payload:
+        payloads.append(symphony_payload)
+    runs = [
+        run
+        for payload in payloads
+        for run in (payload.get("runs") if isinstance(payload.get("runs"), list) else [])
+        if isinstance(run, dict)
+    ]
+    profiles: Dict[str, Any] = {}
+    for payload in payloads:
+        payload_profiles = payload.get("profiles")
+        if isinstance(payload_profiles, dict):
+            profiles.update(payload_profiles)
+    runs.sort(key=lambda run: str(run.get("updatedAt") or run.get("createdAt") or ""), reverse=True)
+    generated_at = max(str(payload.get("generatedAt") or "") for payload in payloads)
+    return {
+        "source": "combined",
+        "sourceMode": "combined",
+        "sourceLabel": "Combined",
+        "generatedAt": generated_at,
+        "summary": _merge_run_summaries(payloads),
+        "profiles": profiles,
+        "runs": runs,
+        "sources": {
+            "dispatcher": _source_state(dispatcher_payload),
+            "symphony": _source_state(symphony_payload, symphony_error),
+        },
+        "daemonError": symphony_error,
+        "daemonSourceTried": "symphony-daemon" if symphony_error else "",
+    }
+
+
+def build_live_runs_payload(root: Path = ROOT, source_mode: str = "combined") -> Dict[str, Any]:
+    mode = source_mode if source_mode in LIVE_RUN_SOURCE_MODES else "combined"
+    dispatcher_payload = _build_dispatcher_source_payload(root)
+
+    if mode == "dispatcher":
+        dispatcher_payload["sourceMode"] = "dispatcher"
+        dispatcher_payload["sources"] = {"dispatcher": _source_state(dispatcher_payload)}
+        return dispatcher_payload
+
     try:
-        return build_symphony_live_runs_from_url()
+        symphony_payload: Dict[str, Any] | None = _build_symphony_source_payload()
+        symphony_error = ""
     except SymphonyDaemonError as exc:
-        payload = build_dispatcher_live_runs(root)
-        payload["daemonError"] = str(exc)
-        payload["daemonSourceTried"] = "symphony-daemon"
-        return payload
+        symphony_payload = None
+        symphony_error = str(exc)
+
+    if mode == "symphony":
+        if symphony_payload is None:
+            return {
+                "source": "symphony-daemon",
+                "sourceMode": "symphony",
+                "sourceLabel": "Symphony",
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "summary": _empty_run_summary(),
+                "profiles": {},
+                "runs": [],
+                "sources": {"symphony": _source_state(None, symphony_error)},
+                "daemonError": symphony_error,
+                "daemonSourceTried": "symphony-daemon",
+            }
+        symphony_payload["sourceMode"] = "symphony"
+        symphony_payload["sources"] = {"symphony": _source_state(symphony_payload)}
+        return symphony_payload
+
+    return _combined_live_runs_payload(dispatcher_payload, symphony_payload, symphony_error)
+
+
+def build_symphony_run_blocker(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if payload.get("approved") is not True:
+        raise ValueError("Field 'approved' must be true before creating a Symphony run.")
+    task_value = payload.get("task")
+    if isinstance(task_value, dict):
+        task_title = str(task_value.get("title") or task_value.get("summary") or task_value.get("task") or "").strip()
+        task_id = str(task_value.get("taskId") or "").strip()
+        sprint_id = str(task_value.get("sprintId") or "").strip()
+    else:
+        task_title = str(task_value or payload.get("goal") or "").strip()
+        task_id = str(payload.get("taskId") or "").strip()
+        sprint_id = str(payload.get("sprintId") or "").strip()
+    if not task_title:
+        raise ValueError("Field 'task' is required.")
+
+    return {
+        "status": "blocked",
+        "accepted": False,
+        "code": "symphony-intake-missing",
+        "message": (
+            "Symphony intake is not documented for external mini-orchestrator task runs yet. "
+            "Use dispatcher execution or add a config-service-resolved Symphony intake contract first."
+        ),
+        "task": {
+            "taskId": task_id,
+            "sprintId": sprint_id,
+            "project": str(payload.get("project") or "mini-orchestrator").strip(),
+            "title": task_title,
+        },
+        "requiredContract": {
+            "serviceId": "symphony",
+            "expectedCapability": "task-intake",
+            "expectedEndpoint": "documented agent-facing intake endpoint",
+        },
+    }
 
 
 @dataclass
@@ -251,6 +443,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
     def _path(self) -> str:
         return urlparse(self.path).path
 
+    def _query(self) -> Dict[str, list[str]]:
+        return parse_qs(urlparse(self.path).query)
+
     def _read_json(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
         body = self.rfile.read(length).decode("utf-8", errors="replace") if length else "{}"
@@ -294,6 +489,12 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         stderr_path = output_dir / f"{run_id}.stderr.txt"
         stdout_handle = stdout_path.open("w", encoding="utf-8")
         stderr_handle = stderr_path.open("w", encoding="utf-8")
+        creationflags = 0
+        startupinfo = None
+        if os.name == "nt":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         process = subprocess.Popen(
             [sys.executable, str(DISPATCHER), *args],
             cwd=str(ROOT),
@@ -303,11 +504,20 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             encoding="utf-8",
             errors="replace",
             env=env,
+            creationflags=creationflags,
+            startupinfo=startupinfo,
         )
         stdout_handle.close()
         stderr_handle.close()
         self.dispatcher_processes[run_id] = process
         log_value = str((ROOT / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl").relative_to(ROOT))
+        self._write_run_metadata_event(
+            run_id,
+            "dispatcher_process_started",
+            processId=process.pid,
+            stdout=str(stdout_path.relative_to(ROOT)),
+            stderr=str(stderr_path.relative_to(ROOT)),
+        )
         return {
             "status": "running",
             "runId": run_id,
@@ -454,6 +664,13 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             raise ValueError("Field 'task' is required.")
         return task
 
+    def _agent_flow_id(self) -> str:
+        prefix = "/api/agent-flows/"
+        path = self._path()
+        if not path.startswith(prefix):
+            return ""
+        return path.removeprefix(prefix).strip("/")
+
     def do_POST(self) -> None:
         path = self._path()
         if path not in {
@@ -467,7 +684,16 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/agents/run",
             "/api/agents/translate-work-package",
             "/api/agents/translation-log",
-        }:
+            "/api/agent-flows",
+            "/api/daemon/run",
+            "/api/daemon/review",
+            "/api/symphony/runs",
+            "/api/worknest/claim",
+            "/api/worknest/complete",
+        } and not (
+            path.startswith("/api/agent-flows/")
+            and (path.endswith("/validate") or path.endswith("/compile"))
+        ):
             self._http_error(404, "Unknown endpoint.")
             return
 
@@ -475,6 +701,141 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
         except ValueError as exc:
             self._http_error(400, str(exc))
+            return
+
+        if path == "/api/agent-flows":
+            try:
+                flow = create_agent_flow(payload, ROOT)
+                self._json_response(201, {"flow": flow})
+            except AgentFlowError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/daemon/run":
+            try:
+                if payload.get("dryRun") is not True:
+                    self._http_error(400, "Single-card daemon MVP currently requires dryRun=true.")
+                    return
+                manifest_id = str(payload.get("manifestId") or "").strip()
+                profile_snapshot_id = str(payload.get("profileSnapshotId") or "").strip()
+                if not manifest_id:
+                    self._http_error(400, "Field 'manifestId' is required.")
+                    return
+                manifest = read_compiled_manifest(manifest_id, ROOT)
+                task_value = payload.get("task")
+                task = task_value if isinstance(task_value, dict) else {}
+                if profile_snapshot_id:
+                    state = run_single_card_dry_run(manifest, profile_snapshot_id, ROOT, task=task)
+                else:
+                    state = run_manifest_dry_run(
+                        manifest,
+                        ROOT,
+                        task=task,
+                        reviewer_verdict=str(payload.get("reviewerVerdict") or "done"),
+                    )
+                self._json_response(201, {"run": state})
+            except (AgentFlowError, ValueError) as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/daemon/review":
+            try:
+                run = set_run_review_decision(
+                    str(payload.get("runId") or "").strip(),
+                    str(payload.get("decision") or "").strip(),
+                    ROOT,
+                )
+                self._json_response(200, {"run": run})
+            except ValueError as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/symphony/runs":
+            try:
+                self._json_response(200, build_symphony_run_blocker(payload))
+            except ValueError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/worknest/claim":
+            try:
+                project = str(payload.get("project") or "mini-orchestrator").strip()
+                task = WorkNestLifecycleBridge(root=ROOT).claim_next_task(project)
+                self._json_response(200, {"task": task.__dict__ if task else None})
+            except WorkNestBridgeError as exc:
+                self._http_error(502, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/worknest/complete":
+            try:
+                review_decision = str(payload.get("reviewDecision") or "").strip().casefold()
+                accepted = payload.get("accepted") is True or review_decision == "done"
+                status_value = str(payload.get("status") or "").strip().casefold()
+                if status_value == "done" and not accepted:
+                    self._http_error(400, "WorkNest done completion requires reviewDecision='done' or accepted=true.")
+                    return
+                changed_files_value = payload.get("changedFiles")
+                checks_value = payload.get("checks")
+                result = WorkNestLifecycleBridge(root=ROOT).complete_task(
+                    task_id=str(payload.get("taskId") or "").strip(),
+                    sprint_id=str(payload.get("sprintId") or "").strip(),
+                    project=str(payload.get("project") or "mini-orchestrator").strip(),
+                    status=status_value,
+                    summary=str(payload.get("summary") or "").strip(),
+                    changed_files=[str(item) for item in changed_files_value] if isinstance(changed_files_value, list) else [],
+                    checks=[str(item) for item in checks_value] if isinstance(checks_value, list) else [],
+                )
+                self._json_response(200, result)
+            except WorkNestBridgeError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path.startswith("/api/agent-flows/") and path.endswith("/validate"):
+            flow_id = self._agent_flow_id().removesuffix("/validate").strip("/")
+            if not flow_id:
+                self._http_error(404, "Agent flow id is required.")
+                return
+            try:
+                validation = validate_saved_agent_flow(
+                    flow_id,
+                    ROOT,
+                    selected_start_agent_id=str(payload.get("selectedStartAgentId") or "").strip() or None,
+                )
+                self._json_response(200, validation)
+            except AgentFlowError as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path.startswith("/api/agent-flows/") and path.endswith("/compile"):
+            flow_id = self._agent_flow_id().removesuffix("/compile").strip("/")
+            if not flow_id:
+                self._http_error(404, "Agent flow id is required.")
+                return
+            try:
+                manifest = compile_saved_agent_flow(flow_id, ROOT, payload)
+                self._json_response(201, {"manifest": manifest})
+            except AgentFlowError as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
             return
 
         if path == "/api/run":
@@ -529,7 +890,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if payload.get("background") is True:
                     run_id = "ui-" + uuid.uuid4().hex[:12]
                     task_args, _ = self._write_task_file(task, run_id)
-                    dispatcher_args = [*task_args, "--run-id", run_id, "--chain"]
+                    dispatcher_args = [
+                        *task_args,
+                        "--run-id",
+                        run_id,
+                        "--chain",
+                        "--turn-timeout-seconds",
+                        str(APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS),
+                    ]
                     if str(payload.get("mode") or "").strip().casefold() == "dry-run":
                         dispatcher_args.append("--dry-run")
                     result = self._start_dispatcher_background(dispatcher_args, run_id)
@@ -541,8 +909,13 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     self._json_response(202, result)
                     return
                 result = self._run_dispatcher(
-                    [*self._write_task_file(task)[0], "--chain"],
-                    timeout_seconds=300,
+                    [
+                        *self._write_task_file(task)[0],
+                        "--chain",
+                        "--turn-timeout-seconds",
+                        str(APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS),
+                    ],
+                    timeout_seconds=APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS * 4,
                 )
                 result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                 self._json_response(200, result)
@@ -709,10 +1082,54 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._http_error(500, str(exc))
             return
 
+    def do_PUT(self) -> None:
+        path = self._path()
+        if not path.startswith("/api/agent-flows/"):
+            self._http_error(404, "Unknown endpoint.")
+            return
+        try:
+            payload = self._read_json()
+        except ValueError as exc:
+            self._http_error(400, str(exc))
+            return
+        flow_id = self._agent_flow_id()
+        if not flow_id:
+            self._http_error(404, "Agent flow id is required.")
+            return
+        try:
+            flow = update_agent_flow(flow_id, payload, ROOT)
+            self._json_response(200, {"flow": flow})
+        except AgentFlowError as exc:
+            status = 404 if "not found" in str(exc).lower() else 400
+            self._http_error(status, str(exc))
+        except Exception as exc:
+            self._http_error(500, str(exc))
+
     def do_GET(self) -> None:
         path = self._path()
+        if path == "/api/agent-flows":
+            try:
+                self._json_response(200, {"flows": list_agent_flows(ROOT)})
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+        if path.startswith("/api/agent-flows/"):
+            flow_id = self._agent_flow_id()
+            if not flow_id:
+                self._http_error(404, "Agent flow id is required.")
+                return
+            try:
+                self._json_response(200, {"flow": read_agent_flow(flow_id, ROOT)})
+            except AgentFlowError as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
         if path == "/api/daemon/runs":
-            self._json_response(200, build_live_runs_payload(ROOT))
+            query = self._query()
+            mode = (query.get("source") or ["combined"])[0]
+            self._json_response(200, build_live_runs_payload(ROOT, mode))
             return
         if path == "/api/agents/default-card":
             try:
@@ -759,14 +1176,17 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Start approved dispatcher workflows in background mode and poll /api/daemon/runs for live state.",
                         "Test one visual agent card through /api/agents/chat.",
                         "Compile visual agent cards through /api/agents/compile.",
+                        "Persist visual agent flows through /api/agent-flows.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
+                        "Validate Symphony run intake requests through /api/symphony/runs and return a documented blocker while intake is unsupported.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
                         "Do not mutate Symphony daemon state through this read-only dashboard bridge.",
+                        "Do not post task runs into Symphony until a config-service-resolved intake contract exists.",
                     ],
                     "startup": {
                         "requiresConfigService": True,
@@ -822,6 +1242,69 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "path": "/api/agents/compile",
                             "optional": ["agent", "task"],
                         },
+                        "agentFlowsList": {
+                            "method": "GET",
+                            "path": "/api/agent-flows",
+                        },
+                        "agentFlowsCreate": {
+                            "method": "POST",
+                            "path": "/api/agent-flows",
+                            "required": ["flow"],
+                        },
+                        "agentFlowsRead": {
+                            "method": "GET",
+                            "path": "/api/agent-flows/{id}",
+                        },
+                        "agentFlowsUpdate": {
+                            "method": "PUT",
+                            "path": "/api/agent-flows/{id}",
+                            "required": ["flow"],
+                        },
+                        "agentFlowsValidate": {
+                            "method": "POST",
+                            "path": "/api/agent-flows/{id}/validate",
+                            "optional": ["selectedStartAgentId"],
+                        },
+                        "agentFlowsCompile": {
+                            "method": "POST",
+                            "path": "/api/agent-flows/{id}/compile",
+                            "required": ["approval"],
+                            "optional": ["selectedStartAgentId", "maxTurnsPerNode"],
+                        },
+                        "daemonRun": {
+                            "method": "POST",
+                            "path": "/api/daemon/run",
+                            "required": ["manifestId", "dryRun"],
+                            "optional": ["profileSnapshotId", "reviewerVerdict"],
+                            "mode": "manifest-dry-run",
+                        },
+                        "daemonReview": {
+                            "method": "POST",
+                            "path": "/api/daemon/review",
+                            "required": ["runId", "decision"],
+                            "decisionValues": ["done", "rework"],
+                            "policy": "records local Human Review decisions; WorkNest terminal completion remains separate",
+                        },
+                        "symphonyRun": {
+                            "method": "POST",
+                            "path": "/api/symphony/runs",
+                            "required": ["task", "approved"],
+                            "mode": "unsupported-blocker",
+                            "policy": "validates approved task-run payload and returns symphony-intake-missing until Symphony exposes documented intake",
+                        },
+                        "workNestClaim": {
+                            "method": "POST",
+                            "path": "/api/worknest/claim",
+                            "required": ["project"],
+                            "policy": "contract-gated next-task claim",
+                        },
+                        "workNestComplete": {
+                            "method": "POST",
+                            "path": "/api/worknest/complete",
+                            "required": ["taskId", "sprintId", "project", "status", "summary"],
+                            "optional": ["reviewDecision", "accepted", "changedFiles", "checks"],
+                            "policy": "contract-gated terminal done-or-blocked only",
+                        },
                         "runAgentCard": {
                             "method": "POST",
                             "path": "/api/agents/run",
@@ -836,7 +1319,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "daemonRuns": {
                             "method": "GET",
                             "path": "/api/daemon/runs",
-                            "mode": "symphony-daemon-read-only",
+                            "optionalQuery": ["source=combined|dispatcher|symphony"],
+                            "mode": "normalized-live-runs-read-only",
                         },
                     },
                     "capabilities": [
@@ -845,8 +1329,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "approved-dispatcher-workflow",
                         "agent-card-mini-chat",
                         "agent-card-compile",
+                        "agent-flow-persistence",
+                        "agent-flow-validation",
+                        "agent-flow-compile",
+                        "daemon-dry-run",
+                        "worknest-lifecycle-bridge",
                         "agent-work-package-translation",
                         "symphony-daemon-dashboard",
+                        "symphony-run-blocker",
                     ],
                 },
             )

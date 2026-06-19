@@ -161,6 +161,21 @@
       justify-content: flex-end;
     }
 
+    .source-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .source-selector select {
+      min-height: 32px;
+      padding: 5px 28px 5px 9px;
+      font-size: 13px;
+    }
+
     .mini-button {
       min-height: 32px;
       padding: 5px 9px;
@@ -668,7 +683,8 @@
 
     .run-status.blocked,
     .run-status.failed,
-    .run-status.waiting_approval {
+    .run-status.waiting_approval,
+    .run-status.stale {
       border-color: #e2aaaa;
       color: var(--danger);
       background: #fff1f1;
@@ -678,6 +694,33 @@
       border-color: #9bc7ad;
       color: var(--ok);
       background: #edf8f1;
+    }
+
+    .run-source-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      width: max-content;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .run-source-badge.dispatcher {
+      border-color: #9fc2d6;
+      color: #25627f;
+      background: #edf7fb;
+    }
+
+    .run-source-badge.symphony {
+      border-color: #b9b2d8;
+      color: #5a4a91;
+      background: #f4f1fb;
     }
 
     .run-detail-grid {
@@ -1216,6 +1259,14 @@
           <p id="live-runs-source" class="subtitle">Loading daemon run state...</p>
         </div>
         <div class="section-actions">
+          <label class="source-selector" for="live-runs-source-mode">
+            Source
+            <select id="live-runs-source-mode" aria-label="Live Runs source">
+              <option value="combined" selected>Combined</option>
+              <option value="dispatcher">Dispatcher</option>
+              <option value="symphony">Symphony</option>
+            </select>
+          </label>
           <div class="status-pill" aria-live="polite">
             <span id="live-runs-dot" class="dot busy"></span>
             <span id="live-runs-status">Loading</span>
@@ -1355,12 +1406,15 @@
     const RUN_REVIEW_DECISIONS_STORAGE_KEY = "mini-orchestrator-run-review-decisions-v1";
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
     const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
+    const LIVE_RUNS_SOURCE_MODE_STORAGE_KEY = "mini-orchestrator-live-runs-source-mode-v1";
+    const LIVE_RUNS_SOURCE_MODES = new Set(["dispatcher", "symphony", "combined"]);
     const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
     const refreshRunsButton = document.querySelector("#refresh-runs-button");
     const runsBoard = document.querySelector("#runs-board");
     const runsBoardResizeHandle = document.querySelector("#runs-board-resize-handle");
+    const liveRunsSourceMode = document.querySelector("#live-runs-source-mode");
     const liveRunsSource = document.querySelector("#live-runs-source");
     const liveRunsDot = document.querySelector("#live-runs-dot");
     const liveRunsStatus = document.querySelector("#live-runs-status");
@@ -1433,6 +1487,28 @@
       return JSON.stringify(value, null, 2);
     }
 
+    function loadLiveRunsSourceMode() {
+      try {
+        const stored = localStorage.getItem(LIVE_RUNS_SOURCE_MODE_STORAGE_KEY);
+        return LIVE_RUNS_SOURCE_MODES.has(stored) ? stored : "combined";
+      } catch (_error) {
+        return "combined";
+      }
+    }
+
+    function setLiveRunsSourceMode(mode) {
+      const nextMode = LIVE_RUNS_SOURCE_MODES.has(mode) ? mode : "combined";
+      if (liveRunsSourceMode) {
+        liveRunsSourceMode.value = nextMode;
+      }
+      try {
+        localStorage.setItem(LIVE_RUNS_SOURCE_MODE_STORAGE_KEY, nextMode);
+      } catch (_error) {
+        // Ignore storage failures; the selector still controls the current request.
+      }
+      return nextMode;
+    }
+
     function loadRunReviewDecisions() {
       try {
         const raw = localStorage.getItem(RUN_REVIEW_DECISIONS_STORAGE_KEY);
@@ -1461,18 +1537,60 @@
     }
 
     function runReviewDecision(run) {
+      const durableDecision = String(run.review?.decision || "").trim();
+      if (durableDecision === "done" || durableDecision === "rework") {
+        return durableDecision;
+      }
       const key = runReviewDecisionKey(run);
       return key ? runReviewDecisions[key] || "" : "";
     }
 
-    function setRunReviewDecision(run, decision) {
+    function isLocalDaemonRun(run) {
+      return Boolean(run.manifestId || String(run.artifacts?.eventLogPath || "").includes("daemon-runs"));
+    }
+
+    async function startRunRework(run, profile) {
+      const payload = await postJson("/api/dispatcher/run", {
+        task: buildReworkTask(run, profile),
+        approved: true,
+        background: true,
+        mode: "real",
+        chainPreset: reworkChainPreset(run),
+      });
+      renderPayload(payload);
+      activeTab("tech");
+      setMessage("Rework workflow started. Watch Live Runs for progress.", "ok");
+      return payload;
+    }
+
+    async function setRunReviewDecision(run, decision, profile = {}) {
       const key = runReviewDecisionKey(run);
       if (!key || (decision !== "done" && decision !== "rework")) {
         return;
       }
+      if (isLocalDaemonRun(run)) {
+        try {
+          await postJson("/api/daemon/review", { runId: run.runId, decision });
+        } catch (error) {
+          statusDot.className = "dot error";
+          setMessage(error.message, "error");
+          return;
+        }
+      }
       runReviewDecisions = { ...runReviewDecisions, [key]: decision };
       saveRunReviewDecisions();
-      loadLiveRuns();
+      if (decision === "rework") {
+        try {
+          setBusy(true, "Starting rework");
+          await startRunRework(run, profile);
+        } catch (error) {
+          statusDot.className = "dot error";
+          setMessage(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+      await loadLiveRuns();
     }
 
     function defaultChainPreset() {
@@ -1561,6 +1679,60 @@
       return run.task?.title || profile.displayName || run.profileSnapshotId || run.runId || "Run";
     }
 
+    function runRawTask(run, profile) {
+      return String(run.task?.raw || run.task?.title || runDisplayTitle(run, profile) || "").trim();
+    }
+
+    function runOutputsSummary(run) {
+      const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
+      return Object.entries(outputs)
+        .map(([agent, output]) => `${agent}: ${String(output || "").slice(0, 1200)}`)
+        .join("\n\n")
+        .slice(0, 4000);
+    }
+
+    function reworkChainPreset(run) {
+      const preset = run.chainPreset && typeof run.chainPreset === "object" ? run.chainPreset : {};
+      if (Array.isArray(preset.stages) && preset.stages.length) {
+        return {
+          id: preset.id || `${runReviewDecisionKey(run) || "run"}-rework-chain`,
+          name: preset.name || "Rework chain",
+          stages: preset.stages,
+        };
+      }
+      return selectedRunChainPreset();
+    }
+
+    function buildReworkTask(run, profile) {
+      const sourceTask = runRawTask(run, profile) || "completed run";
+      const outputSummary = runOutputsSummary(run);
+      const lines = [
+        `Rework requested for run ${run.runId || run.task?.taskId || "-"}.`,
+        "",
+        "Original task:",
+        sourceTask,
+        "",
+        "Reviewer/user decision:",
+        "Доработки",
+      ];
+      if (outputSummary) {
+        lines.push("", "Previous outputs:", outputSummary);
+      }
+      lines.push(
+        "",
+        "Execute another pass that addresses the requested improvements. Keep the work scoped to the original task and preserve previous versioned artifacts unless the task explicitly asks to replace them.",
+      );
+      return lines.join("\n");
+    }
+
+    function runSourceLabel(run) {
+      return run.sourceLabel || (run.sourceKey === "symphony" ? "Symphony" : "Dispatcher");
+    }
+
+    function runSourceClass(run) {
+      return runStatusClass(run.sourceKey || run.sourceLabel || "dispatcher");
+    }
+
     function stageStatusLabel(status) {
       const labels = {
         pending: "Pending",
@@ -1571,15 +1743,14 @@
         blocked: "Blocked",
         waiting_approval: "Waiting approval",
         failed: "Failed",
+        stale: "Stale",
+        review: "Human Review",
         done: "Done",
       };
       return labels[status] || textOf(status);
     }
 
     function stagesForRun(run, profile) {
-      if (Array.isArray(run.stages) && run.stages.length) {
-        return run.stages;
-      }
       if (Array.isArray(run.nodeStates) && run.nodeStates.length) {
         const artifacts = Array.isArray(run.flowArtifacts) ? run.flowArtifacts : [];
         return run.nodeStates.map((node) => {
@@ -1600,6 +1771,9 @@
             verdict: artifact.verdict || "",
           };
         });
+      }
+      if (Array.isArray(run.stages) && run.stages.length) {
+        return run.stages;
       }
       return [
         {
@@ -1861,10 +2035,13 @@
     function runKanbanColumnId(run, profile) {
       const status = runStatusClass(run.status);
       const stages = stagesForRun(run, profile);
+      if (status === "review") {
+        return "human_review";
+      }
       if (status === "done") {
         return runReviewDecision(run) === "done" ? "done" : "human_review";
       }
-      if (status === "blocked" || status === "waiting_approval" || stages.some((stage) => {
+      if (status === "blocked" || status === "waiting_approval" || status === "stale" || stages.some((stage) => {
         const stageStatus = runStatusClass(stage.status);
         return stageStatus === "blocked" || stageStatus === "waiting_approval";
       })) {
@@ -1961,6 +2138,7 @@
         runDetailsSection("Overview", [
           ["Status", run.status || "unknown"],
           ["Column", detailPayload.column],
+          ["Source", runSourceLabel(run)],
           ["Current agent", detailPayload.currentAgent],
           ["Review decision", detailPayload.reviewDecision || "-"],
           ["Run id", run.runId || "-"],
@@ -2007,7 +2185,10 @@
       const subtitle = document.createElement("p");
       subtitle.className = "run-subtitle";
       subtitle.textContent = run.runId || "-";
-      titleWrap.append(title, subtitle);
+      const sourceBadge = document.createElement("span");
+      sourceBadge.className = `run-source-badge ${runSourceClass(run)}`;
+      sourceBadge.textContent = runSourceLabel(run);
+      titleWrap.append(title, subtitle, sourceBadge);
       const pill = document.createElement("span");
       pill.className = `run-status ${status}`;
       pill.textContent = run.status || "unknown";
@@ -2049,7 +2230,7 @@
       detailsButton.addEventListener("click", () => openRunDetails(run, profile));
       footer.append(detailsButton);
       const decision = runReviewDecision(run);
-      if (status === "done" && decision !== "done") {
+      if ((status === "done" || status === "review") && decision !== "done") {
         if (decision === "rework") {
           const note = document.createElement("p");
           note.className = "run-review-note";
@@ -2063,12 +2244,12 @@
         doneButton.className = "btn-primary";
         doneButton.type = "button";
         doneButton.textContent = "ToDone";
-        doneButton.addEventListener("click", () => setRunReviewDecision(run, "done"));
+        doneButton.addEventListener("click", () => setRunReviewDecision(run, "done", profile));
         const reworkButton = document.createElement("button");
         reworkButton.className = "btn-secondary";
         reworkButton.type = "button";
         reworkButton.textContent = "Доработки";
-        reworkButton.addEventListener("click", () => setRunReviewDecision(run, "rework"));
+        reworkButton.addEventListener("click", () => setRunReviewDecision(run, "rework", profile));
         actions.append(doneButton, reworkButton);
         footer.append(actions);
       }
@@ -2076,6 +2257,19 @@
       frame.append(footer);
       article.append(frame);
       return article;
+    }
+
+    function liveRunsSourceText(payload) {
+      const label = payload.sourceLabel || payload.sourceMode || payload.source || "unknown";
+      const generated = payload.generatedAt ? ` - ${payload.generatedAt}` : "";
+      const symphonyError = payload.sources?.symphony?.error || payload.daemonError || "";
+      if (symphonyError && payload.sourceMode === "combined") {
+        return `${label}${generated} / Symphony unavailable: ${symphonyError}`;
+      }
+      if (symphonyError) {
+        return `${label}${generated} / ${symphonyError}`;
+      }
+      return `${label}${generated}`;
     }
 
     function renderLiveRuns(payload) {
@@ -2087,12 +2281,10 @@
       runsBlocked.textContent = textOf(summary.blocked);
       runsDone.textContent = textOf(summary.done);
       runsTotal.textContent = textOf(summary.total);
-      const sourceText = `${payload.source || "unknown"} source - ${payload.generatedAt || ""}`.trim();
-      liveRunsSource.textContent = payload.daemonError
-        ? `${sourceText} / daemon fallback: ${payload.daemonError}`
-        : sourceText;
-      liveRunsDot.className = `dot ${summary.blocked || summary.failed ? "busy" : "ok"}`;
-      liveRunsStatus.textContent = runs.length ? "Ready" : "Empty";
+      liveRunsSource.textContent = liveRunsSourceText(payload);
+      const symphonyModeError = payload.daemonError && payload.sourceMode === "symphony";
+      liveRunsDot.className = `dot ${symphonyModeError ? "error" : (summary.blocked || summary.failed ? "busy" : "ok")}`;
+      liveRunsStatus.textContent = symphonyModeError ? "Error" : (runs.length ? "Ready" : "Empty");
 
       liveRunsList.innerHTML = "";
       const columnRuns = Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, []]));
@@ -2133,7 +2325,9 @@
 
       liveRunsList.hidden = runs.length === 0;
       liveRunsEmpty.hidden = runs.length > 0;
-      liveRunsEmpty.textContent = "No daemon runs yet.";
+      liveRunsEmpty.textContent = symphonyModeError
+        ? `Symphony unavailable: ${payload.daemonError}`
+        : "No daemon runs yet.";
       restoreKanbanScrollState(kanbanScrollState);
       window.requestAnimationFrame(() => restoreKanbanScrollState(kanbanScrollState));
     }
@@ -2141,8 +2335,11 @@
     async function loadLiveRuns() {
       liveRunsDot.className = "dot busy";
       liveRunsStatus.textContent = "Loading";
+      const sourceMode = setLiveRunsSourceMode(liveRunsSourceMode?.value || loadLiveRunsSourceMode());
       try {
-        const response = await fetch("/api/daemon/runs", { headers: { Accept: "application/json" } });
+        const response = await fetch(`/api/daemon/runs?source=${encodeURIComponent(sourceMode)}`, {
+          headers: { Accept: "application/json" },
+        });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(payload.error || response.statusText);
@@ -2288,6 +2485,10 @@
 
     form.addEventListener("submit", createPlan);
     refreshRunsButton.addEventListener("click", loadLiveRuns);
+    liveRunsSourceMode.addEventListener("change", () => {
+      setLiveRunsSourceMode(liveRunsSourceMode.value);
+      loadLiveRuns();
+    });
     agentsBuilderButton.addEventListener("click", () => {
       window.open("/agents-builder", "mini-orchestrator-agents-builder");
     });
@@ -2316,6 +2517,7 @@
       }
     });
     window.addEventListener("focus", renderRunChainPresetSelect);
+    setLiveRunsSourceMode(loadLiveRunsSourceMode());
     renderRunChainPresetSelect();
     restoreRunsBoardHeight();
     setupRunsBoardResize();

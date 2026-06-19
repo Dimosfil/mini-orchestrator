@@ -163,6 +163,74 @@ Initial backend endpoints:
 should be added only after compile output, WorkNest task mapping, daemon service
 lookup, and user approval are all explicit.
 
+### Current Implementation Map
+
+Implemented on 2026-06-19 for WorkNest sprint task
+`001_backend-flow-storage`:
+
+- `mini_orchestrator/agent_flows.py` stores saved flow drafts under the
+  project-owned generated path `.mini_orchestrator/agent-flows/`.
+- `GET /api/agent-flows` returns saved flow summaries.
+- `POST /api/agent-flows` creates a saved draft with `id`, `version`,
+  `createdAt`, `updatedAt`, `validation`, and `validationStatus`.
+- `GET /api/agent-flows/{id}` returns the saved flow and validation metadata.
+- `PUT /api/agent-flows/{id}` replaces the draft and increments `version`.
+- Agent Builder still keeps browser `localStorage` as draft/import state, then
+  saves the current canvas to backend storage when the user saves a chain.
+- `POST /api/agent-flows/{id}/validate` was added in the validation slice. It
+  returns `valid`, `status`, `errors`, `warnings`, `startNodeCandidates`,
+  `selectedStartAgentId`, and `checkedAt`. Errors include actionable `path`
+  values for UI highlighting.
+- Validation checks required agent fields, supported role/access/reasoning/model
+  settings, required work-package fields, broken connection references,
+  duplicate branches, one start node or explicit selected start node, and cycles.
+- `POST /api/agent-flows/{id}/compile` was added in the compile slice. It
+  requires `approval.approved=true`, revalidates the saved flow, does not start
+  workers, and writes an immutable manifest under
+  `.mini_orchestrator/agent-flow-manifests/`.
+- Compile output includes `manifestId`, `flowId`, `flowVersion`,
+  `profileSnapshots`, `graph`, and `runtimePolicy`. Each snapshot copies model,
+  reasoning, access mode, work-package fields, Codex app-server prompt material,
+  approval metadata, and source flow/card ids so later card edits do not mutate
+  approved manifests.
+- Agent Builder now has an approval manifest panel. It shows task/context text,
+  saved flow state, agent order, model/reasoning/access settings, workspace
+  policy, and first prompt summary. The user must check an explicit approval box
+  before the UI calls `/api/agent-flows/{id}/compile`. This creates or selects
+  a manifest only and does not launch workers.
+- The single-card daemon MVP adds an in-process dry-run runner. `POST
+  /api/daemon/run` accepts `manifestId`, `profileSnapshotId`, and `dryRun=true`,
+  requires the manifest to contain exactly one profile snapshot, writes run state
+  and replayable JSONL events under `.mini_orchestrator/daemon-runs/`, and
+  exposes local runs through `/api/daemon/runs` without binding a new port or
+  launching real Codex workers.
+- The three-agent runner slice extends the same endpoint: when `profileSnapshotId`
+  is omitted, the in-process dry-run runner follows the manifest graph execution
+  order, writes compact structured artifacts from Planner to Executor to
+  Reviewer, records `node_started`, `node_completed`, and
+  `ready_for_human_review` events, and maps a reviewer `done` verdict to local
+  `review` until the user accepts it. `needs_changes`, `blocked`, and `failed`
+  still map to `retrying`, `blocked`, and `failed`.
+- `/api/daemon/review` records local daemon Human Review decisions in the
+  persisted run state. `done` moves the local run to final `done`; `rework`
+  keeps it in Human Review while the dashboard may start a follow-up workflow.
+- Live Runs now normalizes daemon `nodeStates` and `flowArtifacts` into stage
+  cards. It renders node status, current agent, last event, output summary,
+  artifact id/link, and reviewer verdict from runner state instead of inventing
+  progress client-side.
+- The WorkNest lifecycle bridge lives in `mini_orchestrator/worknest_bridge.py`.
+  It resolves the configured manager through config-service, reads the WorkNest
+  contract before state-changing calls, supports only documented `next-task`
+  claim and `task-completed` terminal reporting, and rejects arbitrary
+  non-terminal status movement. UI endpoints `/api/worknest/claim` and
+  `/api/worknest/complete` expose those explicit bridge operations.
+
+Not implemented in this slice:
+
+- dedicated `/run` flow endpoint;
+- real Codex app-server daemon execution from saved flows;
+- WorkNest task progress writes beyond the final lifecycle completion endpoint.
+
 ### Stored Flow Schema
 
 ```json

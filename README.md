@@ -122,6 +122,33 @@ configured.
 
 ## Agent Builder
 
+Visual agent flows use a two-layer storage model: browser `localStorage` remains
+the draft/import state, while named saved flows are persisted by the backend
+through `/api/agent-flows`. Saved backend flows carry `id`, `version`,
+`createdAt`, `updatedAt`, and validation metadata; they are not executable until
+later validation and compile steps approve them.
+
+The builder also includes an approval manifest panel. The user reviews the task
+summary, selected flow, agent order, model/reasoning/access settings, workspace
+policy, and first prompt summary, then explicitly checks approval before the UI
+creates an immutable manifest. Compiling the manifest does not launch workers.
+
+The first daemon runner slice is an in-process dry-run path for compiled
+manifests. `POST /api/daemon/run` creates a local run state and replayable JSONL
+event log under `.mini_orchestrator/daemon-runs/`; it can run one selected
+profile or a linear manifest graph such as Planner -> Executor -> Reviewer. It
+does not bind a new port or launch real Codex workers. A successful dry-run
+lands in `review`, not final `done`, until the user accepts it.
+
+Live Runs renders per-node state from daemon `nodeStates` and `flowArtifacts`:
+each node shows status, last event, output summary, artifact id, and reviewer
+verdict when present.
+
+The WorkNest lifecycle bridge resolves the configured task manager through
+config-service at use time, reads the WorkNest contract before state-changing
+calls, and only exposes the documented external-agent operations:
+`next-task` claim and terminal `task-completed` reporting.
+
 The **Настройка агентов** page stores visual agent cards in browser
 `localStorage`. Each card includes a mini chat for checking how that card talks
 through its selected `llm`, `speed`, and `reasoning` settings.
@@ -136,11 +163,25 @@ by the same presets. Starting an approved workflow records the selected chain in
 the run log, and Live Runs shows it inside the single task card while the task
 is in progress.
 
-Live Runs first tries the read-only Symphony daemon bridge. The local-dev
-default state endpoint is `http://127.0.0.1:4000/api/v1/state`; override it with
-`MINI_ORCHESTRATOR_DAEMON_STATE_URL` when the daemon runs elsewhere. If the
-daemon is unavailable, the dashboard falls back to dispatcher JSONL replay and
-shows the daemon error in the source line.
+Live Runs has explicit source modes: **Combined**, **Dispatcher**, and
+**Symphony**. Combined is the default and shows dispatcher/local run state plus
+read-only Symphony daemon state. Dispatcher mode shows only local daemon dry-run
+state and dispatcher JSONL replay. Symphony mode shows only the read-only
+Symphony daemon bridge. The local-dev Symphony state endpoint is
+`http://127.0.0.1:4000/api/v1/state`; override it with
+`MINI_ORCHESTRATOR_DAEMON_STATE_URL` when the daemon runs elsewhere. In Combined
+mode, empty or unavailable Symphony state never hides dispatcher-chain runs; the
+dashboard keeps dispatcher cards visible and shows the Symphony error in the
+source line.
+
+Old incomplete dispatcher JSONL runs are marked `stale` when their process is
+gone or the log has not updated past
+`MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS` (default 15 minutes). Stale
+runs leave the active count and appear in Human Review with the stale reason.
+
+`POST /api/symphony/runs` is intentionally a blocker endpoint for now. It
+validates approved task-run payloads and returns `symphony-intake-missing` until
+Symphony exposes a documented config-service-resolved task-intake contract.
 
 Mini chat requests call the application backend, which routes the message
 through `tools\codex-dispatcher\dispatcher.py` in real Codex app-server mode
@@ -153,8 +194,15 @@ the task through Live Runs.
 
 Completed agent runs appear in **Human Review** first. The user chooses
 **ToDone** to accept the result into final Done, or **Доработки** to mark that
-the task needs another pass. This review choice is currently a dashboard-local
-bridge until a task-manager state-transition endpoint exists.
+the task needs another pass. Local compiled-flow daemon runs record this choice
+durably through `/api/daemon/review`; dispatcher JSONL runs still keep the
+dashboard-local review bridge until a task-manager state-transition endpoint
+exists.
+
+WorkNest remains the task source and terminal completion sink. The local
+WorkNest completion API accepts terminal `done` only after explicit user
+acceptance (`reviewDecision=done` or `accepted=true`); blocked completion is
+reserved for unrecoverable blocked results.
 
 ## LLM Configuration
 
@@ -164,6 +212,7 @@ bridge until a task-manager state-transition endpoint exists.
 - `MINI_ORCHESTRATOR_EXECUTOR_MODEL`
 - `MINI_ORCHESTRATOR_OPENAI_BASE_URL`
 - `MINI_ORCHESTRATOR_DAEMON_STATE_URL`
+- `MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS`
 
 ## API Endpoints
 
@@ -177,7 +226,18 @@ bridge until a task-manager state-transition endpoint exists.
 - `GET /api/agents/default-card` - load the temporary default visual agent card
 - `POST /api/agents/compile` - compile one visual card into a worker profile
 - `POST /api/agents/run` - run one approved selected visual card
-- `GET /api/daemon/runs` - normalized read-only Live Runs state from Symphony daemon or dispatcher fallback
+- `GET /api/agent-flows` - list saved backend flow drafts
+- `POST /api/agent-flows` - create a saved backend flow draft
+- `GET /api/agent-flows/{id}` - read a saved backend flow with validation metadata
+- `PUT /api/agent-flows/{id}` - replace a saved backend flow and increment its version
+- `POST /api/agent-flows/{id}/validate` - validate graph/runtime settings and return field-path errors
+- `POST /api/agent-flows/{id}/compile` - compile a valid approved flow into an immutable run manifest
+- `POST /api/daemon/run` - create a single-card daemon dry-run from an approved manifest
+- `POST /api/daemon/review` - record a local daemon Human Review decision (`done` or `rework`)
+- `GET /api/daemon/runs?source=combined|dispatcher|symphony` - normalized read-only Live Runs state
+- `POST /api/symphony/runs` - validates approved Symphony run intake and returns a blocker until intake is documented
+- `POST /api/worknest/claim` - contract-gated WorkNest `next-task` claim
+- `POST /api/worknest/complete` - contract-gated WorkNest terminal `done` or `blocked` completion
 
 Plan preview request:
 
@@ -200,7 +260,8 @@ Approved run request:
 ## Checks
 
 ```powershell
-python -m compileall mini_orchestrator
-python tools\codex-dispatcher\test_dispatcher.py
+python -m compileall mini_orchestrator tools\codex-dispatcher
+python -m pytest tests
+python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain --dry-run
 python -m mini_orchestrator "search AGENTS" --no-log
 ```

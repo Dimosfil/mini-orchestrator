@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import json
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List
+
+
+LOCAL_DAEMON_RUN_DIR = ".mini_orchestrator/daemon-runs"
+REVIEW_DECISIONS = {"done", "rework"}
 
 
 def _utc_now() -> str:
@@ -31,6 +38,8 @@ def _run_state(
     return {
         "schemaVersion": 1,
         "runId": run_id,
+        "sourceKey": "dispatcher",
+        "sourceLabel": "Dispatcher",
         "task": {
             "taskId": task_id,
             "sprintId": sprint_id,
@@ -38,6 +47,7 @@ def _run_state(
         },
         "profileSnapshotId": profile_snapshot_id,
         "status": status,
+        "currentAgent": profile_snapshot_id,
         "workspacePath": workspace_path,
         "thread": {
             "threadId": thread_id,
@@ -56,6 +66,34 @@ def _run_state(
             "workspaceGenerated": True,
             "durableProjectMemory": False,
             "privateRuntimeData": True,
+        },
+        "stages": [
+            {
+                "agent": profile_snapshot_id,
+                "label": profile_snapshot_id,
+                "status": status,
+                "statusLabel": status.replace("_", " ").title(),
+                "startedAt": created_at,
+                "completedAt": updated_at if status in {"done", "review"} else None,
+                "threadId": thread_id,
+                "turnCount": turn_count,
+                "model": None,
+                "tokens": total_tokens,
+                "lastEvent": last_event,
+                "output": "",
+            }
+        ],
+        "outputs": {},
+        "review": {
+            "decision": "",
+            "decidedAt": "",
+        },
+        "reviewerVerdict": None,
+        "stale": {
+            "isStale": False,
+            "reason": "",
+            "lastEventAt": updated_at,
+            "thresholdSeconds": 0,
         },
         "createdAt": created_at,
         "updatedAt": updated_at,
@@ -154,3 +192,346 @@ def build_demo_daemon_runs() -> Dict[str, Any]:
         "profiles": profiles,
         "runs": runs,
     }
+
+
+def run_single_card_dry_run(
+    manifest: dict[str, Any],
+    profile_snapshot_id: str,
+    root: Path,
+    *,
+    task: dict[str, str] | None = None,
+) -> Dict[str, Any]:
+    profiles = manifest.get("profileSnapshots") if isinstance(manifest.get("profileSnapshots"), list) else []
+    profile = next((item for item in profiles if item.get("snapshotId") == profile_snapshot_id), None)
+    if not isinstance(profile, dict):
+        raise ValueError(f"Profile snapshot was not found in manifest: {profile_snapshot_id}")
+    if len(profiles) != 1:
+        raise ValueError("Single-card daemon MVP requires a manifest with exactly one profile snapshot.")
+
+    run_id = f"daemon-{uuid.uuid4().hex[:12]}"
+    created_at = _utc_now()
+    run_dir = root / LOCAL_DAEMON_RUN_DIR
+    run_dir.mkdir(parents=True, exist_ok=True)
+    event_log = run_dir / f"{run_id}.jsonl"
+    workspace_path = f".mini_orchestrator/generated-workspaces/{run_id}"
+    state = _run_state(
+        run_id=run_id,
+        task_id=str((task or {}).get("taskId") or manifest.get("manifestId") or run_id),
+        sprint_id=str((task or {}).get("sprintId") or "local-daemon-dry-run"),
+        profile_snapshot_id=profile_snapshot_id,
+        status="queued",
+        workspace_path=workspace_path,
+        thread_id=None,
+        turn_id=None,
+        turn_count=0,
+        input_tokens=0,
+        output_tokens=0,
+        last_event="queued",
+        last_error=None,
+        event_log_path=_project_path(event_log, root),
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    _append_event(event_log, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
+
+    for status, event_type in (("claimed", "workspace_prepared"), ("running", "dry_run_started")):
+        now = _utc_now()
+        state["status"] = status
+        state["lastEvent"] = event_type
+        state["updatedAt"] = now
+        _append_event(event_log, {"time": now, "type": event_type, "runId": run_id, "profileSnapshotId": profile_snapshot_id})
+
+    output_text = f"Dry-run completed for {profile.get('displayName') or profile_snapshot_id}."
+    done_at = _utc_now()
+    state["status"] = "review"
+    state["currentAgent"] = profile_snapshot_id
+    state["thread"] = {"threadId": f"dry-run-{run_id}", "currentTurnId": f"turn-{run_id}", "turnCount": 1}
+    state["tokens"] = {"input": 0, "output": 0, "total": 0}
+    state["lastEvent"] = "ready_for_human_review"
+    state["updatedAt"] = done_at
+    state["output"] = output_text
+    state["outputs"] = {profile_snapshot_id: output_text}
+    state["stages"][0]["status"] = "done"
+    state["stages"][0]["statusLabel"] = "Done"
+    state["stages"][0]["completedAt"] = done_at
+    state["stages"][0]["threadId"] = f"dry-run-{run_id}"
+    state["stages"][0]["turnCount"] = 1
+    state["stages"][0]["lastEvent"] = "dry_run_completed"
+    state["stages"][0]["output"] = output_text
+    _append_event(
+        event_log,
+        {
+            "time": done_at,
+            "type": "ready_for_human_review",
+            "runId": run_id,
+            "profileSnapshotId": profile_snapshot_id,
+            "output": output_text,
+        },
+    )
+    _write_state(root, state)
+    return state
+
+
+def run_manifest_dry_run(
+    manifest: dict[str, Any],
+    root: Path,
+    *,
+    task: dict[str, str] | None = None,
+    reviewer_verdict: str = "done",
+) -> Dict[str, Any]:
+    profiles = manifest.get("profileSnapshots") if isinstance(manifest.get("profileSnapshots"), list) else []
+    if not profiles:
+        raise ValueError("Run manifest has no profile snapshots.")
+    graph = manifest.get("graph") if isinstance(manifest.get("graph"), dict) else {}
+    execution_order = graph.get("executionOrder") if isinstance(graph.get("executionOrder"), list) else []
+    if not execution_order:
+        execution_order = [str(profile.get("source", {}).get("sourceCardId") or "") for profile in profiles]
+    profile_by_card_id = {
+        str(profile.get("source", {}).get("sourceCardId") or ""): profile
+        for profile in profiles
+        if isinstance(profile, dict)
+    }
+    ordered_profiles = [profile_by_card_id[card_id] for card_id in execution_order if card_id in profile_by_card_id]
+    if len(ordered_profiles) != len(profiles):
+        raise ValueError("Run manifest graph does not cover every profile snapshot.")
+
+    run_id = f"daemon-{uuid.uuid4().hex[:12]}"
+    created_at = _utc_now()
+    run_dir = root / LOCAL_DAEMON_RUN_DIR
+    run_dir.mkdir(parents=True, exist_ok=True)
+    event_log = run_dir / f"{run_id}.jsonl"
+    workspace_path = f".mini_orchestrator/generated-workspaces/{run_id}"
+    state = _run_state(
+        run_id=run_id,
+        task_id=str((task or {}).get("taskId") or manifest.get("manifestId") or run_id),
+        sprint_id=str((task or {}).get("sprintId") or "local-daemon-dry-run"),
+        profile_snapshot_id=str(ordered_profiles[0].get("snapshotId") or manifest.get("manifestId") or run_id),
+        status="queued",
+        workspace_path=workspace_path,
+        thread_id=None,
+        turn_id=None,
+        turn_count=0,
+        input_tokens=0,
+        output_tokens=0,
+        last_event="queued",
+        last_error=None,
+        event_log_path=_project_path(event_log, root),
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    state["manifestId"] = manifest.get("manifestId")
+    state["nodeStates"] = []
+    state["flowArtifacts"] = []
+    _append_event(event_log, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
+
+    previous_artifacts: list[dict[str, str]] = []
+    for index, profile in enumerate(ordered_profiles):
+        node_id = str(profile.get("source", {}).get("sourceCardId") or profile.get("snapshotId") or f"node-{index + 1}")
+        snapshot_id = str(profile.get("snapshotId") or node_id)
+        role = str(profile.get("role") or "")
+        now = _utc_now()
+        state["status"] = "running"
+        state["currentAgent"] = node_id
+        state["lastEvent"] = f"{node_id}: started"
+        state["updatedAt"] = now
+        state["nodeStates"].append(
+            {
+                "agentId": node_id,
+                "snapshotId": snapshot_id,
+                "role": role,
+                "status": "running",
+                "startedAt": now,
+                "completedAt": None,
+            }
+        )
+        _append_event(
+            event_log,
+            {
+                "time": now,
+                "type": "node_started",
+                "runId": run_id,
+                "agentId": node_id,
+                "snapshotId": snapshot_id,
+                "inputArtifacts": previous_artifacts,
+            },
+        )
+        output = _simulated_node_output(profile, previous_artifacts, reviewer_verdict if role == "Reviewer" else "")
+        artifact = {
+            "artifactId": f"artifact-{node_id}",
+            "agentId": node_id,
+            "role": role,
+            "summary": output["summary"],
+        }
+        if output.get("verdict"):
+            artifact["verdict"] = output["verdict"]
+        previous_artifacts = [*previous_artifacts, artifact]
+        done_at = _utc_now()
+        state["nodeStates"][-1]["status"] = "done"
+        state["nodeStates"][-1]["completedAt"] = done_at
+        state["flowArtifacts"] = previous_artifacts
+        state["lastEvent"] = f"{node_id}: completed"
+        state["updatedAt"] = done_at
+        _append_event(
+            event_log,
+            {
+                "time": done_at,
+                "type": "node_completed",
+                "runId": run_id,
+                "agentId": node_id,
+                "snapshotId": snapshot_id,
+                "artifact": artifact,
+            },
+        )
+
+    final_verdict = _normalize_verdict(previous_artifacts[-1].get("verdict", "done") if previous_artifacts else "done")
+    final_status = {
+        "done": "review",
+        "needs_changes": "retrying",
+        "blocked": "blocked",
+        "failed": "failed",
+    }[final_verdict]
+    completed_at = _utc_now()
+    state["status"] = final_status
+    state["currentAgent"] = str(ordered_profiles[-1].get("source", {}).get("sourceCardId") or ordered_profiles[-1].get("snapshotId") or "")
+    if state.get("nodeStates") and final_status != "done":
+        state["nodeStates"][-1]["status"] = final_status
+    state["thread"] = {"threadId": f"dry-run-{run_id}", "currentTurnId": f"turn-{run_id}", "turnCount": len(ordered_profiles)}
+    state["lastEvent"] = "ready_for_human_review" if final_status == "review" else f"reviewer verdict: {final_verdict}"
+    state["lastError"] = "Reviewer blocked the run." if final_status == "blocked" else None
+    state["reviewerVerdict"] = final_verdict
+    state["updatedAt"] = completed_at
+    _append_event(
+        event_log,
+        {
+            "time": completed_at,
+            "type": "ready_for_human_review" if final_status == "review" else "run_completed",
+            "runId": run_id,
+            "status": final_status,
+            "reviewerVerdict": final_verdict,
+        },
+    )
+    _write_state(root, state)
+    return state
+
+
+def build_local_daemon_runs(root: Path) -> Dict[str, Any]:
+    run_dir = root / LOCAL_DAEMON_RUN_DIR
+    runs: list[dict[str, Any]] = []
+    if run_dir.exists():
+        for path in sorted(run_dir.glob("*.state.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict):
+                runs.append(data)
+    profiles = {
+        str(run.get("profileSnapshotId")): {
+            "displayName": str(run.get("profileSnapshotId") or "Daemon profile"),
+            "role": "visual-agent",
+            "model": "dry-run",
+        }
+        for run in runs
+    }
+    active_statuses = {"queued", "claimed", "running", "blocked", "retrying"}
+    return {
+        "service": "mini-orchestrator",
+        "source": "mini-daemon-jsonl",
+        "generatedAt": _utc_now(),
+        "summary": {
+            "total": len(runs),
+            "active": sum(1 for run in runs if run.get("status") in active_statuses),
+            "blocked": sum(1 for run in runs if run.get("status") == "blocked"),
+            "done": sum(1 for run in runs if run.get("status") == "done"),
+            "failed": sum(1 for run in runs if run.get("status") == "failed"),
+            "review": sum(1 for run in runs if run.get("status") == "review"),
+        },
+        "profiles": profiles,
+        "runs": runs,
+    }
+
+
+def _write_state(root: Path, state: dict[str, Any]) -> None:
+    path = root / LOCAL_DAEMON_RUN_DIR / f"{state['runId']}.state.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def set_run_review_decision(run_id: str, decision: str, root: Path) -> dict[str, Any]:
+    normalized_run_id = str(run_id or "").strip()
+    normalized_decision = str(decision or "").strip().casefold()
+    if not normalized_run_id:
+        raise ValueError("Field 'runId' is required.")
+    if normalized_decision not in REVIEW_DECISIONS:
+        raise ValueError("Field 'decision' must be 'done' or 'rework'.")
+
+    path = root / LOCAL_DAEMON_RUN_DIR / f"{normalized_run_id}.state.json"
+    if not path.exists():
+        raise ValueError(f"Daemon run state was not found: {normalized_run_id}")
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Daemon run state is not valid JSON: {normalized_run_id}") from exc
+    if not isinstance(state, dict):
+        raise ValueError(f"Daemon run state is not an object: {normalized_run_id}")
+
+    decided_at = _utc_now()
+    state["review"] = {"decision": normalized_decision, "decidedAt": decided_at}
+    state["updatedAt"] = decided_at
+    state.setdefault("stale", {})
+    if isinstance(state["stale"], dict):
+        state["stale"]["lastEventAt"] = decided_at
+
+    if normalized_decision == "done":
+        state["status"] = "done"
+        state["lastEvent"] = "user accepted result"
+    else:
+        state["status"] = "review"
+        state["lastEvent"] = "user requested rework"
+
+    event_log_value = state.get("artifacts", {}).get("eventLogPath") if isinstance(state.get("artifacts"), dict) else ""
+    event_log = root / str(event_log_value) if event_log_value else path.with_suffix(".jsonl")
+    _append_event(
+        event_log,
+        {
+            "time": decided_at,
+            "type": "review_decision",
+            "runId": normalized_run_id,
+            "decision": normalized_decision,
+            "status": state["status"],
+        },
+    )
+    _write_state(root, state)
+    return state
+
+
+def _append_event(path: Path, event: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _simulated_node_output(profile: dict[str, Any], previous_artifacts: list[dict[str, str]], verdict: str) -> dict[str, str]:
+    role = str(profile.get("role") or "Agent")
+    display_name = str(profile.get("displayName") or role)
+    summary = f"{display_name} dry-run output"
+    if previous_artifacts:
+        summary += f" after {len(previous_artifacts)} artifact(s)"
+    result = {"summary": summary}
+    if verdict:
+        result["verdict"] = _normalize_verdict(verdict)
+    return result
+
+
+def _normalize_verdict(value: str) -> str:
+    normalized = str(value or "done").strip().lower().replace("-", "_")
+    if normalized in {"done", "needs_changes", "blocked", "failed"}:
+        return normalized
+    return "failed"
+
+
+def _project_path(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return str(path)

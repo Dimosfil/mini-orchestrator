@@ -123,7 +123,10 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
         or generated_at
     )
     return {
+        "schemaVersion": 1,
         "runId": run_id,
+        "sourceKey": "symphony",
+        "sourceLabel": "Symphony",
         "status": status,
         "mode": "symphony-daemon",
         "currentAgent": _text(entry.get("worker_host")) or "Symphony worker",
@@ -155,6 +158,13 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
         "eventTypes": {},
         "createdAt": _text(entry.get("started_at")) or generated_at,
         "updatedAt": updated_at,
+        "reviewerVerdict": None,
+        "stale": {
+            "isStale": False,
+            "reason": "",
+            "lastEventAt": updated_at,
+            "thresholdSeconds": 0,
+        },
         "outputs": {},
     }
 

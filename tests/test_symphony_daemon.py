@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import threading
+import urllib.request
 
 import pytest
 
+from mini_orchestrator import ui
 from mini_orchestrator.symphony_daemon import (
     SymphonyDaemonError,
     build_symphony_live_runs,
     fetch_symphony_state,
 )
-from mini_orchestrator.ui import build_live_runs_payload
+from mini_orchestrator.ui import build_live_runs_payload, build_symphony_run_blocker
 
 
 class FakeResponse:
@@ -77,10 +80,13 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
     assert payload["summary"] == {"total": 3, "active": 2, "blocked": 1, "done": 0, "failed": 0}
     assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked"]
     running = payload["runs"][0]
+    assert running["schemaVersion"] == 1
     assert running["runId"] == "MT-1"
+    assert running["sourceLabel"] == "Symphony"
     assert running["currentAgent"] == "executor"
     assert running["tokens"]["total"] == 120
     assert running["stages"][0]["threadId"] == "thread-1"
+    assert running["stale"]["isStale"] is False
     blocked = payload["runs"][2]
     assert blocked["approval"]["required"] is True
     assert blocked["lastError"] == "approval required"
@@ -97,14 +103,137 @@ def test_symphony_state_json_error_raises(monkeypatch):
         fetch_symphony_state("http://daemon/state")
 
 
-def test_live_runs_payload_falls_back_to_dispatcher_jsonl(tmp_path, monkeypatch):
+def write_event(log_path, payload):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def write_dispatcher_chain(root, run_id="dispatcher-run"):
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl"
+    write_event(log_path, {"time": "2026-06-18T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2026-06-18T00:00:01Z", "type": "agent_started", "agent": "planner"})
+    return log_path
+
+
+def test_combined_live_runs_keeps_dispatcher_jsonl_when_symphony_unavailable(tmp_path, monkeypatch):
     def fail():
         raise SymphonyDaemonError("daemon unavailable")
 
     monkeypatch.setattr("mini_orchestrator.ui.build_symphony_live_runs_from_url", fail)
+    write_dispatcher_chain(tmp_path, "latest-dispatcher-chain")
 
     payload = build_live_runs_payload(tmp_path)
 
-    assert payload["source"] == "dispatcher-jsonl"
+    assert payload["sourceMode"] == "combined"
     assert payload["daemonSourceTried"] == "symphony-daemon"
     assert payload["daemonError"] == "daemon unavailable"
+    assert [run["runId"] for run in payload["runs"]] == ["latest-dispatcher-chain"]
+    assert payload["runs"][0]["sourceLabel"] == "Dispatcher"
+
+
+def test_combined_live_runs_keeps_dispatcher_jsonl_when_symphony_is_empty(tmp_path, monkeypatch):
+    def empty_symphony():
+        return build_symphony_live_runs(
+            {"generated_at": "2026-06-18T00:00:02Z", "running": [], "retrying": [], "blocked": []},
+            "http://daemon/state",
+        )
+
+    monkeypatch.setattr("mini_orchestrator.ui.build_symphony_live_runs_from_url", empty_symphony)
+    write_dispatcher_chain(tmp_path, "latest-dispatcher-chain")
+
+    payload = build_live_runs_payload(tmp_path, "combined")
+
+    assert payload["sourceMode"] == "combined"
+    assert payload["summary"]["total"] == 1
+    assert [run["runId"] for run in payload["runs"]] == ["latest-dispatcher-chain"]
+    assert payload["sources"]["symphony"]["summary"]["total"] == 0
+
+
+def test_dispatcher_mode_ignores_symphony_failure(tmp_path, monkeypatch):
+    def fail():
+        raise AssertionError("dispatcher mode should not fetch Symphony")
+
+    monkeypatch.setattr("mini_orchestrator.ui.build_symphony_live_runs_from_url", fail)
+    write_dispatcher_chain(tmp_path, "dispatcher-only")
+
+    payload = build_live_runs_payload(tmp_path, "dispatcher")
+
+    assert payload["sourceMode"] == "dispatcher"
+    assert [run["runId"] for run in payload["runs"]] == ["dispatcher-only"]
+    assert payload["runs"][0]["sourceLabel"] == "Dispatcher"
+
+
+def test_symphony_mode_reports_error_without_dispatcher_fallback(tmp_path, monkeypatch):
+    def fail():
+        raise SymphonyDaemonError("daemon unavailable")
+
+    monkeypatch.setattr("mini_orchestrator.ui.build_symphony_live_runs_from_url", fail)
+    write_dispatcher_chain(tmp_path, "hidden-in-symphony-mode")
+
+    payload = build_live_runs_payload(tmp_path, "symphony")
+
+    assert payload["sourceMode"] == "symphony"
+    assert payload["summary"]["total"] == 0
+    assert payload["runs"] == []
+    assert payload["daemonError"] == "daemon unavailable"
+
+
+def test_symphony_run_blocker_validates_approved_task_payload():
+    blocker = build_symphony_run_blocker(
+        {
+            "approved": True,
+            "project": "mini-orchestrator",
+            "task": {
+                "taskId": "task-1",
+                "sprintId": "sprint-1",
+                "title": "Bridge task",
+            },
+        }
+    )
+
+    assert blocker["status"] == "blocked"
+    assert blocker["code"] == "symphony-intake-missing"
+    assert blocker["accepted"] is False
+    assert blocker["task"]["taskId"] == "task-1"
+    assert blocker["requiredContract"]["serviceId"] == "symphony"
+
+
+def test_symphony_run_http_endpoint_returns_blocker_without_http_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "ROOT", tmp_path)
+
+    handler = ui._OrchestratorUIHandler
+    handler.orchestrator = None
+    handler.dispatcher_service = None
+    handler.web_root = tmp_path
+    handler.service_id = "mini-orchestrator"
+    server = ui._ThreadedHttpServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        payload = {
+            "approved": True,
+            "task": {
+                "taskId": "task-1",
+                "sprintId": "sprint-1",
+                "title": "Bridge task",
+            },
+        }
+        request = urllib.request.Request(
+            f"{base_url}/api/symphony/runs",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 200
+        assert body["status"] == "blocked"
+        assert body["code"] == "symphony-intake-missing"
+        assert body["accepted"] is False
+    finally:
+        server.shutdown()
+        server.server_close()

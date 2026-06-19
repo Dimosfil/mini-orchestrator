@@ -14,6 +14,197 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Sprint7: Symphony Bridge Adapter Sprint
+
+Goal: complete the WorkNest sprint
+`2026-06-19_17-01-10_symphony-bridge-adapter-sprint` as one coherent MVP
+runtime pass.
+
+Planned changes:
+
+- [x] Confirm task 001 source-mode work and preserve dispatcher visibility.
+- [x] Define one normalized run-state shape across dispatcher, local daemon,
+  and Symphony sources.
+- [x] Mark stale dispatcher JSONL runs without hiding current active runs.
+- [x] Add a Symphony bridge blocker endpoint for approved task-run intake.
+- [x] Document the Symphony-side intake adapter responsibilities and limits.
+- [x] Keep WorkNest as source and terminal completion sink after user review.
+- [x] Verify the real Codex app-server chain remains visible in the dashboard.
+- [x] Update README and project memory with source precedence, bridge limits,
+  and smoke commands.
+
+Risks or dependencies:
+
+- WorkNest `sprint7` is a UI alias; manager API calls require the full sprint id.
+- WorkNest terminal `done` should remain gated by user acceptance.
+
+### MVP Consolidation And Remaining Work
+
+Goal: consolidate the current mini-orchestrator implementation state and write
+the remaining work needed for a reviewable MVP.
+
+Planned changes:
+
+- [x] Inventory current product surfaces, implementation modules, tests, and
+  project-memory contracts.
+- [x] Write a compact MVP status/roadmap document in project memory.
+- [x] Verify the current test/syntax baseline where practical.
+- [x] Update this checklist when the consolidation document is complete.
+
+Risks or dependencies:
+
+- Existing sprint notes may contain stale unchecked items; current source files,
+  tests, and README are the authority for this pass.
+
+### Backend Flow Storage Sprint Task
+
+Goal: add backend persistence for visual agent flows so browser localStorage
+remains draft/import state and executable workflow work can later use saved,
+versioned server-side flows.
+
+Planned changes:
+
+- [x] Add flow storage/validation helpers for saved flow drafts.
+- [x] Expose `/api/agent-flows` list/create/read/update endpoints.
+- [x] Wire Agent Builder saves to backend persistence while preserving local
+  editing.
+- [x] Add focused tests for flow storage and HTTP API behavior.
+- [x] Update durable workflow docs and complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- This task should not make browser-local flow state executable yet; daemon
+  execution starts only after later validation/compile sprint tasks.
+
+### Flow Validation Sprint Task
+
+Goal: add server-side validation for saved executable flow drafts before later
+compile and daemon execution steps consume them.
+
+Planned changes:
+
+- [x] Add precise validation errors/warnings with field paths.
+- [x] Validate ids, required agent fields, supported runtime settings, graph
+  references, one start node, and no cycles.
+- [x] Expose `POST /api/agent-flows/{id}/validate`.
+- [x] Add focused tests for valid default chain, broken links, and cycles.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- Validation should not start workers or compile profiles; it is a gate for
+  later sprint tasks.
+
+### Compile Worker Profiles Sprint Task
+
+Goal: compile a validated saved flow into an immutable run manifest and worker
+profile snapshots without starting workers.
+
+Planned changes:
+
+- [x] Add compile helpers and immutable manifest storage.
+- [x] Expose `POST /api/agent-flows/{id}/compile` with approval metadata.
+- [x] Include manifest id, flow id/version, profile snapshots, graph, and
+  runtime policy.
+- [x] Add focused one-card and three-card compile tests.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- Compile output is an approved artifact for later daemon tasks; it must not
+  mutate the source flow or launch Codex workers.
+
+### Approval And Run Manifest UI Sprint Task
+
+Goal: add an explicit UI approval surface that shows what will run and creates
+an immutable manifest without launching workers.
+
+Planned changes:
+
+- [x] Add Agent Builder approval controls and manifest preview.
+- [x] Require explicit approval before compile.
+- [x] Show selected task/context, flow, agent order, runtime settings, workspace
+  policy, and first prompt summary.
+- [x] Verify UI script parsing and focused tests.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- Approval must create/select a manifest only; daemon execution starts in later
+  sprint tasks.
+
+### Single-Card Daemon MVP Sprint Task
+
+Goal: add an in-process dry-run daemon runner for one compiled worker profile
+without binding a new port or reading WorkNest files directly.
+
+Planned changes:
+
+- [x] Add local daemon run-state/event-log storage.
+- [x] Add dry-run single-profile runner.
+- [x] Expose run creation and local run-state through existing UI API surface.
+- [x] Add focused tests for done run states and replayable events.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- The MVP uses fake/dry-run transport only; real Codex app-server execution is a
+  later integration step.
+
+### Three-Agent Flow Runner Sprint Task
+
+Goal: execute a compiled linear Planner -> Executor -> Reviewer manifest with
+compact structured artifacts between nodes and a bounded reviewer verdict.
+
+Planned changes:
+
+- [x] Add dry-run manifest graph runner.
+- [x] Persist per-node artifacts and reviewer verdict in run state/events.
+- [x] Map verdicts to done, retrying, blocked, or failed.
+- [x] Add simulated success and blocked runner tests.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- This remains simulated transport; it must not launch real Codex or infer
+  WorkNest state transitions beyond final task completion.
+
+### Per-Node Live State Sprint Task
+
+Goal: render daemon node state in Live Runs so users can inspect each card/node
+instead of only the overall run.
+
+Planned changes:
+
+- [x] Normalize daemon `nodeStates` and `flowArtifacts` into UI stages.
+- [x] Show per-node status, last event, output summary, artifact id, and verdict.
+- [x] Mark blocked/failed/retrying node statuses from runner state.
+- [x] Add focused runner/UI checks and JS parse.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- UI must only render runner state; it must not infer hidden progress.
+
+### WorkNest Lifecycle Bridge Sprint Task
+
+Goal: connect the runner-facing lifecycle to WorkNest only through
+config-service and the documented WorkNest external-agent contract.
+
+Planned changes:
+
+- [x] Add config-service-resolved WorkNest lifecycle bridge.
+- [x] Read contract before `next-task` and `task-completed` calls.
+- [x] Restrict completion to terminal `done` or `blocked`.
+- [x] Expose explicit claim/complete UI API endpoints.
+- [x] Add focused bridge tests.
+- [x] Complete the WorkNest sprint task.
+
+Risks or dependencies:
+
+- No direct WorkNest storage reads, arbitrary task status transitions, or
+  progress/workpad writes are supported without a future contract capability.
+
 ### Symphony-Style Kanban Live Run Cards
 
 Goal: make the main dashboard show dispatcher live runs as task cards moving
@@ -844,6 +1035,45 @@ Verification:
 - [x] `python -m pytest tests`
 - [x] `python -m compileall mini_orchestrator`
 
+### Live Runs Rework Action
+
+Goal: make the Human Review `Доработки` action start a new visible background
+run instead of only storing a local review label.
+
+Planned changes:
+
+- [x] Build a rework task from the selected completed run.
+- [x] Post the rework task to `/api/dispatcher/run` with `approved=true` and
+  `background=true`.
+- [x] Keep the original reviewed card marked as `Доработки` while the new run
+  appears in `In Progress`.
+- [x] Add a focused dashboard UI regression assertion.
+
+Verification:
+
+- [x] Static dashboard test for the rework runner.
+- [x] `python -m pytest tests/test_agent_builder_ui.py`
+- [x] `node -e "<inline script compile check>"`
+
+### Approved Workflow Turn Timeout
+
+Goal: prevent full UI-approved dispatcher chains from failing at the CLI
+default 90-second agent-turn timeout during real executor file work.
+
+Completed changes:
+
+- [x] Set approved dashboard workflow turns to 300 seconds.
+- [x] Pass `--turn-timeout-seconds` for background `/api/dispatcher/run`.
+- [x] Pass the same turn timeout for foreground approved dispatcher runs.
+- [x] Restarted local UI so the updated backend code is active.
+- [x] Verified a new CRM run moved past executor and completed all stages.
+
+Verification:
+
+- [x] `python -m pytest tests/test_agent_builder_ui.py`
+- [x] `python -m compileall mini_orchestrator/ui.py`
+- [x] Run `ui-0e5817571207` completed planner -> executor -> reviewer.
+
 Follow-up implementation:
 
 - [x] Add the same chain preset dropdown to the executable dashboard task form.
@@ -880,4 +1110,25 @@ Verification:
 
 - [x] `node -e "<inline script parse check>"`
 - [x] `python -m pytest tests`
+- [x] `python -m compileall mini_orchestrator`
+
+### Compiled Flow Human Review Gate
+
+Goal: make approved compiled-flow daemon runs land in Human Review first, then
+record the user's `ToDone` or `Доработки` decision durably in local run state.
+
+Planned changes:
+
+- [x] Map successful compiled-flow dry-run completion to `review` instead of
+  terminal `done`.
+- [x] Add a local run review-decision API for daemon run state files.
+- [x] Wire dashboard `ToDone` / `Доработки` actions to the backend decision API
+  for local daemon runs.
+- [x] Keep WorkNest terminal completion separate and gated by explicit
+  acceptance.
+
+Verification:
+
+- [x] Focused daemon run tests for `review`, `done`, and `rework`.
+- [x] Dashboard static/API tests for durable review actions.
 - [x] `python -m compileall mini_orchestrator`

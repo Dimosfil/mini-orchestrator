@@ -154,6 +154,12 @@ class CodexAppServer:
         self.stderr_thread: threading.Thread | None = None
 
     def __enter__(self) -> "CodexAppServer":
+        creationflags = 0
+        startupinfo = None
+        if os.name == "nt":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         self.proc = subprocess.Popen(
             [self.codex_command or resolve_codex_command(), "app-server"],
             cwd=str(self.process_cwd),
@@ -162,6 +168,8 @@ class CodexAppServer:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
+            creationflags=creationflags,
+            startupinfo=startupinfo,
         )
         self.stdout_thread = threading.Thread(target=self.read_stdout, daemon=True)
         self.stdout_thread.start()

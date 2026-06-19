@@ -5,6 +5,24 @@ import json
 from mini_orchestrator.live_runs import build_dispatcher_live_runs
 
 
+REQUIRED_RUN_KEYS = {
+    "schemaVersion",
+    "runId",
+    "sourceKey",
+    "sourceLabel",
+    "status",
+    "currentAgent",
+    "task",
+    "thread",
+    "tokens",
+    "artifacts",
+    "stages",
+    "createdAt",
+    "updatedAt",
+    "stale",
+}
+
+
 def write_event(log_path, payload):
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -15,11 +33,11 @@ def test_dispatcher_live_runs_surface_approval_gate(tmp_path):
     log_path = root / "tools" / "codex-dispatcher" / "runs" / "approval-run.jsonl"
     log_path.parent.mkdir(parents=True)
 
-    write_event(log_path, {"time": "2026-06-18T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2999-06-18T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
     write_event(
         log_path,
         {
-            "time": "2026-06-18T00:00:01Z",
+            "time": "2999-06-18T00:00:01Z",
             "type": "agent_thread_started",
             "agent": "executor",
             "model": "gpt-5.4",
@@ -29,7 +47,7 @@ def test_dispatcher_live_runs_surface_approval_gate(tmp_path):
     write_event(
         log_path,
         {
-            "time": "2026-06-18T00:00:02Z",
+            "time": "2999-06-18T00:00:02Z",
             "type": "codex_notification",
             "message": {
                 "method": "item/fileChange/requestApproval",
@@ -75,6 +93,44 @@ def test_dispatcher_live_runs_surface_completed_chain(tmp_path):
     assert payload["summary"]["done"] == 1
 
 
+def test_dispatcher_run_state_has_normalized_shape(tmp_path):
+    root = tmp_path
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / "shape-run.jsonl"
+    log_path.parent.mkdir(parents=True)
+
+    write_event(log_path, {"time": "2999-06-18T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2999-06-18T00:00:01Z", "type": "agent_started", "agent": "planner"})
+
+    run = build_dispatcher_live_runs(root)["runs"][0]
+
+    assert REQUIRED_RUN_KEYS.issubset(run)
+    assert run["schemaVersion"] == 1
+    assert run["sourceKey"] == "dispatcher"
+    assert isinstance(run["stages"], list)
+    assert "total" in run["tokens"]
+    assert "eventLogPath" in run["artifacts"]
+    assert run["stale"]["isStale"] is False
+
+
+def test_dispatcher_live_runs_marks_old_incomplete_log_stale(tmp_path, monkeypatch):
+    monkeypatch.setenv("MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS", "30")
+    root = tmp_path
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / "stale-run.jsonl"
+    log_path.parent.mkdir(parents=True)
+
+    write_event(log_path, {"time": "2020-01-01T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2020-01-01T00:00:01Z", "type": "agent_started", "agent": "executor"})
+
+    payload = build_dispatcher_live_runs(root)
+    run = payload["runs"][0]
+
+    assert run["status"] == "stale"
+    assert run["stale"]["isStale"] is True
+    assert "not updated" in run["stale"]["reason"]
+    assert payload["summary"]["active"] == 0
+    assert payload["summary"]["stale"] == 1
+
+
 def test_dispatcher_live_runs_surface_selected_chain_preset(tmp_path):
     root = tmp_path
     log_path = root / "tools" / "codex-dispatcher" / "runs" / "chain-run.jsonl"
@@ -83,7 +139,7 @@ def test_dispatcher_live_runs_surface_selected_chain_preset(tmp_path):
     write_event(
         log_path,
         {
-            "time": "2026-06-18T00:00:00Z",
+            "time": "2999-06-18T00:00:00Z",
             "type": "chain_selected",
             "chainPreset": {
                 "id": "chain-demo",
@@ -92,8 +148,8 @@ def test_dispatcher_live_runs_surface_selected_chain_preset(tmp_path):
             },
         },
     )
-    write_event(log_path, {"time": "2026-06-18T00:00:01Z", "type": "task_created", "task": "calc", "chain": True})
-    write_event(log_path, {"time": "2026-06-18T00:00:02Z", "type": "agent_started", "agent": "planner"})
+    write_event(log_path, {"time": "2999-06-18T00:00:01Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(log_path, {"time": "2999-06-18T00:00:02Z", "type": "agent_started", "agent": "planner"})
 
     payload = build_dispatcher_live_runs(root)
 

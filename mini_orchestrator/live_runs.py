@@ -4,17 +4,81 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable
 import json
+import os
 
 
 ACTIVE_STATUSES = {"queued", "planning", "running", "waiting_approval"}
 CHAIN_AGENTS = ["planner", "executor", "reviewer"]
+DEFAULT_STALE_AFTER_SECONDS = 15 * 60
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _safe_read_events(path: Path, max_lines: int = 5000) -> Iterable[Dict[str, Any]]:
+def _parse_time(value: str) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _stale_after_seconds() -> int:
+    raw = os.environ.get("MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_STALE_AFTER_SECONDS
+    try:
+        return max(30, int(raw))
+    except ValueError:
+        return DEFAULT_STALE_AFTER_SECONDS
+
+
+def _process_is_running(process_id: int | None) -> bool | None:
+    if not process_id:
+        return None
+    try:
+        os.kill(process_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def _stale_reason(
+    *,
+    status: str,
+    process_id: int | None,
+    last_event_time: str,
+    now: datetime,
+) -> str:
+    if status not in ACTIVE_STATUSES:
+        return ""
+    process_status = _process_is_running(process_id)
+    if process_status is False:
+        return f"dispatcher process {process_id} is not running"
+
+    parsed = _parse_time(last_event_time)
+    if parsed is None:
+        return "dispatcher log has no readable event timestamp"
+    age_seconds = int((now - parsed).total_seconds())
+    threshold = _stale_after_seconds()
+    if age_seconds > threshold:
+        return f"dispatcher log has not updated for {age_seconds}s"
+    return ""
+
+
+def _safe_read_events(path: Path, max_lines: int = 50000) -> Iterable[Dict[str, Any]]:
     try:
         with path.open("r", encoding="utf-8") as handle:
             for index, line in enumerate(handle):
@@ -184,11 +248,15 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
     approval_count = 0
     turn_count = 0
     token_total = 0
+    first_event_time = ""
+    process_id: int | None = None
 
     for event in _safe_read_events(path):
         event_type = str(event.get("type") or "unknown")
         event_counts[event_type] = event_counts.get(event_type, 0) + 1
         last_event_time = str(event.get("time") or last_event_time)
+        if not first_event_time and last_event_time:
+            first_event_time = last_event_time
 
         if event_type == "task_created":
             task = str(event.get("task") or "")
@@ -220,6 +288,12 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             if isinstance(value, dict):
                 chain_preset = value
                 last_event = f"Chain selected: {value.get('name') or value.get('id') or 'agent chain'}"
+        elif event_type == "dispatcher_process_started":
+            try:
+                process_id = int(event.get("processId") or 0) or None
+            except (TypeError, ValueError):
+                process_id = None
+            last_event = "Dispatcher process started"
         elif event_type == "dispatch_decision":
             last_event = f"Dispatch: {event.get('role') or '-'}"
             role = str(event.get("role") or "")
@@ -391,6 +465,22 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             if stage.get("status") in {"running", "waiting_approval"}:
                 _set_stage_status(stage, "done", last_event_time)
 
+    stale = {"isStale": False, "reason": "", "lastEventAt": last_event_time, "thresholdSeconds": _stale_after_seconds()}
+    reason = _stale_reason(
+        status=status,
+        process_id=process_id,
+        last_event_time=last_event_time,
+        now=datetime.now(timezone.utc),
+    )
+    if reason:
+        stale["isStale"] = True
+        stale["reason"] = reason
+        status = "stale"
+        last_error = reason
+        last_event = f"Stale run: {reason}"
+        if current_agent:
+            _touch_stage(stage_map, stage_order, current_agent, "failed", last_event_time, last_event=last_event)
+
     stages = [stage_map[agent] for agent in stage_order]
 
     try:
@@ -399,7 +489,10 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
         log_value = str(path)
 
     return {
+        "schemaVersion": 1,
         "runId": path.stem,
+        "sourceKey": "dispatcher",
+        "sourceLabel": "Dispatcher",
         "status": status,
         "mode": mode,
         "currentAgent": current_agent or None,
@@ -413,6 +506,7 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
             "threadId": workers[-1]["threadId"] if workers else None,
             "turnCount": turn_count,
             "workers": workers,
+            "processId": process_id,
         },
         "tokens": {"total": token_total},
         "artifacts": {"eventLogPath": log_value},
@@ -425,7 +519,9 @@ def _run_from_log(path: Path, root: Path) -> Dict[str, Any]:
         "chainPreset": chain_preset,
         "stages": stages,
         "eventTypes": event_counts,
+        "createdAt": first_event_time or last_event_time,
         "updatedAt": last_event_time,
+        "stale": stale,
         "outputs": outputs,
     }
 
@@ -444,6 +540,7 @@ def build_dispatcher_live_runs(root: Path, limit: int = 8) -> Dict[str, Any]:
         "blocked": sum(1 for run in runs if run["status"] == "waiting_approval"),
         "done": sum(1 for run in runs if run["status"] == "done"),
         "failed": sum(1 for run in runs if run["status"] == "failed"),
+        "stale": sum(1 for run in runs if run["status"] == "stale"),
     }
     profiles = {
         "dispatcher": {"displayName": "Dispatcher", "role": "dispatcher", "model": "-"},

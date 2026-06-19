@@ -374,8 +374,13 @@
     .agent-card {
       position: absolute;
       z-index: 2;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
       width: 320px;
       min-height: 240px;
+      max-height: min(720px, calc(100vh - 96px));
+      resize: vertical;
+      overflow: hidden;
       border: 1px solid var(--line-strong);
       border-radius: 8px;
       background: var(--surface);
@@ -498,7 +503,11 @@
     .card-body {
       display: grid;
       gap: 10px;
+      align-content: start;
+      min-height: 0;
+      overflow-y: auto;
       padding: 11px 12px 12px;
+      overscroll-behavior: contain;
     }
 
     .mini-chat {
@@ -755,12 +764,12 @@
     }
 
     .port.input {
-      left: -8px;
+      left: 4px;
       background: var(--blue);
     }
 
     .port.output {
-      right: -8px;
+      right: 4px;
     }
 
     .port.output.success {
@@ -776,7 +785,7 @@
 
     .port-label {
       position: absolute;
-      right: 14px;
+      right: 24px;
       color: var(--muted);
       font-size: 10px;
       font-weight: 800;
@@ -871,6 +880,38 @@
       font-size: 11px;
       line-height: 1.45;
       white-space: pre-wrap;
+    }
+
+    .approval-panel {
+      display: grid;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .approval-task {
+      min-height: 88px;
+      font-family: var(--font);
+      font-size: 12px;
+    }
+
+    .approval-check {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .approval-check input {
+      width: 16px;
+      min-height: 16px;
+      margin-top: 1px;
     }
 
     .connection-editor {
@@ -1128,6 +1169,23 @@
           <pre id="flow-json" class="json-preview"></pre>
           <div class="status-line" id="status-line">Флоу хранится локально в браузере.</div>
         </section>
+
+        <section class="section">
+          <h2>Approval manifest</h2>
+          <div class="approval-panel">
+            <label class="field">
+              <span>Task/context summary</span>
+              <textarea id="approval-task" class="approval-task" placeholder="WorkNest task or run context"></textarea>
+            </label>
+            <div id="approval-summary" class="flow-summary"></div>
+            <label class="approval-check">
+              <input id="approval-confirm" type="checkbox" />
+              <span>I approve compiling this saved flow into an immutable run manifest. Do not launch workers yet.</span>
+            </label>
+            <button id="compile-manifest" class="btn-primary" type="button">Compile manifest</button>
+            <pre id="manifest-json" class="json-preview"></pre>
+          </div>
+        </section>
       </aside>
 
       <section class="canvas-wrap" aria-label="Рабочее поле флоу">
@@ -1352,6 +1410,11 @@
     const connectionPort = document.querySelector("#connection-port");
     const connectionTo = document.querySelector("#connection-to");
     const statusLine = document.querySelector("#status-line");
+    const approvalTask = document.querySelector("#approval-task");
+    const approvalSummary = document.querySelector("#approval-summary");
+    const approvalConfirm = document.querySelector("#approval-confirm");
+    const compileManifestButton = document.querySelector("#compile-manifest");
+    const manifestJson = document.querySelector("#manifest-json");
     const addAgentButton = document.querySelector("#add-agent");
     const chainPresetSelect = document.querySelector("#chain-preset-select");
     const loadChainPresetButton = document.querySelector("#load-chain-preset");
@@ -1376,6 +1439,9 @@
     const openMiniChats = new Set();
     const warmingMiniChatProfiles = new Set();
     const warmedMiniChatProfiles = new Set();
+    const cardResizeObserver = "ResizeObserver" in window
+      ? new ResizeObserver(() => renderConnections())
+      : null;
 
     let chainPresets = loadChainPresets();
     const flow = loadFlow();
@@ -1455,7 +1521,10 @@
     function flowFromChainPreset(preset) {
       const source = preset?.flow || defaultChainPreset().flow;
       return {
+        id: String(source.id || "").trim(),
         name: String(source.name || preset?.name || "Agent chain").trim() || "Agent chain",
+        version: Number(source.version || 0),
+        validationStatus: String(source.validationStatus || "").trim(),
         chainPresetId: String(preset?.id || source.chainPresetId || "").trim(),
         agents: Array.isArray(source.agents) ? source.agents.map(normalizeAgent) : [],
         connections: Array.isArray(source.connections) ? source.connections.map(normalizeConnection) : [],
@@ -1517,7 +1586,10 @@
           return fallback;
         }
         return {
+          id: String(parsed.id || "").trim(),
           name: String(parsed.name || "Agent chain").trim() || "Agent chain",
+          version: Number(parsed.version || 0),
+          validationStatus: String(parsed.validationStatus || "").trim(),
           chainPresetId: String(parsed.chainPresetId || "").trim(),
           agents: parsed.agents.map(normalizeAgent),
           connections: parsed.connections.map(normalizeConnection),
@@ -1888,6 +1960,37 @@
       statusLine.textContent = message;
     }
 
+    function persistFlowLocalSnapshot(message) {
+      const snapshot = buildFlowSnapshotFromCanvas();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      Object.assign(flow, snapshot);
+      updateFlowPreview();
+      if (message) {
+        statusLine.textContent = message;
+      }
+    }
+
+    async function saveFlowToBackend(snapshot) {
+      const flowId = String(snapshot.id || "").trim();
+      const response = await fetch(flowId ? `/api/agent-flows/${encodeURIComponent(flowId)}` : "/api/agent-flows", {
+        method: flowId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flow: snapshot }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Backend flow save failed with HTTP ${response.status}.`);
+      }
+      if (!payload.flow || typeof payload.flow !== "object") {
+        throw new Error("Backend flow save returned no flow.");
+      }
+      flow.id = String(payload.flow.id || flow.id || "").trim();
+      flow.version = Number(payload.flow.version || flow.version || 0);
+      flow.validationStatus = String(payload.flow.validationStatus || flow.validationStatus || "").trim();
+      persistFlowLocalSnapshot(`Saved to backend: ${flow.id || "flow"} v${flow.version || 1} (${flow.validationStatus || "unknown"}).`);
+      return payload.flow;
+    }
+
     function buildFlowSnapshotFromCanvas() {
       const agents = [...canvas.querySelectorAll(".agent-card")].map((card) => {
         const agent = getAgent(card.dataset.agentId) || {};
@@ -1910,7 +2013,10 @@
       });
       const agentIds = new Set(agents.map((agent) => agent.id));
       return {
+        id: String(flow.id || "").trim(),
         name: String(flow.name || "Agent chain").trim() || "Agent chain",
+        version: Number(flow.version || 0),
+        validationStatus: String(flow.validationStatus || "").trim(),
         chainPresetId: String(flow.chainPresetId || "").trim(),
         agents,
         connections: flow.connections
@@ -1925,6 +2031,7 @@
       const snapshot = buildFlowSnapshotFromCanvas();
       flowJson.textContent = JSON.stringify(snapshot, null, 2);
       renderFlowSummary(snapshot);
+      renderApprovalSummary(snapshot);
       renderConnectionEditor();
       if (message) {
         statusLine.textContent = message;
@@ -1957,6 +2064,96 @@
           ];
         }),
       );
+    }
+
+    function renderApprovalSummary(snapshot) {
+      const orderedAgents = orderedFlowAgents(snapshot);
+      approvalSummary.replaceChildren(
+        summaryGroup("Flow", [snapshot], (item) => [
+          item.name || "Agent chain",
+          item.id ? `saved flow: ${item.id} v${item.version || 0}` : "not saved to backend yet",
+          "workspace: project-root | network: enabled | launch: manifest only",
+        ]),
+        summaryGroup("Agent order", orderedAgents, (agent, index) => [
+          `${index + 1}. ${agent.name || agent.role}`,
+          `${agent.llm} / ${agent.reasoning} / ${agent.accessMode}`,
+          `first prompt: ${String(agent.workPackage?.currentObjective || agent.workPackage?.expectedOutput || "").slice(0, 120)}`,
+        ]),
+      );
+    }
+
+    function orderedFlowAgents(snapshot) {
+      const byId = new Map(snapshot.agents.map((agent) => [agent.id, agent]));
+      const incoming = new Map(snapshot.agents.map((agent) => [agent.id, 0]));
+      const outgoing = new Map(snapshot.agents.map((agent) => [agent.id, []]));
+      for (const connection of snapshot.connections) {
+        if (!byId.has(connection.fromAgentId) || !byId.has(connection.toAgentId)) {
+          continue;
+        }
+        outgoing.get(connection.fromAgentId).push(connection.toAgentId);
+        incoming.set(connection.toAgentId, (incoming.get(connection.toAgentId) || 0) + 1);
+      }
+      const ready = snapshot.agents.map((agent) => agent.id).filter((id) => (incoming.get(id) || 0) === 0);
+      const order = [];
+      while (ready.length) {
+        const id = ready.shift();
+        const agent = byId.get(id);
+        if (agent) {
+          order.push(agent);
+        }
+        for (const target of outgoing.get(id) || []) {
+          incoming.set(target, (incoming.get(target) || 0) - 1);
+          if ((incoming.get(target) || 0) === 0) {
+            ready.push(target);
+          }
+        }
+      }
+      return order.length === snapshot.agents.length ? order : snapshot.agents;
+    }
+
+    async function compileApprovedManifest() {
+      if (!approvalConfirm.checked) {
+        statusLine.textContent = "Approve manifest compilation before continuing.";
+        return;
+      }
+      compileManifestButton.disabled = true;
+      manifestJson.textContent = "";
+      try {
+        persistFlowLocalSnapshot();
+        const savedFlow = await saveFlowToBackend(buildFlowSnapshotFromCanvas());
+        const flowId = String(savedFlow.id || flow.id || "").trim();
+        if (!flowId) {
+          throw new Error("Backend did not return a saved flow id.");
+        }
+        const taskSummary = String(approvalTask.value || "").trim();
+        const response = await fetch(`/api/agent-flows/${encodeURIComponent(flowId)}/compile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            approval: {
+              approved: true,
+              approvedBy: "agent-builder-ui",
+              approvalId: `approval-${Date.now()}`,
+            },
+            runContext: {
+              taskSummary,
+              firstPromptSummary: orderedFlowAgents(buildFlowSnapshotFromCanvas())
+                .map((agent) => `${agent.name}: ${agent.workPackage?.currentObjective || agent.workPackage?.expectedOutput || ""}`)
+                .join("\n"),
+            },
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || `Compile failed with HTTP ${response.status}.`);
+        }
+        manifestJson.textContent = JSON.stringify(payload.manifest || payload, null, 2);
+        statusLine.textContent = `Manifest compiled: ${payload.manifest?.manifestId || "created"}. Workers were not launched.`;
+      } catch (error) {
+        statusLine.textContent = `Manifest compile failed: ${error.message}`;
+      } finally {
+        compileManifestButton.disabled = false;
+      }
     }
 
     function branchLabel(fromPort) {
@@ -2188,7 +2385,10 @@
     }
 
     function render() {
-      canvas.querySelectorAll(".agent-card").forEach((node) => node.remove());
+      canvas.querySelectorAll(".agent-card").forEach((node) => {
+        cardResizeObserver?.unobserve(node);
+        node.remove();
+      });
       emptyState.hidden = flow.agents.length > 0;
       removeBrokenConnections();
       for (const agent of flow.agents) {
@@ -2315,6 +2515,7 @@
       successPort.addEventListener("pointerdown", (event) => startLink(event, agent.id, "success"));
       failurePort.addEventListener("pointerdown", (event) => startLink(event, agent.id, "failure"));
       inputPort.addEventListener("pointerup", (event) => finishLink(event, agent.id));
+      cardResizeObserver?.observe(card);
       return card;
     }
 
@@ -2855,9 +3056,14 @@
         return;
       }
       const rect = canvas.getBoundingClientRect();
-      agent.x = Math.max(12, Math.min(rect.width - 340, event.clientX - rect.left - dragState.offsetX));
-      agent.y = Math.max(12, Math.min(rect.height - 350, event.clientY - rect.top - dragState.offsetY));
       const card = canvas.querySelector(`[data-agent-id="${agent.id}"]`);
+      const cardRect = card?.getBoundingClientRect();
+      const cardWidth = cardRect?.width || 320;
+      const cardHeight = cardRect?.height || 260;
+      const maxX = Math.max(12, rect.width - cardWidth - 20);
+      const maxY = Math.max(12, rect.height - cardHeight - 12);
+      agent.x = Math.max(12, Math.min(maxX, event.clientX - rect.left - dragState.offsetX));
+      agent.y = Math.max(12, Math.min(maxY, event.clientY - rect.top - dragState.offsetY));
       if (card) {
         card.style.left = `${agent.x}px`;
         card.style.top = `${agent.y}px`;
@@ -3115,7 +3321,7 @@
       return "";
     }
 
-    function saveFlow() {
+    async function saveFlow() {
       const saveMode = saveModeForCurrentChain();
       if (!saveMode) {
         return;
@@ -3151,6 +3357,11 @@
       saveChainPresets();
       persistFlow(`Цепочка "${flow.name}" сохранена как пресет.`);
       renderChainPresetSelect();
+      try {
+        await saveFlowToBackend(buildFlowSnapshotFromCanvas());
+      } catch (error) {
+        statusLine.textContent = `Saved locally; backend save failed: ${error.message}`;
+      }
     }
 
     function resetFlow() {
@@ -3161,6 +3372,9 @@
       flow.connections = [];
       flow.nextAgentNumber = 1;
       flow.name = "Agent chain";
+      flow.id = "";
+      flow.version = 0;
+      flow.validationStatus = "";
       flow.chainPresetId = "";
       selectedAgentId = "";
       selectedConnectionId = "";
@@ -3179,6 +3393,7 @@
     addAgentButton.addEventListener("click", () => addAgent(agentPresetSelect.value || "agent"));
     agentPresetSelect.addEventListener("change", renderPresetPreview);
     loadChainPresetButton.addEventListener("click", loadSelectedChainPreset);
+    compileManifestButton.addEventListener("click", compileApprovedManifest);
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);
     document.querySelector("#close-settings").addEventListener("click", closeAgentSettings);
