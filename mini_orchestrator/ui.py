@@ -13,7 +13,7 @@ import sys
 import uuid
 import time
 import webbrowser
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .agent_flows import (
     AgentFlowError,
@@ -39,7 +39,12 @@ from .codex_dispatcher_service import PersistentCodexDispatcher
 from .daemon_runs import build_local_daemon_runs, run_manifest_dry_run, run_single_card_dry_run, set_run_review_decision
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
-from .symphony_daemon import SymphonyDaemonError, build_symphony_live_runs_from_url
+from .symphony_daemon import (
+    SymphonyDaemonError,
+    build_symphony_live_runs_from_url,
+    fetch_symphony_issue,
+    refresh_symphony_state,
+)
 from .worknest_bridge import WorkNestBridgeError, WorkNestLifecycleBridge
 
 
@@ -687,6 +692,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/agent-flows",
             "/api/daemon/run",
             "/api/daemon/review",
+            "/api/symphony/refresh",
             "/api/symphony/runs",
             "/api/worknest/claim",
             "/api/worknest/complete",
@@ -763,6 +769,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._json_response(200, build_symphony_run_blocker(payload))
             except ValueError as exc:
                 self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/symphony/refresh":
+            try:
+                self._json_response(202, refresh_symphony_state())
+            except SymphonyDaemonError as exc:
+                self._http_error(502, str(exc))
             except Exception as exc:
                 self._http_error(500, str(exc))
             return
@@ -1131,6 +1146,18 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             mode = (query.get("source") or ["combined"])[0]
             self._json_response(200, build_live_runs_payload(ROOT, mode))
             return
+        if path.startswith("/api/symphony/issues/"):
+            issue_identifier = unquote(path.removeprefix("/api/symphony/issues/")).strip("/")
+            if not issue_identifier:
+                self._http_error(400, "Symphony issue identifier is required.")
+                return
+            try:
+                self._json_response(200, fetch_symphony_issue(issue_identifier))
+            except SymphonyDaemonError as exc:
+                self._http_error(502, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
         if path == "/api/agents/default-card":
             try:
                 card = load_or_create_default_agent_card(ROOT)
@@ -1179,6 +1206,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Persist visual agent flows through /api/agent-flows.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
+                        "Refresh Symphony daemon observability through /api/symphony/refresh.",
+                        "Read Symphony issue debug records through /api/symphony/issues/{issueIdentifier}.",
                         "Validate Symphony run intake requests through /api/symphony/runs and return a documented blocker while intake is unsupported.",
                     ],
                     "forbiddenActions": [
@@ -1186,6 +1215,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
                         "Do not mutate Symphony daemon state through this read-only dashboard bridge.",
+                        "Do not treat Symphony observability refresh as task intake or task creation.",
                         "Do not post task runs into Symphony until a config-service-resolved intake contract exists.",
                     ],
                     "startup": {
@@ -1291,6 +1321,19 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "required": ["task", "approved"],
                             "mode": "unsupported-blocker",
                             "policy": "validates approved task-run payload and returns symphony-intake-missing until Symphony exposes documented intake",
+                        },
+                        "symphonyRefresh": {
+                            "method": "POST",
+                            "path": "/api/symphony/refresh",
+                            "optional": [],
+                            "mode": "observability-control",
+                            "policy": "asks Symphony to refresh its observability snapshot; does not create or mutate task runs",
+                        },
+                        "symphonyIssue": {
+                            "method": "GET",
+                            "path": "/api/symphony/issues/{issueIdentifier}",
+                            "mode": "observability-read",
+                            "policy": "returns Symphony issue runtime/debug details through the configured Symphony service",
                         },
                         "workNestClaim": {
                             "method": "POST",

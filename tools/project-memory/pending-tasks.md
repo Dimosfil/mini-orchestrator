@@ -1013,6 +1013,34 @@ Decision update, 2026-06-18:
   main Kanban/Live Runs workflow where the user selects which chain preset runs
   the task in `In Progress`.
 
+### Symphony Service Discovery Bridge
+
+Goal: connect Mini Orchestrator to the configured Symphony service through
+GI config-service instead of only a hard-coded local state URL.
+
+Planned changes:
+
+- [x] Resolve the Symphony service record through config-service when
+  `MINI_ORCHESTRATOR_DAEMON_STATE_URL` is not explicitly set.
+- [x] Keep the existing environment override for local/manual daemon URLs.
+- [x] Add local API helpers for Symphony refresh and issue detail endpoints
+  exposed by the current Symphony implementation.
+- [x] Keep task intake blocked until Symphony exposes a documented task-intake
+  contract.
+- [x] Update docs and tests for the connected-service behavior.
+
+Verification:
+
+- [x] Focused Symphony daemon tests.
+- [x] `python -m pytest tests/test_symphony_daemon.py`
+- [x] `python -m compileall mini_orchestrator`
+- [x] `python -m pytest tests`
+- [x] Live check: `/api/daemon/runs?source=symphony` resolved
+  `http://127.0.0.1:4000/api/v1/state` through config-service and returned an
+  empty current Symphony run summary.
+- [x] Live check: `/api/symphony/refresh` returned a queued Symphony refresh
+  response with `operations=["poll","reconcile"]`.
+
 Historical implementation:
 
 - [x] Previously added a visible selected-card run action to the builder UI.

@@ -45,14 +45,20 @@ project scope, privacy rules, and explicit user request.
 - Local folder: `D:\AI\symphony`.
 - Canonical Git/package/docs URLs:
   `https://github.com/openai/symphony.git`.
-- Service ID or runtime endpoints: read-only local daemon state endpoint
-  `http://127.0.0.1:4000/api/v1/state`; mini-orchestrator reads it through the
-  configurable `MINI_ORCHESTRATOR_DAEMON_STATE_URL`.
+- Service ID or runtime endpoints: service id `symphony` resolved through
+  GI config-service. Current local endpoints include read-only state
+  `http://127.0.0.1:4000/api/v1/state`, API root
+  `http://127.0.0.1:4000/api/v1`, refresh
+  `POST /api/v1/refresh`, and issue details `GET /api/v1/{issue_identifier}`.
+  `MINI_ORCHESTRATOR_DAEMON_STATE_URL` remains an explicit manual state URL
+  override.
 - Owner or source of truth: local reference workspace until a canonical source
   is documented.
-- Data/API contract: reference workspace plus read-only `GET /api/v1/state`
-  runtime bridge for `running`, `retrying`, `blocked`, `codex_totals`, and
-  `rate_limits` snapshot data. Mini-orchestrator must not mutate Symphony state
+- Data/API contract: reference workspace plus observability/control runtime
+  bridge for `GET /api/v1/state`, `POST /api/v1/refresh`, and
+  `GET /api/v1/{issue_identifier}`. State snapshots provide `running`,
+  `retrying`, `blocked`, `codex_totals`, and `rate_limits` data.
+  Mini-orchestrator must not create task runs or mutate Symphony task lifecycle
   through this bridge.
 - Setup, sync, build, test, or update commands: none approved from this project.
 - Version, branch, or update cadence: not recorded yet.

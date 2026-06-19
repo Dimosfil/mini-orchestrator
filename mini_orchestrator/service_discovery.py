@@ -35,6 +35,15 @@ class ResolvedUiRuntime:
     endpoints: dict[str, str]
 
 
+@dataclass(frozen=True)
+class ResolvedServiceRuntime:
+    service_id: str
+    base_url: str
+    config_service_url: str
+    endpoints: dict[str, str]
+    record: dict[str, Any]
+
+
 def _load_json_file(path: Path) -> dict[str, Any]:
     try:
         raw = path.read_text(encoding="utf-8")
@@ -198,4 +207,31 @@ def resolve_ui_runtime(requested_host: str | None, requested_port: int | None) -
         service_id=project_config.service_id,
         config_service_url=config_service_url,
         endpoints=endpoints,
+    )
+
+
+def resolve_service_runtime(service_id: str) -> ResolvedServiceRuntime:
+    clean_service_id = service_id.strip()
+    if not clean_service_id:
+        raise ConfigServiceBlocker("Service id is required.")
+
+    project_config = load_project_service_runtime_config()
+    config_service_url = resolve_config_service_url(project_config)
+    _get_json(f"{config_service_url}/health")
+
+    service_url = f"{config_service_url}/services/{clean_service_id}"
+    try:
+        record = _get_json(service_url)
+    except ConfigServiceBlocker as exc:
+        raise ConfigServiceBlocker(
+            f"Config-service has no usable record for {clean_service_id!r}. Details: {exc}"
+        ) from exc
+
+    base_url, _host, _port, endpoints = _validate_service_record(record, clean_service_id)
+    return ResolvedServiceRuntime(
+        service_id=clean_service_id,
+        base_url=base_url,
+        config_service_url=config_service_url,
+        endpoints=endpoints,
+        record=record,
     )

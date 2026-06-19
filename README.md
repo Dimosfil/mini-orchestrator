@@ -167,12 +167,14 @@ Live Runs has explicit source modes: **Combined**, **Dispatcher**, and
 **Symphony**. Combined is the default and shows dispatcher/local run state plus
 read-only Symphony daemon state. Dispatcher mode shows only local daemon dry-run
 state and dispatcher JSONL replay. Symphony mode shows only the read-only
-Symphony daemon bridge. The local-dev Symphony state endpoint is
-`http://127.0.0.1:4000/api/v1/state`; override it with
-`MINI_ORCHESTRATOR_DAEMON_STATE_URL` when the daemon runs elsewhere. In Combined
-mode, empty or unavailable Symphony state never hides dispatcher-chain runs; the
-dashboard keeps dispatcher cards visible and shows the Symphony error in the
-source line.
+Symphony daemon bridge. By default Mini Orchestrator resolves the `symphony`
+service through GI config-service and reads its `endpoints.availability` /
+`/api/v1/state` endpoint. Override the service id with
+`MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID`, or set
+`MINI_ORCHESTRATOR_DAEMON_STATE_URL` for an explicit manual state URL. In
+Combined mode, empty or unavailable Symphony state never hides dispatcher-chain
+runs; the dashboard keeps dispatcher cards visible and shows the Symphony error
+in the source line.
 
 Old incomplete dispatcher JSONL runs are marked `stale` when their process is
 gone or the log has not updated past
@@ -182,6 +184,9 @@ runs leave the active count and appear in Human Review with the stale reason.
 `POST /api/symphony/runs` is intentionally a blocker endpoint for now. It
 validates approved task-run payloads and returns `symphony-intake-missing` until
 Symphony exposes a documented config-service-resolved task-intake contract.
+The supported Symphony bridge operations are observability/control only:
+`GET /api/daemon/runs?source=symphony`, `POST /api/symphony/refresh`, and
+`GET /api/symphony/issues/{issueIdentifier}`.
 
 Mini chat requests call the application backend, which routes the message
 through `tools\codex-dispatcher\dispatcher.py` in real Codex app-server mode
@@ -212,6 +217,7 @@ reserved for unrecoverable blocked results.
 - `MINI_ORCHESTRATOR_EXECUTOR_MODEL`
 - `MINI_ORCHESTRATOR_OPENAI_BASE_URL`
 - `MINI_ORCHESTRATOR_DAEMON_STATE_URL`
+- `MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID`
 - `MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS`
 
 ## API Endpoints
@@ -236,6 +242,8 @@ reserved for unrecoverable blocked results.
 - `POST /api/daemon/review` - record a local daemon Human Review decision (`done` or `rework`)
 - `GET /api/daemon/runs?source=combined|dispatcher|symphony` - normalized read-only Live Runs state
 - `POST /api/symphony/runs` - validates approved Symphony run intake and returns a blocker until intake is documented
+- `POST /api/symphony/refresh` - config-service-resolved Symphony observability refresh
+- `GET /api/symphony/issues/{issueIdentifier}` - config-service-resolved Symphony issue runtime/debug details
 - `POST /api/worknest/claim` - contract-gated WorkNest `next-task` claim
 - `POST /api/worknest/complete` - contract-gated WorkNest terminal `done` or `blocked` completion
 

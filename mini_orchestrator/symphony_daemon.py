@@ -3,29 +3,74 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 import json
 import os
 
+from . import service_discovery
+
 
 DEFAULT_STATE_URL = "http://127.0.0.1:4000/api/v1/state"
 STATE_URL_ENV = "MINI_ORCHESTRATOR_DAEMON_STATE_URL"
+SERVICE_ID_ENV = "MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID"
+DEFAULT_SERVICE_ID = "symphony"
 
 
 class SymphonyDaemonError(RuntimeError):
     pass
 
 
+def _absolute_endpoint(base_url: str, endpoint: str) -> str:
+    endpoint = endpoint.strip()
+    parsed = urlparse(endpoint)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return endpoint.rstrip("/")
+    return urljoin(f"{base_url.rstrip('/')}/", endpoint.lstrip("/")).rstrip("/")
+
+
+def _configured_service_id() -> str:
+    return os.environ.get(SERVICE_ID_ENV, DEFAULT_SERVICE_ID).strip() or DEFAULT_SERVICE_ID
+
+
+def configured_api_url() -> str:
+    runtime = service_discovery.resolve_service_runtime(_configured_service_id())
+    api_endpoint = runtime.endpoints.get("api") or "/api/v1"
+    return _absolute_endpoint(runtime.base_url, api_endpoint)
+
+
 def configured_state_url() -> str:
-    return os.environ.get(STATE_URL_ENV, DEFAULT_STATE_URL).strip()
+    explicit = os.environ.get(STATE_URL_ENV)
+    if explicit:
+        return explicit.strip()
+
+    runtime = service_discovery.resolve_service_runtime(_configured_service_id())
+    state_endpoint = (
+        runtime.endpoints.get("availability")
+        or runtime.endpoints.get("state")
+        or runtime.endpoints.get("contract")
+        or "/api/v1/state"
+    )
+    return _absolute_endpoint(runtime.base_url, state_endpoint)
+
+
+def configured_refresh_url() -> str:
+    return f"{configured_api_url()}/refresh"
+
+
+def configured_issue_url(issue_identifier: str) -> str:
+    identifier = issue_identifier.strip()
+    if not identifier:
+        raise SymphonyDaemonError("Symphony issue identifier is required.")
+    return f"{configured_api_url()}/{quote(identifier, safe='')}"
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def fetch_symphony_state(url: str, timeout: float = 2.0) -> Dict[str, Any]:
-    request = Request(url, headers={"Accept": "application/json"})
+def _request_json(url: str, method: str = "GET", timeout: float = 2.0) -> Dict[str, Any]:
+    request = Request(url, method=method, headers={"Accept": "application/json"})
     try:
         with urlopen(request, timeout=timeout) as response:
             charset = response.headers.get_content_charset() or "utf-8"
@@ -46,6 +91,26 @@ def fetch_symphony_state(url: str, timeout: float = 2.0) -> Dict[str, Any]:
         message = str(payload["error"].get("message") or payload["error"].get("code") or "unknown error")
         raise SymphonyDaemonError(f"Symphony daemon state error: {message}")
     return payload
+
+
+def fetch_symphony_state(url: str, timeout: float = 2.0) -> Dict[str, Any]:
+    return _request_json(url, timeout=timeout)
+
+
+def refresh_symphony_state(url: str | None = None, timeout: float = 5.0) -> Dict[str, Any]:
+    try:
+        refresh_url = (url or configured_refresh_url()).strip()
+    except service_discovery.ConfigServiceBlocker as exc:
+        raise SymphonyDaemonError(f"Symphony service discovery failed: {exc}") from exc
+    return _request_json(refresh_url, method="POST", timeout=timeout)
+
+
+def fetch_symphony_issue(issue_identifier: str, url: str | None = None, timeout: float = 5.0) -> Dict[str, Any]:
+    try:
+        issue_url = (url or configured_issue_url(issue_identifier)).strip()
+    except service_discovery.ConfigServiceBlocker as exc:
+        raise SymphonyDaemonError(f"Symphony service discovery failed: {exc}") from exc
+    return _request_json(issue_url, timeout=timeout)
 
 
 def _text(value: Any, fallback: str = "") -> str:
@@ -208,6 +273,9 @@ def build_symphony_live_runs(state: Dict[str, Any], state_url: str) -> Dict[str,
 
 
 def build_symphony_live_runs_from_url(url: str | None = None, timeout: float = 2.0) -> Dict[str, Any]:
-    state_url = (url or configured_state_url()).strip()
+    try:
+        state_url = (url or configured_state_url()).strip()
+    except service_discovery.ConfigServiceBlocker as exc:
+        raise SymphonyDaemonError(f"Symphony service discovery failed: {exc}") from exc
     state = fetch_symphony_state(state_url, timeout=timeout)
     return build_symphony_live_runs(state, state_url)

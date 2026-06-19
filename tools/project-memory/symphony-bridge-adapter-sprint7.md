@@ -17,8 +17,10 @@ Symphony task-run submission as a blocker.
 Live Runs has three source modes:
 
 - `dispatcher`: local daemon dry-run state plus dispatcher JSONL replay.
-- `symphony`: read-only Symphony daemon state from
-  `MINI_ORCHESTRATOR_DAEMON_STATE_URL` or the local default.
+- `symphony`: read-only Symphony daemon state resolved from the `symphony`
+  service record in GI config-service. `MINI_ORCHESTRATOR_DAEMON_STATE_URL`
+  remains an explicit manual override for the state endpoint, and
+  `MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID` can select a different service id.
 - `combined`: dispatcher/local state plus Symphony state.
 
 Combined mode is the default. Symphony errors or empty state do not hide
@@ -80,6 +82,16 @@ The future Symphony-side adapter should define:
 - lifecycle ownership boundaries;
 - health and failure reporting;
 - no fallback-port behavior.
+
+Supported Symphony bridge operations before task intake exists:
+
+- `GET /api/v1/state` through `/api/daemon/runs?source=symphony`.
+- `POST /api/v1/refresh` through `/api/symphony/refresh`.
+- `GET /api/v1/{issue_identifier}` through
+  `/api/symphony/issues/{issueIdentifier}`.
+
+These are observability/control operations only. They do not create external
+task runs and do not replace the missing task-intake contract.
 
 ## WorkNest Lifecycle
 

@@ -7,10 +7,14 @@ import urllib.request
 import pytest
 
 from mini_orchestrator import ui
+from mini_orchestrator import service_discovery
 from mini_orchestrator.symphony_daemon import (
     SymphonyDaemonError,
     build_symphony_live_runs,
+    configured_state_url,
     fetch_symphony_state,
+    fetch_symphony_issue,
+    refresh_symphony_state,
 )
 from mini_orchestrator.ui import build_live_runs_payload, build_symphony_run_blocker
 
@@ -101,6 +105,65 @@ def test_symphony_state_json_error_raises(monkeypatch):
 
     with pytest.raises(SymphonyDaemonError, match="Snapshot timed out"):
         fetch_symphony_state("http://daemon/state")
+
+
+def test_configured_state_url_prefers_explicit_environment(monkeypatch):
+    monkeypatch.setenv("MINI_ORCHESTRATOR_DAEMON_STATE_URL", "http://example.test/custom-state")
+
+    def fail(_service_id):
+        raise AssertionError("explicit daemon state URL should skip config-service")
+
+    monkeypatch.setattr(service_discovery, "resolve_service_runtime", fail)
+
+    assert configured_state_url() == "http://example.test/custom-state"
+
+
+def test_configured_state_url_resolves_symphony_service_record(monkeypatch):
+    monkeypatch.delenv("MINI_ORCHESTRATOR_DAEMON_STATE_URL", raising=False)
+    monkeypatch.delenv("MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID", raising=False)
+
+    def fake_resolve(service_id):
+        assert service_id == "symphony"
+        return service_discovery.ResolvedServiceRuntime(
+            service_id="symphony",
+            base_url="http://127.0.0.1:4000",
+            config_service_url="http://127.0.0.1:4100",
+            endpoints={"availability": "/api/v1/state", "api": "/api/v1"},
+            record={},
+        )
+
+    monkeypatch.setattr(service_discovery, "resolve_service_runtime", fake_resolve)
+
+    assert configured_state_url() == "http://127.0.0.1:4000/api/v1/state"
+
+
+def test_refresh_and_issue_use_symphony_api_endpoint(monkeypatch):
+    monkeypatch.delenv("MINI_ORCHESTRATOR_DAEMON_STATE_URL", raising=False)
+    calls = []
+
+    def fake_resolve(service_id):
+        assert service_id == "symphony"
+        return service_discovery.ResolvedServiceRuntime(
+            service_id="symphony",
+            base_url="http://symphony.test/root",
+            config_service_url="http://config.test",
+            endpoints={"availability": "/api/v1/state", "api": "/api/v1"},
+            record={},
+        )
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, request.get_method(), timeout))
+        return FakeResponse({"ok": True})
+
+    monkeypatch.setattr(service_discovery, "resolve_service_runtime", fake_resolve)
+    monkeypatch.setattr("mini_orchestrator.symphony_daemon.urlopen", fake_urlopen)
+
+    assert refresh_symphony_state() == {"ok": True}
+    assert fetch_symphony_issue("MT 1") == {"ok": True}
+    assert calls == [
+        ("http://symphony.test/root/api/v1/refresh", "POST", 5.0),
+        ("http://symphony.test/root/api/v1/MT%201", "GET", 5.0),
+    ]
 
 
 def write_event(log_path, payload):
@@ -234,6 +297,41 @@ def test_symphony_run_http_endpoint_returns_blocker_without_http_error(tmp_path,
         assert body["status"] == "blocked"
         assert body["code"] == "symphony-intake-missing"
         assert body["accepted"] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_symphony_refresh_and_issue_http_endpoints_proxy_adapter(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "ROOT", tmp_path)
+    monkeypatch.setattr(ui, "refresh_symphony_state", lambda: {"status": "refresh_requested"})
+    monkeypatch.setattr(ui, "fetch_symphony_issue", lambda identifier: {"issue": {"identifier": identifier}})
+
+    handler = ui._OrchestratorUIHandler
+    handler.orchestrator = None
+    handler.dispatcher_service = None
+    handler.web_root = tmp_path
+    handler.service_id = "mini-orchestrator"
+    server = ui._ThreadedHttpServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        request = urllib.request.Request(
+            f"{base_url}/api/symphony/refresh",
+            data=b"{}",
+            method="POST",
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            refresh_body = json.loads(response.read().decode("utf-8"))
+
+        with urllib.request.urlopen(f"{base_url}/api/symphony/issues/MT%201", timeout=5) as response:
+            issue_body = json.loads(response.read().decode("utf-8"))
+
+        assert refresh_body == {"status": "refresh_requested"}
+        assert issue_body == {"issue": {"identifier": "MT 1"}}
     finally:
         server.shutdown()
         server.server_close()
