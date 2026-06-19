@@ -206,21 +206,62 @@
     }
 
     .runs-board {
-      display: block;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) 12px;
+      height: min(520px, calc(100vh - 190px));
+      min-height: 220px;
+      max-height: calc(100vh - 140px);
+      resize: vertical;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
     }
 
     .kanban-board {
       display: grid;
-      grid-template-columns: repeat(5, minmax(190px, 1fr));
-      gap: 10px;
-      min-height: 308px;
+      grid-template-columns: repeat(5, minmax(260px, 1fr));
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
       overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0;
       padding-bottom: 2px;
     }
 
+    .runs-board-resize-handle {
+      min-height: 12px;
+      border: 0;
+      border-top: 1px dashed var(--line-strong);
+      border-radius: 0;
+      padding: 0;
+      background:
+        linear-gradient(90deg, transparent, rgba(98, 113, 131, 0.16), transparent);
+      cursor: ns-resize;
+    }
+
+    .runs-board-resize-handle:hover,
+    .runs-board-resize-handle:focus-visible {
+      background:
+        linear-gradient(90deg, transparent, rgba(37, 111, 108, 0.22), transparent);
+      outline: none;
+    }
+
+    .runs-board.resizing {
+      user-select: none;
+    }
+
+    .runs-board.resizing .runs-board-resize-handle {
+      background:
+        linear-gradient(90deg, transparent, rgba(37, 111, 108, 0.28), transparent);
+    }
+
     .kanban-column {
-      min-width: 190px;
-      min-height: 308px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-width: 260px;
+      min-height: 0;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fbfcfd;
@@ -247,23 +288,55 @@
     }
 
     .kanban-list {
-      display: grid;
-      gap: 8px;
-      min-height: 260px;
-      padding: 9px;
-      align-content: start;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px 14px 12px 12px;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
     }
 
     .kanban-card {
-      display: grid;
-      gap: 9px;
-      min-height: 120px;
-      padding: 10px;
+      display: block;
+      position: relative;
+      flex: 0 0 auto;
+      min-width: 0;
+      min-height: 0;
+      overflow: visible;
+      animation: card-lift 220ms ease-out;
+    }
+
+    .kanban-card-frame {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+      min-height: 168px;
+      height: auto;
+      padding: 12px;
       border: 1px solid var(--line);
       border-radius: 7px;
       background: var(--surface);
       box-shadow: 0 1px 2px rgba(21, 29, 37, 0.04);
-      animation: card-lift 220ms ease-out;
+      overflow: visible;
+      overflow-wrap: anywhere;
+    }
+
+    .kanban-card-body,
+    .kanban-card-footer {
+      display: grid;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .kanban-details-button {
+      width: 100%;
+      min-height: 32px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 800;
     }
 
     @keyframes card-lift {
@@ -278,10 +351,15 @@
     }
 
     .kanban-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .kanban-card-header > div {
+      min-width: 0;
     }
 
     .kanban-current-agent {
@@ -294,6 +372,7 @@
       font-size: 12px;
       font-weight: 800;
       line-height: 1.35;
+      min-width: 0;
       overflow-wrap: anywhere;
     }
 
@@ -457,12 +536,14 @@
 
     .pipeline-stage.running .stage-mark,
     .pipeline-stage.queued .stage-mark,
-    .pipeline-stage.planning .stage-mark {
+    .pipeline-stage.planning .stage-mark,
+    .pipeline-stage.retrying .stage-mark {
       border-color: var(--warn);
       background: #fff8e6;
     }
 
     .pipeline-stage.waiting_approval .stage-mark,
+    .pipeline-stage.blocked .stage-mark,
     .pipeline-stage.failed .stage-mark {
       border-color: var(--danger);
       background: #fff1f1;
@@ -494,6 +575,14 @@
       margin: 7px 0 0;
       color: var(--muted);
       font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .stage-artifact {
+      margin: 5px 0 0;
+      color: var(--text);
+      font-size: 11px;
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
@@ -632,6 +721,137 @@
 
     .runs-empty {
       min-height: 96px;
+    }
+
+    .run-details-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(21, 29, 37, 0.42);
+    }
+
+    .run-details-backdrop[hidden] {
+      display: none;
+    }
+
+    .run-details-dialog {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      width: min(920px, calc(100vw - 32px));
+      max-height: calc(100vh - 48px);
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 18px 48px rgba(21, 29, 37, 0.22);
+      overflow: hidden;
+    }
+
+    .run-details-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    .run-details-title {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .run-details-subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .run-details-close {
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      min-height: 32px;
+      padding: 0;
+      border-color: var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .run-details-body {
+      display: grid;
+      gap: 14px;
+      overflow: auto;
+      padding: 16px;
+    }
+
+    .run-details-section {
+      display: grid;
+      gap: 9px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+    }
+
+    .run-details-section h3 {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .run-details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .run-details-item {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+
+    .run-details-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+
+    .run-details-value {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .run-details-json {
+      max-height: 300px;
+      overflow: auto;
+      margin: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
     }
 
     .panel {
@@ -920,7 +1140,7 @@
       }
 
       .kanban-board {
-        grid-template-columns: repeat(2, minmax(190px, 1fr));
+        grid-template-columns: repeat(2, minmax(260px, 1fr));
       }
 
       .summary-grid {
@@ -950,6 +1170,10 @@
       .run-detail-grid,
       .kanban-board {
         grid-template-columns: 1fr;
+      }
+
+      .kanban-column {
+        min-width: 0;
       }
 
       .pipeline-run-header,
@@ -1019,8 +1243,9 @@
         </div>
       </div>
 
-      <div class="runs-board">
+      <div id="runs-board" class="runs-board">
         <div id="live-runs-list" class="kanban-board" aria-label="Live run Kanban"></div>
+        <button id="runs-board-resize-handle" class="runs-board-resize-handle" type="button" aria-label="Resize Kanban window"></button>
         <div id="live-runs-empty" class="empty runs-empty" hidden>No daemon runs yet.</div>
       </div>
     </section>
@@ -1113,13 +1338,29 @@
     </section>
   </main>
 
+  <div id="run-details-backdrop" class="run-details-backdrop" hidden>
+    <section class="run-details-dialog" role="dialog" aria-modal="true" aria-labelledby="run-details-title">
+      <header class="run-details-head">
+        <div>
+          <h2 id="run-details-title" class="run-details-title">Run details</h2>
+          <p id="run-details-subtitle" class="run-details-subtitle"></p>
+        </div>
+        <button id="run-details-close" class="run-details-close" type="button" aria-label="Close run details">x</button>
+      </header>
+      <div id="run-details-body" class="run-details-body"></div>
+    </section>
+  </div>
+
   <script>
     const RUN_REVIEW_DECISIONS_STORAGE_KEY = "mini-orchestrator-run-review-decisions-v1";
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
+    const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
     const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
     const refreshRunsButton = document.querySelector("#refresh-runs-button");
+    const runsBoard = document.querySelector("#runs-board");
+    const runsBoardResizeHandle = document.querySelector("#runs-board-resize-handle");
     const liveRunsSource = document.querySelector("#live-runs-source");
     const liveRunsDot = document.querySelector("#live-runs-dot");
     const liveRunsStatus = document.querySelector("#live-runs-status");
@@ -1150,6 +1391,11 @@
     const techEmpty = document.querySelector("#tech-empty");
     const techOutput = document.querySelector("#tech-output");
     const jsonOutput = document.querySelector("#json-output");
+    const runDetailsBackdrop = document.querySelector("#run-details-backdrop");
+    const runDetailsTitle = document.querySelector("#run-details-title");
+    const runDetailsSubtitle = document.querySelector("#run-details-subtitle");
+    const runDetailsBody = document.querySelector("#run-details-body");
+    const runDetailsClose = document.querySelector("#run-details-close");
     let lastPlanTask = "";
     let busy = false;
     let runReviewDecisions = loadRunReviewDecisions();
@@ -1334,6 +1580,27 @@
       if (Array.isArray(run.stages) && run.stages.length) {
         return run.stages;
       }
+      if (Array.isArray(run.nodeStates) && run.nodeStates.length) {
+        const artifacts = Array.isArray(run.flowArtifacts) ? run.flowArtifacts : [];
+        return run.nodeStates.map((node) => {
+          const artifact = artifacts.find((item) => item.agentId === node.agentId) || {};
+          return {
+            agent: node.agentId || node.snapshotId || "worker",
+            label: node.agentId || node.role || "Worker",
+            status: node.status || run.status || "unknown",
+            statusLabel: stageStatusLabel(node.status || run.status),
+            model: node.model || "",
+            threadId: run.thread?.threadId || "",
+            turnCount: run.thread?.turnCount || 0,
+            tokens: node.tokens?.total || 0,
+            lastEvent: node.lastEvent || run.lastEvent || "",
+            output: artifact.summary || node.outputSummary || "",
+            artifactId: artifact.artifactId || "",
+            artifactLink: artifact.path || run.artifacts?.eventLogPath || "",
+            verdict: artifact.verdict || "",
+          };
+        });
+      }
       return [
         {
           agent: run.currentAgent || profile.role || "worker",
@@ -1431,6 +1698,22 @@
         if (event.textContent) {
           body.append(event);
         }
+        if (stage.output || stage.artifactId || stage.verdict) {
+          const artifact = document.createElement("p");
+          artifact.className = "stage-artifact";
+          const parts = [];
+          if (stage.output) {
+            parts.push(stage.output);
+          }
+          if (stage.artifactId) {
+            parts.push(`artifact: ${stage.artifactId}`);
+          }
+          if (stage.verdict) {
+            parts.push(`verdict: ${stage.verdict}`);
+          }
+          artifact.textContent = parts.join(" / ");
+          body.append(artifact);
+        }
         item.append(mark, body);
         stages.append(item);
       }
@@ -1471,6 +1754,110 @@
       { id: "done", title: "Done" },
     ];
 
+    function captureKanbanScrollState() {
+      const state = {
+        boardLeft: liveRunsList.scrollLeft || 0,
+        columns: {},
+      };
+      liveRunsList.querySelectorAll(".kanban-column").forEach((column) => {
+        const columnId = [...column.classList].find((className) => KANBAN_COLUMNS.some((item) => item.id === className));
+        const list = column.querySelector(".kanban-list");
+        if (columnId && list) {
+          state.columns[columnId] = list.scrollTop;
+        }
+      });
+      return state;
+    }
+
+    function restoreKanbanScrollState(state) {
+      if (!state || typeof state !== "object") {
+        return;
+      }
+      liveRunsList.scrollLeft = Number(state.boardLeft || 0);
+      liveRunsList.querySelectorAll(".kanban-column").forEach((column) => {
+        const columnId = [...column.classList].find((className) => KANBAN_COLUMNS.some((item) => item.id === className));
+        const list = column.querySelector(".kanban-list");
+        if (columnId && list && Object.prototype.hasOwnProperty.call(state.columns || {}, columnId)) {
+          list.scrollTop = Number(state.columns[columnId] || 0);
+        }
+      });
+    }
+
+    function runsBoardMaxHeight() {
+      return Math.max(220, window.innerHeight - 140);
+    }
+
+    function setRunsBoardHeight(height, persist = true) {
+      if (!runsBoard) {
+        return;
+      }
+      const nextHeight = Math.max(220, Math.min(runsBoardMaxHeight(), Number(height) || 0));
+      runsBoard.style.height = `${nextHeight}px`;
+      if (persist) {
+        try {
+          localStorage.setItem(RUNS_BOARD_HEIGHT_STORAGE_KEY, String(Math.round(nextHeight)));
+        } catch {
+          // Browser storage can be unavailable in private or restricted contexts.
+        }
+      }
+    }
+
+    function restoreRunsBoardHeight() {
+      try {
+        const savedHeight = Number(localStorage.getItem(RUNS_BOARD_HEIGHT_STORAGE_KEY) || 0);
+        if (savedHeight > 0) {
+          setRunsBoardHeight(savedHeight, false);
+        }
+      } catch {
+        // Browser storage can be unavailable in private or restricted contexts.
+      }
+    }
+
+    function setupRunsBoardResize() {
+      if (!runsBoard || !runsBoardResizeHandle) {
+        return;
+      }
+      let resizeState = null;
+      const finishResize = () => {
+        if (!resizeState) {
+          return;
+        }
+        resizeState = null;
+        runsBoard.classList.remove("resizing");
+        document.removeEventListener("pointermove", moveResize);
+        document.removeEventListener("pointerup", finishResize);
+        document.removeEventListener("pointercancel", finishResize);
+      };
+      var moveResize = (event) => {
+        if (!resizeState) {
+          return;
+        }
+        setRunsBoardHeight(resizeState.startHeight + event.clientY - resizeState.startY);
+      };
+      runsBoardResizeHandle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        resizeState = {
+          startY: event.clientY,
+          startHeight: runsBoard.getBoundingClientRect().height,
+        };
+        runsBoard.classList.add("resizing");
+        document.addEventListener("pointermove", moveResize);
+        document.addEventListener("pointerup", finishResize);
+        document.addEventListener("pointercancel", finishResize);
+      });
+      runsBoardResizeHandle.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+          return;
+        }
+        event.preventDefault();
+        const delta = event.key === "ArrowDown" ? 32 : -32;
+        setRunsBoardHeight(runsBoard.getBoundingClientRect().height + delta);
+      });
+      window.addEventListener("resize", () => {
+        setRunsBoardHeight(runsBoard.getBoundingClientRect().height, false);
+      });
+    }
+
     function runKanbanColumnId(run, profile) {
       const status = runStatusClass(run.status);
       const stages = stagesForRun(run, profile);
@@ -1507,10 +1894,109 @@
       return "in_progress";
     }
 
+    function detailValue(value) {
+      if (value === null || value === undefined || value === "") {
+        return "-";
+      }
+      if (typeof value === "string") {
+        return value;
+      }
+      return JSON.stringify(value, null, 2);
+    }
+
+    function runDetailsItem(label, value) {
+      const item = document.createElement("div");
+      item.className = "run-details-item";
+      const labelNode = document.createElement("div");
+      labelNode.className = "run-details-label";
+      labelNode.textContent = label;
+      const valueNode = document.createElement("div");
+      valueNode.className = "run-details-value";
+      valueNode.textContent = detailValue(value);
+      item.append(labelNode, valueNode);
+      return item;
+    }
+
+    function runDetailsSection(title, entries) {
+      const section = document.createElement("section");
+      section.className = "run-details-section";
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      const grid = document.createElement("div");
+      grid.className = "run-details-grid";
+      for (const [label, value] of entries) {
+        grid.append(runDetailsItem(label, value));
+      }
+      section.append(heading, grid);
+      return section;
+    }
+
+    function runDetailsJson(title, value) {
+      const section = document.createElement("section");
+      section.className = "run-details-section";
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      const pre = document.createElement("pre");
+      pre.className = "run-details-json";
+      pre.textContent = JSON.stringify(value, null, 2);
+      section.append(heading, pre);
+      return section;
+    }
+
+    function openRunDetails(run, profile) {
+      const stages = stagesForRun(run, profile);
+      const configuredStages = configuredChainStagesForRun(run, profile);
+      const detailPayload = {
+        column: runKanbanColumnId(run, profile),
+        currentAgent: currentAgentLabel(run, profile),
+        reviewDecision: runReviewDecision(run),
+        stages,
+        configuredStages,
+        run,
+        profile,
+      };
+      runDetailsTitle.textContent = runDisplayTitle(run, profile);
+      runDetailsSubtitle.textContent = `${run.runId || "-"} / ${run.status || "unknown"}`;
+      runDetailsBody.replaceChildren(
+        runDetailsSection("Overview", [
+          ["Status", run.status || "unknown"],
+          ["Column", detailPayload.column],
+          ["Current agent", detailPayload.currentAgent],
+          ["Review decision", detailPayload.reviewDecision || "-"],
+          ["Run id", run.runId || "-"],
+          ["Profile snapshot", run.profileSnapshotId || "-"],
+          ["Last event", run.lastEvent || "-"],
+          ["Last error", run.lastError || "-"],
+        ]),
+        runDetailsSection("Task", [
+          ["Task id", run.task?.taskId || "-"],
+          ["Sprint id", run.task?.sprintId || "-"],
+          ["Title", run.task?.title || "-"],
+          ["Summary", run.task?.summary || "-"],
+        ]),
+        runDetailsJson("Stages", configuredStages),
+        runDetailsJson("Artifacts", {
+          artifacts: run.artifacts || {},
+          flowArtifacts: run.flowArtifacts || [],
+        }),
+        runDetailsJson("Profile", profile || {}),
+        runDetailsJson("Full payload", detailPayload),
+      );
+      runDetailsBackdrop.hidden = false;
+      runDetailsClose.focus();
+    }
+
+    function closeRunDetails() {
+      runDetailsBackdrop.hidden = true;
+      runDetailsBody.replaceChildren();
+    }
+
     function renderKanbanRunCard(run, profile) {
       const status = runStatusClass(run.status);
       const article = document.createElement("article");
       article.className = "kanban-card";
+      const frame = document.createElement("div");
+      frame.className = "kanban-card-frame";
 
       const header = document.createElement("div");
       header.className = "kanban-card-header";
@@ -1550,14 +2036,25 @@
       event.className = `run-event ${run.lastError ? "run-error" : ""}`.trim();
       event.textContent = run.lastError || run.lastEvent || run.artifacts?.eventLogPath || "-";
 
-      article.append(header, current, stageRow, event);
+      const body = document.createElement("div");
+      body.className = "kanban-card-body";
+      body.append(current, stageRow, event);
+
+      const footer = document.createElement("div");
+      footer.className = "kanban-card-footer";
+      const detailsButton = document.createElement("button");
+      detailsButton.className = "btn-secondary kanban-details-button";
+      detailsButton.type = "button";
+      detailsButton.textContent = "Details";
+      detailsButton.addEventListener("click", () => openRunDetails(run, profile));
+      footer.append(detailsButton);
       const decision = runReviewDecision(run);
       if (status === "done" && decision !== "done") {
         if (decision === "rework") {
           const note = document.createElement("p");
           note.className = "run-review-note";
           note.textContent = "Выбрано: Доработки";
-          article.append(note);
+          footer.append(note);
         }
 
         const actions = document.createElement("div");
@@ -1573,12 +2070,16 @@
         reworkButton.textContent = "Доработки";
         reworkButton.addEventListener("click", () => setRunReviewDecision(run, "rework"));
         actions.append(doneButton, reworkButton);
-        article.append(actions);
+        footer.append(actions);
       }
+      frame.append(header, body);
+      frame.append(footer);
+      article.append(frame);
       return article;
     }
 
     function renderLiveRuns(payload) {
+      const kanbanScrollState = captureKanbanScrollState();
       const summary = payload.summary || {};
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
       const profiles = payload.profiles || {};
@@ -1633,6 +2134,8 @@
       liveRunsList.hidden = runs.length === 0;
       liveRunsEmpty.hidden = runs.length > 0;
       liveRunsEmpty.textContent = "No daemon runs yet.";
+      restoreKanbanScrollState(kanbanScrollState);
+      window.requestAnimationFrame(() => restoreKanbanScrollState(kanbanScrollState));
     }
 
     async function loadLiveRuns() {
@@ -1790,6 +2293,12 @@
     });
     runButton.addEventListener("click", runApprovedWorkflow);
     coreButton.addEventListener("click", runCoreOrchestrator);
+    runDetailsClose.addEventListener("click", closeRunDetails);
+    runDetailsBackdrop.addEventListener("click", (event) => {
+      if (event.target === runDetailsBackdrop) {
+        closeRunDetails();
+      }
+    });
     approval.addEventListener("change", () => {
       runButton.disabled = busy || !approval.checked || !lastPlanTask;
     });
@@ -1801,8 +2310,15 @@
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => activeTab(tab.dataset.tab));
     });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !runDetailsBackdrop.hidden) {
+        closeRunDetails();
+      }
+    });
     window.addEventListener("focus", renderRunChainPresetSelect);
     renderRunChainPresetSelect();
+    restoreRunsBoardHeight();
+    setupRunsBoardResize();
     loadLiveRuns();
     window.setInterval(loadLiveRuns, 3000);
   </script>
