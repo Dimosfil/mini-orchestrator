@@ -179,6 +179,8 @@ def test_dashboard_keeps_running_reviewer_as_bot_work() -> None:
 
     assert 'if (activeAgent === "reviewer") {\n        return "human_review";\n      }' not in html
     assert 'if (status === "done") {\n        return runReviewDecision(run) === "done" ? "done" : "human_review";\n      }' in html
+    assert 'const currentPrefix = status === "queued" ? "Queued for: " : "Current: ";' in html
+    assert 'if (status === "queued") {\n        return "todo";\n      }' in html
 
 
 def test_dashboard_can_route_approved_workflow_to_symphony_gateway() -> None:

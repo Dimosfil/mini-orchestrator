@@ -2249,7 +2249,7 @@
         return "todo";
       }
       if (status === "queued") {
-        return "backlog";
+        return "todo";
       }
       return "in_progress";
     }
@@ -2440,7 +2440,8 @@
       const current = document.createElement("p");
       current.className = "kanban-current-agent";
       const currentLabel = currentAgentLabel(run, profile);
-      current.append(document.createTextNode("Current: "));
+      const currentPrefix = status === "queued" ? "Queued for: " : "Current: ";
+      current.append(document.createTextNode(currentPrefix));
       const currentName = document.createElement("button");
       currentName.className = "kanban-agent-button";
       currentName.type = "button";
