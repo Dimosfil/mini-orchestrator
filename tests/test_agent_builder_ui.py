@@ -173,6 +173,14 @@ def test_dashboard_kanban_cards_have_clickable_agent_details() -> None:
     assert 'runDetailsJson("Agent config", agentConfig)' in html
 
 
+def test_dashboard_keeps_running_reviewer_as_bot_work() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert 'if (activeAgent === "reviewer") {\n        return "human_review";\n      }' not in html
+    assert 'if (status === "done") {\n        return runReviewDecision(run) === "done" ? "done" : "human_review";\n      }' in html
+
+
 def test_dashboard_can_route_approved_workflow_to_symphony_gateway() -> None:
     html_path = Path("mini_orchestrator/web/index.html")
     html = html_path.read_text(encoding="utf-8")

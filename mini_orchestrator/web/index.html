@@ -2242,9 +2242,6 @@
         return stageStatus === "running" || stageStatus === "planning" || stageStatus === "queued";
       });
       const activeAgent = runStatusClass(activeStage?.agent || run.currentAgent || "");
-      if (activeAgent === "reviewer") {
-        return "human_review";
-      }
       if (activeAgent === "executor") {
         return "in_progress";
       }
