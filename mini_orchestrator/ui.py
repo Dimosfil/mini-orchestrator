@@ -41,7 +41,9 @@ from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
 from .symphony_daemon import (
     SymphonyDaemonError,
+    build_local_symphony_gateway_runs,
     build_symphony_live_runs_from_url,
+    create_symphony_gateway_run,
     fetch_symphony_issue,
     refresh_symphony_state,
 )
@@ -117,10 +119,46 @@ def _build_dispatcher_source_payload(root: Path) -> Dict[str, Any]:
     }
 
 
-def _build_symphony_source_payload() -> Dict[str, Any]:
-    payload = build_symphony_live_runs_from_url()
-    payload["sourceLabel"] = "Symphony"
-    return _stamp_run_source(payload, "symphony", "Symphony")
+def _build_symphony_source_payload(root: Path = ROOT) -> Dict[str, Any]:
+    daemon_payload = build_symphony_live_runs_from_url()
+    gateway_payload = build_local_symphony_gateway_runs(root)
+    _stamp_run_source(daemon_payload, "symphony", "Symphony")
+    _stamp_run_source(gateway_payload, "symphony", "Symphony")
+
+    payloads = [daemon_payload, gateway_payload]
+    runs = [
+        run
+        for payload in payloads
+        for run in (payload.get("runs") if isinstance(payload.get("runs"), list) else [])
+        if isinstance(run, dict)
+    ]
+    profiles: Dict[str, Any] = {}
+    for payload in payloads:
+        payload_profiles = payload.get("profiles")
+        if isinstance(payload_profiles, dict):
+            profiles.update(payload_profiles)
+    runs.sort(key=lambda run: str(run.get("updatedAt") or run.get("createdAt") or ""), reverse=True)
+    return {
+        "source": "symphony",
+        "sourceLabel": "Symphony",
+        "generatedAt": max(str(payload.get("generatedAt") or "") for payload in payloads),
+        "summary": _merge_run_summaries(payloads),
+        "profiles": profiles,
+        "runs": runs,
+        "sourceDetails": {
+            "symphonyDaemon": {
+                "source": daemon_payload.get("source"),
+                "summary": daemon_payload.get("summary") or _empty_run_summary(),
+                "stateUrl": daemon_payload.get("stateUrl"),
+                "codexTotals": daemon_payload.get("codexTotals") or {},
+                "rateLimits": daemon_payload.get("rateLimits"),
+            },
+            "symphonyGateway": {
+                "source": gateway_payload.get("source"),
+                "summary": gateway_payload.get("summary") or _empty_run_summary(),
+            },
+        },
+    }
 
 
 def _source_state(payload: Dict[str, Any] | None, error: str = "") -> Dict[str, Any]:
@@ -181,7 +219,7 @@ def build_live_runs_payload(root: Path = ROOT, source_mode: str = "combined") ->
         return dispatcher_payload
 
     try:
-        symphony_payload: Dict[str, Any] | None = _build_symphony_source_payload()
+        symphony_payload: Dict[str, Any] | None = _build_symphony_source_payload(root)
         symphony_error = ""
     except SymphonyDaemonError as exc:
         symphony_payload = None
@@ -766,7 +804,10 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
         if path == "/api/symphony/runs":
             try:
-                self._json_response(200, build_symphony_run_blocker(payload))
+                state_payload = build_symphony_live_runs_from_url()
+                self._json_response(202, create_symphony_gateway_run(ROOT, payload, state_payload))
+            except SymphonyDaemonError as exc:
+                self._http_error(502, str(exc))
             except ValueError as exc:
                 self._http_error(400, str(exc))
             except Exception as exc:
@@ -1208,15 +1249,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
                         "Refresh Symphony daemon observability through /api/symphony/refresh.",
                         "Read Symphony issue debug records through /api/symphony/issues/{issueIdentifier}.",
-                        "Validate Symphony run intake requests through /api/symphony/runs and return a documented blocker while intake is unsupported.",
+                        "Record approved Symphony gateway run requests through /api/symphony/runs while upstream intake is unavailable.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
-                        "Do not mutate Symphony daemon state through this read-only dashboard bridge.",
+                        "Do not mutate Symphony daemon state through the observability bridge.",
                         "Do not treat Symphony observability refresh as task intake or task creation.",
-                        "Do not post task runs into Symphony until a config-service-resolved intake contract exists.",
+                        "Do not claim Symphony accepted a task run until a config-service-resolved intake contract exists.",
                     ],
                     "startup": {
                         "requiresConfigService": True,
@@ -1319,8 +1360,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "POST",
                             "path": "/api/symphony/runs",
                             "required": ["task", "approved"],
-                            "mode": "unsupported-blocker",
-                            "policy": "validates approved task-run payload and returns symphony-intake-missing until Symphony exposes documented intake",
+                            "optional": ["chainPreset", "mode", "project"],
+                            "mode": "gateway-record",
+                            "policy": "requires live Symphony observability, records the selected chain, and returns a visible gateway blocker until Symphony exposes documented intake",
                         },
                         "symphonyRefresh": {
                             "method": "POST",
@@ -1379,7 +1421,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "worknest-lifecycle-bridge",
                         "agent-work-package-translation",
                         "symphony-daemon-dashboard",
-                        "symphony-run-blocker",
+                        "symphony-run-gateway",
                     ],
                 },
             )

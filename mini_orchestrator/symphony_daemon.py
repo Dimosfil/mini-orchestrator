@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 import json
 import os
+import uuid
 
 from . import service_discovery
 
@@ -15,6 +17,7 @@ DEFAULT_STATE_URL = "http://127.0.0.1:4000/api/v1/state"
 STATE_URL_ENV = "MINI_ORCHESTRATOR_DAEMON_STATE_URL"
 SERVICE_ID_ENV = "MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID"
 DEFAULT_SERVICE_ID = "symphony"
+LOCAL_SYMPHONY_RUN_DIR = ".mini_orchestrator/symphony-runs"
 
 
 class SymphonyDaemonError(RuntimeError):
@@ -126,6 +129,30 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _chain_stage_names(chain_preset: Dict[str, Any]) -> list[str]:
+    flow = chain_preset.get("flow") if isinstance(chain_preset.get("flow"), dict) else {}
+    agents = flow.get("agents") if isinstance(flow.get("agents"), list) else []
+    names = [
+        _text(agent.get("name") or agent.get("role") or agent.get("preset")).strip()
+        for agent in agents
+        if isinstance(agent, dict)
+    ]
+    if names:
+        return [name for name in names if name]
+    stages = chain_preset.get("stages") if isinstance(chain_preset.get("stages"), list) else []
+    return [_text(stage).strip() for stage in stages if _text(stage).strip()]
+
+
+def _summary_for_runs(runs: list[Dict[str, Any]]) -> Dict[str, int]:
+    return {
+        "total": len(runs),
+        "active": sum(1 for run in runs if run.get("status") in {"running", "retrying", "queued", "waiting_approval"}),
+        "blocked": sum(1 for run in runs if run.get("status") == "blocked"),
+        "done": sum(1 for run in runs if run.get("status") == "done"),
+        "failed": sum(1 for run in runs if run.get("status") == "failed"),
+    }
+
+
 def _entry_id(entry: Dict[str, Any], prefix: str) -> str:
     return (
         _text(entry.get("issue_identifier"))
@@ -234,6 +261,87 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
     }
 
 
+def build_symphony_daemon_summary_run(state: Dict[str, Any], state_url: str, generated_at: str) -> Dict[str, Any]:
+    counts = state.get("counts") if isinstance(state.get("counts"), dict) else {}
+    codex_totals = state.get("codex_totals") if isinstance(state.get("codex_totals"), dict) else {}
+    running = _int(counts.get("running") if counts else len(state.get("running") or []))
+    retrying = _int(counts.get("retrying") if counts else len(state.get("retrying") or []))
+    blocked = _int(counts.get("blocked") if counts else len(state.get("blocked") or []))
+    total = running + retrying + blocked
+    status = "running" if running else "retrying" if retrying else "blocked" if blocked else "idle"
+    last_event = (
+        f"running={running}, retrying={retrying}, blocked={blocked}, "
+        f"tokens={_int(codex_totals.get('total_tokens') or codex_totals.get('total'))}"
+    )
+    return {
+        "schemaVersion": 1,
+        "runId": "symphony-daemon-summary",
+        "sourceKey": "symphony",
+        "sourceLabel": "Symphony",
+        "status": status,
+        "mode": "symphony-daemon-summary",
+        "currentAgent": "Symphony daemon",
+        "task": {
+            "taskId": "symphony-daemon",
+            "title": "Symphony daemon snapshot",
+            "summary": last_event,
+            "raw": state_url,
+        },
+        "profileSnapshotId": "symphony-daemon",
+        "thread": {"threadId": None, "currentTurnId": None, "turnCount": 0, "workers": []},
+        "tokens": {
+            "input": _int(codex_totals.get("input_tokens") or codex_totals.get("input")),
+            "output": _int(codex_totals.get("output_tokens") or codex_totals.get("output")),
+            "total": _int(codex_totals.get("total_tokens") or codex_totals.get("total")),
+        },
+        "artifacts": {
+            "eventLogPath": state_url,
+            "workspaceGenerated": False,
+            "durableProjectMemory": False,
+            "privateRuntimeData": True,
+        },
+        "lastEvent": last_event,
+        "lastError": "",
+        "approval": {"required": False, "count": 0},
+        "chainPreset": {},
+        "stages": [
+            {
+                "agent": "symphony-daemon",
+                "label": "Symphony daemon",
+                "status": status,
+                "statusLabel": status.replace("_", " ").title(),
+                "startedAt": generated_at,
+                "completedAt": None,
+                "threadId": None,
+                "turnCount": 0,
+                "model": None,
+                "tokens": _int(codex_totals.get("total_tokens") or codex_totals.get("total")),
+                "lastEvent": last_event,
+                "output": json.dumps(
+                    {
+                        "counts": {"running": running, "retrying": retrying, "blocked": blocked, "total": total},
+                        "codex_totals": codex_totals,
+                        "rate_limits": state.get("rate_limits"),
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ],
+        "eventTypes": {},
+        "createdAt": generated_at,
+        "updatedAt": generated_at,
+        "reviewerVerdict": None,
+        "stale": {"isStale": False, "reason": "", "lastEventAt": generated_at, "thresholdSeconds": 0},
+        "outputs": {},
+        "daemonSnapshot": {
+            "counts": {"running": running, "retrying": retrying, "blocked": blocked, "total": total},
+            "codexTotals": codex_totals,
+            "rateLimits": state.get("rate_limits"),
+            "stateUrl": state_url,
+        },
+    }
+
+
 def build_symphony_live_runs(state: Dict[str, Any], state_url: str) -> Dict[str, Any]:
     generated_at = _text(state.get("generated_at")) or _utc_now()
     runs: list[Dict[str, Any]] = []
@@ -246,13 +354,9 @@ def build_symphony_live_runs(state: Dict[str, Any], state_url: str) -> Dict[str,
             if isinstance(entry, dict):
                 runs.append(_run_from_entry(entry, status, generated_at))
 
-    summary = {
-        "total": len(runs),
-        "active": sum(1 for run in runs if run["status"] in {"running", "retrying"}),
-        "blocked": sum(1 for run in runs if run["status"] == "blocked"),
-        "done": 0,
-        "failed": 0,
-    }
+    runs.append(build_symphony_daemon_summary_run(state, state_url, generated_at))
+
+    summary = _summary_for_runs([run for run in runs if run.get("mode") != "symphony-daemon-summary"])
     profiles = {
         "symphony-daemon": {
             "displayName": "Symphony Daemon",
@@ -279,3 +383,131 @@ def build_symphony_live_runs_from_url(url: str | None = None, timeout: float = 2
         raise SymphonyDaemonError(f"Symphony service discovery failed: {exc}") from exc
     state = fetch_symphony_state(state_url, timeout=timeout)
     return build_symphony_live_runs(state, state_url)
+
+
+def _local_symphony_run_dir(root: Path) -> Path:
+    return root / LOCAL_SYMPHONY_RUN_DIR
+
+
+def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def create_symphony_gateway_run(root: Path, payload: Dict[str, Any], state_payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    if payload.get("approved") is not True:
+        raise ValueError("Field 'approved' must be true before creating a Symphony run.")
+    task_value = payload.get("task")
+    if isinstance(task_value, dict):
+        task_title = str(task_value.get("title") or task_value.get("summary") or task_value.get("task") or "").strip()
+        task_id = str(task_value.get("taskId") or "").strip()
+        sprint_id = str(task_value.get("sprintId") or "").strip()
+    else:
+        task_title = str(task_value or payload.get("goal") or "").strip()
+        task_id = str(payload.get("taskId") or "").strip()
+        sprint_id = str(payload.get("sprintId") or "").strip()
+    if not task_title:
+        raise ValueError("Field 'task' is required.")
+
+    now = _utc_now()
+    chain_preset = payload.get("chainPreset") if isinstance(payload.get("chainPreset"), dict) else {}
+    stage_names = _chain_stage_names(chain_preset) or ["planner", "executor", "reviewer"]
+    state_error = ""
+    state_available = state_payload is not None
+    state_url = ""
+    if isinstance(state_payload, dict):
+        state_url = _text(state_payload.get("stateUrl"))
+    run_id = f"symphony-gateway-{uuid.uuid4().hex[:12]}"
+    run = {
+        "schemaVersion": 1,
+        "runId": run_id,
+        "sourceKey": "symphony",
+        "sourceLabel": "Symphony",
+        "status": "blocked",
+        "mode": "symphony-gateway",
+        "currentAgent": "Symphony intake",
+        "task": {
+            "taskId": task_id or run_id,
+            "sprintId": sprint_id,
+            "project": str(payload.get("project") or "mini-orchestrator").strip(),
+            "title": task_title,
+            "raw": task_title,
+        },
+        "profileSnapshotId": "symphony-gateway",
+        "thread": {"threadId": None, "currentTurnId": None, "turnCount": 0, "workers": []},
+        "tokens": {"input": 0, "output": 0, "total": 0},
+        "lastEvent": "Symphony observability is live; external task intake is not exposed by Symphony yet.",
+        "lastError": "symphony-intake-missing",
+        "artifacts": {
+            "eventLogPath": str((Path(LOCAL_SYMPHONY_RUN_DIR) / f"{run_id}.json").as_posix()),
+            "workspaceGenerated": False,
+            "durableProjectMemory": False,
+            "privateRuntimeData": True,
+        },
+        "approval": {"required": True, "count": 1},
+        "chainPreset": chain_preset,
+        "stages": [
+            {
+                "agent": stage,
+                "label": stage,
+                "status": "waiting_approval" if index == 0 else "pending",
+                "statusLabel": "Waiting Intake" if index == 0 else "Pending",
+                "startedAt": now if index == 0 else None,
+                "completedAt": None,
+                "threadId": None,
+                "turnCount": 0,
+                "model": None,
+                "tokens": 0,
+                "lastEvent": "Waiting for Symphony task-intake endpoint." if index == 0 else "",
+                "output": "",
+            }
+            for index, stage in enumerate(stage_names)
+        ],
+        "eventTypes": {"symphony_gateway_request": 1},
+        "createdAt": now,
+        "updatedAt": now,
+        "reviewerVerdict": None,
+        "stale": {"isStale": False, "reason": "", "lastEventAt": now, "thresholdSeconds": 0},
+        "outputs": {},
+        "requiredContract": {
+            "serviceId": "symphony",
+            "expectedCapability": "task-intake",
+            "expectedEndpoint": "documented agent-facing intake endpoint",
+            "observedEndpoints": ["GET /api/v1/state", "POST /api/v1/refresh", "GET /api/v1/{issue_identifier}"],
+        },
+        "symphony": {
+            "stateAvailable": state_available,
+            "stateUrl": state_url,
+            "stateSummary": state_payload.get("summary") if isinstance(state_payload, dict) else {},
+            "stateError": state_error,
+        },
+    }
+    _write_json(_local_symphony_run_dir(root) / f"{run_id}.json", run)
+    return run
+
+
+def build_local_symphony_gateway_runs(root: Path) -> Dict[str, Any]:
+    run_dir = _local_symphony_run_dir(root)
+    runs: list[Dict[str, Any]] = []
+    if run_dir.exists():
+        for path in sorted(run_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                runs.append(payload)
+    return {
+        "source": "symphony-gateway",
+        "sourceLabel": "Symphony",
+        "generatedAt": _utc_now(),
+        "summary": _summary_for_runs(runs),
+        "profiles": {
+            "symphony-gateway": {
+                "displayName": "Symphony Intake Gateway",
+                "role": "gateway",
+                "model": "-",
+            }
+        },
+        "runs": runs,
+    }

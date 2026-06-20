@@ -14,6 +14,83 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Symphony-Governed Chain Dashboard Pass
+
+Goal: make the dashboard show a Symphony-aware task workflow with selected
+agent chain context, clickable agent details, and real Symphony daemon
+observability.
+
+Planned changes:
+
+- [x] Confirm the current Symphony HTTP contract from `D:\AI\symphony\elixir`.
+- [x] Add a mini-orchestrator Symphony run gateway record for approved requests
+  while upstream Symphony exposes observability but not external intake.
+- [x] Preserve the selected chain in the Symphony request/run payload.
+- [x] Render Symphony-aware task cards and daemon summary cards in Live Runs.
+- [x] Make current agent and stage chips open focused detail views.
+- [x] Verify API, UI script parse, and a smoke workflow.
+
+Risks or dependencies:
+
+- Current Symphony exposes `GET /api/v1/state`, `POST /api/v1/refresh`, and
+  `GET /api/v1/{issue_identifier}` only; actual task creation remains blocked
+  until Symphony adds an agent-facing intake endpoint or tracker-backed task
+  creation contract.
+
+### Live Runs Task/Daemon Placement Fix
+
+Goal: keep task cards in the upper Kanban and move Symphony daemon observability
+cards into the lower daemon area.
+
+Planned changes:
+
+- [x] Filter `symphony-daemon` summary/snapshot records out of the Kanban task
+  board.
+- [x] Render Symphony daemon records in the lower dashboard area.
+- [x] Keep gateway/dispatcher task cards in the Kanban columns.
+- [x] Verify focused UI checks and script syntax.
+
+Risks or dependencies:
+
+- Symphony gateway task requests remain task cards; only daemon observability
+  records move to the lower panel.
+
+### Agent Builder Chain Preset Hygiene
+
+Goal: keep chain preset management predictable in the browser-local Agent
+Builder list.
+
+- [x] Reject duplicate chain preset names when saving as a new preset.
+- [x] Add a delete action for selected custom chain presets with confirmation.
+- [x] Verify the focused Agent Builder UI checks.
+
+### Agent Builder Card Layout Refresh
+
+Goal: make visual agent cards compact, readable, and easier to connect.
+
+- [x] Reduce card field overflow and remove horizontal scroll from cards.
+- [x] Modernize connection ports and prevent port labels from overlapping form controls.
+- [x] Verify the focused Agent Builder UI checks.
+
+### Dashboard Chain Picker Placement
+
+Goal: make the current execution chain visible and selectable from the dashboard
+top bar.
+
+- [x] Move plan mode and chain preset selection out of the task form.
+- [x] Replace old plan/core-run buttons with one chain selection action.
+- [x] Show the current selected chain next to the picker.
+- [x] Verify the focused dashboard UI checks.
+
+### Default Chain Preset Persistence Fix
+
+Goal: keep edits to the built-in default chain preset when switching presets or
+refreshing dashboard selectors.
+
+- [x] Persist overwritten default chain presets in browser-local storage.
+- [x] Load persisted default chain overrides in Agent Builder and Dashboard.
+- [x] Verify the focused UI checks.
+
 ### Sprint7: Symphony Bridge Adapter Sprint
 
 Goal: complete the WorkNest sprint

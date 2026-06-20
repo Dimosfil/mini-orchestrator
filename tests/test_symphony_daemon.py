@@ -10,7 +10,9 @@ from mini_orchestrator import ui
 from mini_orchestrator import service_discovery
 from mini_orchestrator.symphony_daemon import (
     SymphonyDaemonError,
+    build_local_symphony_gateway_runs,
     build_symphony_live_runs,
+    create_symphony_gateway_run,
     configured_state_url,
     fetch_symphony_state,
     fetch_symphony_issue,
@@ -82,7 +84,7 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
 
     assert payload["source"] == "symphony-daemon"
     assert payload["summary"] == {"total": 3, "active": 2, "blocked": 1, "done": 0, "failed": 0}
-    assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked"]
+    assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked", "running"]
     running = payload["runs"][0]
     assert running["schemaVersion"] == 1
     assert running["runId"] == "MT-1"
@@ -94,6 +96,9 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
     blocked = payload["runs"][2]
     assert blocked["approval"]["required"] is True
     assert blocked["lastError"] == "approval required"
+    summary = payload["runs"][3]
+    assert summary["runId"] == "symphony-daemon-summary"
+    assert summary["daemonSnapshot"]["counts"] == {"running": 1, "retrying": 1, "blocked": 1, "total": 3}
 
 
 def test_symphony_state_json_error_raises(monkeypatch):
@@ -209,7 +214,7 @@ def test_combined_live_runs_keeps_dispatcher_jsonl_when_symphony_is_empty(tmp_pa
 
     assert payload["sourceMode"] == "combined"
     assert payload["summary"]["total"] == 1
-    assert [run["runId"] for run in payload["runs"]] == ["latest-dispatcher-chain"]
+    assert [run["runId"] for run in payload["runs"]] == ["symphony-daemon-summary", "latest-dispatcher-chain"]
     assert payload["sources"]["symphony"]["summary"]["total"] == 0
 
 
@@ -262,8 +267,49 @@ def test_symphony_run_blocker_validates_approved_task_payload():
     assert blocker["requiredContract"]["serviceId"] == "symphony"
 
 
-def test_symphony_run_http_endpoint_returns_blocker_without_http_error(tmp_path, monkeypatch):
+def test_symphony_gateway_run_preserves_chain_and_is_listed(tmp_path):
+    run = create_symphony_gateway_run(
+        tmp_path,
+        {
+            "approved": True,
+            "project": "mini-orchestrator",
+            "task": {"taskId": "task-1", "sprintId": "sprint-1", "title": "Bridge task"},
+            "chainPreset": {
+                "id": "chain-1",
+                "name": "Planner -> Executor -> Reviewer",
+                "flow": {
+                    "agents": [
+                        {"id": "planner", "name": "Planner", "role": "planner"},
+                        {"id": "executor", "name": "Executor", "role": "executor"},
+                        {"id": "reviewer", "name": "Reviewer", "role": "reviewer"},
+                    ]
+                },
+            },
+        },
+        {"stateUrl": "http://daemon/state", "summary": {"total": 0}},
+    )
+
+    assert run["status"] == "blocked"
+    assert run["mode"] == "symphony-gateway"
+    assert run["chainPreset"]["id"] == "chain-1"
+    assert [stage["label"] for stage in run["stages"]] == ["Planner", "Executor", "Reviewer"]
+
+    payload = build_local_symphony_gateway_runs(tmp_path)
+
+    assert payload["summary"]["blocked"] == 1
+    assert payload["runs"][0]["runId"] == run["runId"]
+
+
+def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_path, monkeypatch):
     monkeypatch.setattr(ui, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        ui,
+        "build_symphony_live_runs_from_url",
+        lambda: build_symphony_live_runs(
+            {"generated_at": "2026-06-18T00:00:02Z", "running": [], "retrying": [], "blocked": []},
+            "http://daemon/state",
+        ),
+    )
 
     handler = ui._OrchestratorUIHandler
     handler.orchestrator = None
@@ -293,10 +339,11 @@ def test_symphony_run_http_endpoint_returns_blocker_without_http_error(tmp_path,
         with urllib.request.urlopen(request, timeout=5) as response:
             body = json.loads(response.read().decode("utf-8"))
 
-        assert response.status == 200
+        assert response.status == 202
         assert body["status"] == "blocked"
-        assert body["code"] == "symphony-intake-missing"
-        assert body["accepted"] is False
+        assert body["mode"] == "symphony-gateway"
+        assert body["lastError"] == "symphony-intake-missing"
+        assert body["task"]["taskId"] == "task-1"
     finally:
         server.shutdown()
         server.server_close()

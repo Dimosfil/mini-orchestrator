@@ -164,6 +164,7 @@
     .field {
       display: grid;
       gap: 6px;
+      min-width: 0;
     }
 
     label {
@@ -376,7 +377,7 @@
       z-index: 2;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      width: 320px;
+      width: 340px;
       min-height: 240px;
       max-height: min(720px, calc(100vh - 96px));
       resize: vertical;
@@ -394,13 +395,14 @@
     }
 
     .card-head {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) auto auto;
       align-items: center;
-      justify-content: space-between;
       gap: 10px;
       min-height: 44px;
-      padding: 10px 12px;
+      padding: 9px 12px;
       border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #fbfcfd);
       cursor: grab;
     }
 
@@ -429,19 +431,26 @@
     }
 
     .agent-name {
-      width: 150px;
+      min-width: 0;
       border: 0;
       border-radius: 4px;
       min-height: 28px;
       padding: 4px 6px;
       background: transparent;
       font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .agent-role {
+      max-width: 96px;
+      min-width: 0;
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .agent-card-actions {
@@ -457,6 +466,7 @@
       gap: 6px;
       min-height: 28px;
       max-width: 100%;
+      width: 100%;
       padding: 5px 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -465,6 +475,8 @@
       font-size: 12px;
       font-weight: 800;
       line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -502,12 +514,28 @@
 
     .card-body {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       align-content: start;
       min-height: 0;
+      min-width: 0;
+      overflow-x: hidden;
       overflow-y: auto;
-      padding: 11px 12px 12px;
+      padding: 10px 12px 12px;
       overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+
+    .card-body .field {
+      gap: 4px;
+    }
+
+    .card-body label {
+      font-size: 11px;
+    }
+
+    .card-body select {
+      min-height: 34px;
+      padding: 6px 9px;
     }
 
     .mini-chat {
@@ -753,23 +781,28 @@
     .port {
       position: absolute;
       top: 50%;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
+      min-height: 18px;
       border: 2px solid #ffffff;
       border-radius: 50%;
+      padding: 0;
       background: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent-strong);
+      box-shadow: 0 0 0 1px rgba(24, 79, 77, 0.58), 0 4px 10px rgba(26, 39, 52, 0.16);
       transform: translateY(-50%);
       cursor: crosshair;
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+      z-index: 4;
     }
 
     .port.input {
-      left: 4px;
+      left: -9px;
       background: var(--blue);
+      box-shadow: 0 0 0 1px rgba(47, 102, 144, 0.62), 0 4px 10px rgba(26, 39, 52, 0.16);
     }
 
     .port.output {
-      right: 4px;
+      right: -9px;
     }
 
     .port.output.success {
@@ -780,17 +813,20 @@
     .port.output.failure {
       top: 62%;
       background: var(--danger);
-      box-shadow: 0 0 0 1px #7d2929;
+      box-shadow: 0 0 0 1px rgba(125, 41, 41, 0.64), 0 4px 10px rgba(26, 39, 52, 0.16);
     }
 
     .port-label {
       position: absolute;
-      right: 24px;
+      right: 16px;
       color: var(--muted);
       font-size: 10px;
       font-weight: 800;
+      opacity: 0;
       pointer-events: none;
       text-transform: uppercase;
+      transform: translateX(4px);
+      transition: opacity 120ms ease, transform 120ms ease;
     }
 
     .port-label.success {
@@ -802,7 +838,19 @@
     }
 
     .port.active {
-      box-shadow: 0 0 0 4px var(--accent-soft);
+      box-shadow: 0 0 0 5px var(--accent-soft), 0 4px 10px rgba(26, 39, 52, 0.16);
+      filter: saturate(1.12);
+      transform: translateY(-50%) scale(1.1);
+    }
+
+    .port:hover,
+    .agent-card:hover .port-label {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.08);
+    }
+
+    .agent-card:hover .port-label {
+      transform: translateX(0);
     }
 
     .empty-state {
@@ -1125,6 +1173,7 @@
               <select id="chain-preset-select"></select>
             </div>
             <button id="load-chain-preset" class="btn-secondary" type="button">Загрузить цепочку</button>
+            <button id="delete-chain-preset" class="btn-danger" type="button">Удалить пресет</button>
           </div>
         </section>
 
@@ -1418,6 +1467,7 @@
     const addAgentButton = document.querySelector("#add-agent");
     const chainPresetSelect = document.querySelector("#chain-preset-select");
     const loadChainPresetButton = document.querySelector("#load-chain-preset");
+    const deleteChainPresetButton = document.querySelector("#delete-chain-preset");
     const agentPresetSelect = document.querySelector("#agent-preset-select");
     const agentPresetPreview = document.querySelector("#agent-preset-preview");
     const settingsBackdrop = document.querySelector("#agent-settings");
@@ -1550,16 +1600,30 @@
       };
     }
 
+    function chainPresetNameKey(value) {
+      return String(value || "").trim().toLocaleLowerCase();
+    }
+
     function loadChainPresets() {
       const presets = [defaultChainPreset()];
+      const names = new Set(presets.map((preset) => chainPresetNameKey(preset.name)));
       try {
         const raw = localStorage.getItem(CHAIN_PRESETS_STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
         if (Array.isArray(parsed)) {
           for (const item of parsed) {
             const preset = normalizeChainPreset(item);
-            if (preset && preset.id !== DEFAULT_CHAIN_PRESET_ID) {
+            const nameKey = chainPresetNameKey(preset?.name);
+            if (!preset) {
+              continue;
+            }
+            if (preset.id === DEFAULT_CHAIN_PRESET_ID) {
+              presets[0] = preset;
+              names.clear();
+              names.add(nameKey);
+            } else if (!names.has(nameKey)) {
               presets.push(preset);
+              names.add(nameKey);
             }
           }
         }
@@ -1570,8 +1634,7 @@
     }
 
     function saveChainPresets() {
-      const customPresets = chainPresets.filter((preset) => preset.id !== DEFAULT_CHAIN_PRESET_ID);
-      localStorage.setItem(CHAIN_PRESETS_STORAGE_KEY, JSON.stringify(customPresets));
+      localStorage.setItem(CHAIN_PRESETS_STORAGE_KEY, JSON.stringify(chainPresets));
     }
 
     function loadFlow() {
@@ -3192,6 +3255,8 @@
         path.setAttribute("fill", "none");
         path.setAttribute("stroke", selectedConnectionId === connection.id ? "#184f4d" : (normalized.fromPort === "failure" ? "#b13b3b" : "#256f6c"));
         path.setAttribute("stroke-width", selectedConnectionId === connection.id ? "4" : "2.5");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
         path.setAttribute("marker-end", "url(#arrow-head)");
         path.dataset.connectionId = connection.id;
         path.addEventListener("pointerdown", (event) => {
@@ -3267,6 +3332,9 @@
         option.selected = true;
         chainPresetSelect.append(option);
       }
+      deleteChainPresetButton.disabled = !chainPresetSelect.value
+        || chainPresetSelect.value === DEFAULT_CHAIN_PRESET_ID
+        || !chainPresets.some((preset) => preset.id === chainPresetSelect.value);
     }
 
     function loadSelectedChainPreset() {
@@ -3284,22 +3352,22 @@
       persistFlow(`Цепочка "${preset.name}" загружена.`);
     }
 
-    function currentCustomChainPreset() {
-      const flowPreset = flow.chainPresetId && flow.chainPresetId !== DEFAULT_CHAIN_PRESET_ID
+    function currentChainPreset() {
+      const flowPreset = flow.chainPresetId
         ? chainPresets.find((item) => item.id === flow.chainPresetId)
         : null;
       if (flowPreset) {
         return flowPreset;
       }
       const selectedPresetId = chainPresetSelect?.value || "";
-      if (!selectedPresetId || selectedPresetId === DEFAULT_CHAIN_PRESET_ID) {
+      if (!selectedPresetId) {
         return null;
       }
       return chainPresets.find((item) => item.id === selectedPresetId) || null;
     }
 
     function saveModeForCurrentChain() {
-      const existingPreset = currentCustomChainPreset();
+      const existingPreset = currentChainPreset();
       if (!existingPreset) {
         return "new";
       }
@@ -3326,7 +3394,7 @@
       if (!saveMode) {
         return;
       }
-      const overwritePreset = saveMode === "overwrite" ? currentCustomChainPreset() : null;
+      const overwritePreset = saveMode === "overwrite" ? currentChainPreset() : null;
       const suggestedName = String(overwritePreset?.name || flow.name || "").trim() || "Agent chain";
       const name = window.prompt("Название цепочки агентов", suggestedName);
       if (name === null) {
@@ -3339,7 +3407,15 @@
         return;
       }
       const overwriteId = overwritePreset?.id || "";
-      flow.name = trimmedName.slice(0, 80);
+      const nextName = trimmedName.slice(0, 80);
+      const duplicateNamePreset = chainPresets.find((item) =>
+        chainPresetNameKey(item.name) === chainPresetNameKey(nextName) && item.id !== overwriteId
+      );
+      if (duplicateNamePreset) {
+        statusLine.textContent = `Пресет с названием "${nextName}" уже есть. Выберите другое имя или перезапишите существующий пресет.`;
+        return;
+      }
+      flow.name = nextName;
       flow.chainPresetId = overwriteId || `chain-${chainPresetSlug(trimmedName)}-${Date.now()}`;
       const snapshot = buildFlowSnapshotFromCanvas();
       const preset = {
@@ -3348,11 +3424,14 @@
         flow: snapshot,
         updatedAt: new Date().toISOString(),
       };
+      const remainingPresets = chainPresets.filter((item) => item.id !== preset.id);
+      const defaultPreset = preset.id === DEFAULT_CHAIN_PRESET_ID
+        ? preset
+        : remainingPresets.find((item) => item.id === DEFAULT_CHAIN_PRESET_ID) || defaultChainPreset();
       chainPresets = [
-        chainPresets[0] || defaultChainPreset(),
-        ...chainPresets
-          .filter((item) => item.id !== DEFAULT_CHAIN_PRESET_ID && item.id !== preset.id),
-        preset,
+        defaultPreset,
+        ...remainingPresets.filter((item) => item.id !== DEFAULT_CHAIN_PRESET_ID),
+        ...(preset.id === DEFAULT_CHAIN_PRESET_ID ? [] : [preset]),
       ];
       saveChainPresets();
       persistFlow(`Цепочка "${flow.name}" сохранена как пресет.`);
@@ -3362,6 +3441,29 @@
       } catch (error) {
         statusLine.textContent = `Saved locally; backend save failed: ${error.message}`;
       }
+    }
+
+    function deleteSelectedChainPreset() {
+      const preset = chainPresets.find((item) => item.id === chainPresetSelect.value);
+      if (!preset) {
+        statusLine.textContent = "Выберите пресет для удаления.";
+        return;
+      }
+      if (preset.id === DEFAULT_CHAIN_PRESET_ID) {
+        statusLine.textContent = "Встроенный пресет нельзя удалить.";
+        return;
+      }
+      if (!window.confirm(`Удалить пресет "${preset.name}"? Текущая цепочка останется на поле.`)) {
+        statusLine.textContent = "Удаление пресета отменено.";
+        return;
+      }
+      chainPresets = chainPresets.filter((item) => item.id !== preset.id);
+      if (flow.chainPresetId === preset.id) {
+        flow.chainPresetId = "";
+      }
+      saveChainPresets();
+      renderChainPresetSelect();
+      persistFlow(`Пресет "${preset.name}" удален. Текущая цепочка осталась на поле.`);
     }
 
     function resetFlow() {
@@ -3393,6 +3495,12 @@
     addAgentButton.addEventListener("click", () => addAgent(agentPresetSelect.value || "agent"));
     agentPresetSelect.addEventListener("change", renderPresetPreview);
     loadChainPresetButton.addEventListener("click", loadSelectedChainPreset);
+    deleteChainPresetButton.addEventListener("click", deleteSelectedChainPreset);
+    chainPresetSelect.addEventListener("change", () => {
+      deleteChainPresetButton.disabled = !chainPresetSelect.value
+        || chainPresetSelect.value === DEFAULT_CHAIN_PRESET_ID
+        || !chainPresets.some((preset) => preset.id === chainPresetSelect.value);
+    });
     compileManifestButton.addEventListener("click", compileApprovedManifest);
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);

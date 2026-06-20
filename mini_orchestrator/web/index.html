@@ -106,6 +106,59 @@
       align-items: center;
       gap: 10px;
       flex: 0 0 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: min(860px, 100%);
+    }
+
+    .workflow-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .topbar-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .topbar-field select {
+      min-height: 32px;
+      min-width: 132px;
+      max-width: 150px;
+      padding: 5px 28px 5px 9px;
+      font-size: 13px;
+    }
+
+    .topbar-field.chain select {
+      min-width: 240px;
+      max-width: 270px;
+    }
+
+    .current-chain-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      max-width: 230px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .dot {
@@ -231,6 +284,22 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fbfcfd;
+    }
+
+    .daemon-board {
+      min-height: 280px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 8px;
+      background: #fbfcfd;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .daemon-card-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 360px));
+      gap: 12px;
+      align-content: start;
     }
 
     .kanban-board {
@@ -391,8 +460,32 @@
       overflow-wrap: anywhere;
     }
 
-    .kanban-current-agent span {
+    .kanban-current-agent span,
+    .kanban-agent-button {
       color: var(--accent);
+    }
+
+    .kanban-agent-button,
+    .kanban-stage-chip {
+      cursor: pointer;
+    }
+
+    .kanban-agent-button {
+      appearance: none;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      font: inherit;
+      font-weight: 900;
+      text-align: left;
+    }
+
+    .kanban-agent-button:hover,
+    .kanban-agent-button:focus-visible,
+    .kanban-stage-chip:hover,
+    .kanban-stage-chip:focus-visible {
+      outline: 2px solid rgba(47, 111, 139, 0.22);
+      outline-offset: 2px;
     }
 
     .kanban-stage-row {
@@ -415,6 +508,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-family: inherit;
     }
 
     .kanban-stage-chip.running,
@@ -1204,6 +1298,15 @@
         grid-template-columns: 1fr;
       }
 
+      .workflow-picker,
+      .topbar-field,
+      .topbar-field select,
+      .topbar-field.chain select,
+      .current-chain-label {
+        width: 100%;
+        max-width: 100%;
+      }
+
       .summary-grid {
         grid-template-columns: 1fr;
       }
@@ -1244,6 +1347,21 @@
         <p class="subtitle">Планирование, подтверждение и локальный прогон демо-проекта через dispatcher.</p>
       </div>
       <div class="topbar-actions">
+        <div class="workflow-picker" aria-label="Выбор исполнительной цепочки">
+          <label class="topbar-field" for="plan-mode">
+            Режим
+            <select id="plan-mode">
+              <option value="real" selected>Основной</option>
+              <option value="dry-run">Dry-run smoke</option>
+            </select>
+          </label>
+          <label class="topbar-field chain" for="run-chain-preset">
+            Чейн
+            <select id="run-chain-preset"></select>
+          </label>
+          <button id="select-chain-button" class="btn-primary mini-button" type="button">Выбрать!</button>
+          <span id="current-chain-label" class="current-chain-label">Текущий чейн: -</span>
+        </div>
         <button id="agents-builder-button" class="btn-secondary" type="button">Настройка агентов</button>
         <div class="status-pill" aria-live="polite">
           <span id="status-dot" class="dot"></span>
@@ -1297,7 +1415,10 @@
       <div id="runs-board" class="runs-board">
         <div id="live-runs-list" class="kanban-board" aria-label="Live run Kanban"></div>
         <button id="runs-board-resize-handle" class="runs-board-resize-handle" type="button" aria-label="Resize Kanban window"></button>
-        <div id="live-runs-empty" class="empty runs-empty" hidden>No daemon runs yet.</div>
+      </div>
+      <div id="symphony-daemon-board" class="daemon-board" aria-label="Symphony daemon state">
+        <div id="symphony-daemon-list" class="daemon-card-list"></div>
+        <div id="live-runs-empty" class="empty runs-empty">No daemon runs yet.</div>
       </div>
     </section>
 
@@ -1310,22 +1431,6 @@
           <div class="field">
             <label for="task">Команда</label>
             <textarea id="task" spellcheck="false">оркестратор план Сделай калькулятор</textarea>
-          </div>
-          <div class="field">
-            <label for="plan-mode">Plan preview mode</label>
-            <select id="plan-mode">
-              <option value="real" selected>Real planner</option>
-              <option value="dry-run">Dry-run smoke</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="run-chain-preset">Исполнительная цепочка</label>
-            <select id="run-chain-preset"></select>
-          </div>
-
-          <div class="controls">
-            <button id="plan-button" class="btn-primary" type="submit">План</button>
-            <button id="core-button" class="btn-secondary" type="button">Core run</button>
           </div>
 
           <div class="run-controls">
@@ -1405,6 +1510,7 @@
   <script>
     const RUN_REVIEW_DECISIONS_STORAGE_KEY = "mini-orchestrator-run-review-decisions-v1";
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
+    const RUN_CHAIN_SELECTION_STORAGE_KEY = "mini-orchestrator-run-chain-selection-v1";
     const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
     const LIVE_RUNS_SOURCE_MODE_STORAGE_KEY = "mini-orchestrator-live-runs-source-mode-v1";
     const LIVE_RUNS_SOURCE_MODES = new Set(["dispatcher", "symphony", "combined"]);
@@ -1423,12 +1529,13 @@
     const runsDone = document.querySelector("#runs-done");
     const runsTotal = document.querySelector("#runs-total");
     const liveRunsList = document.querySelector("#live-runs-list");
+    const symphonyDaemonList = document.querySelector("#symphony-daemon-list");
     const liveRunsEmpty = document.querySelector("#live-runs-empty");
     const taskInput = document.querySelector("#task");
     const planMode = document.querySelector("#plan-mode");
     const runChainPreset = document.querySelector("#run-chain-preset");
-    const planButton = document.querySelector("#plan-button");
-    const coreButton = document.querySelector("#core-button");
+    const selectChainButton = document.querySelector("#select-chain-button");
+    const currentChainLabel = document.querySelector("#current-chain-label");
     const runButton = document.querySelector("#run-button");
     const approval = document.querySelector("#approval");
     const message = document.querySelector("#message");
@@ -1453,11 +1560,11 @@
     let lastPlanTask = "";
     let busy = false;
     let runReviewDecisions = loadRunReviewDecisions();
+    let selectedRunChainConfig = loadRunChainSelection();
 
     function setBusy(nextBusy, label = "Работаю") {
       busy = nextBusy;
-      planButton.disabled = busy;
-      coreButton.disabled = busy;
+      selectChainButton.disabled = busy;
       runButton.disabled = busy || !approval.checked || !lastPlanTask;
       statusDot.className = `dot ${busy ? "busy" : ""}`;
       statusText.textContent = busy ? label : "Готов";
@@ -1645,7 +1752,12 @@
         if (Array.isArray(parsed)) {
           for (const item of parsed) {
             const preset = normalizeChainPreset(item);
-            if (preset && preset.id !== DEFAULT_CHAIN_PRESET_ID) {
+            if (!preset) {
+              continue;
+            }
+            if (preset.id === DEFAULT_CHAIN_PRESET_ID) {
+              presets[0] = preset;
+            } else {
               presets.push(preset);
             }
           }
@@ -1656,19 +1768,79 @@
       return presets;
     }
 
+    function normalizePlanMode(value) {
+      return value === "dry-run" ? "dry-run" : "real";
+    }
+
+    function loadRunChainSelection() {
+      try {
+        const raw = localStorage.getItem(RUN_CHAIN_SELECTION_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return {
+          planMode: normalizePlanMode(parsed?.planMode),
+          chainPresetId: String(parsed?.chainPresetId || DEFAULT_CHAIN_PRESET_ID),
+        };
+      } catch (_error) {
+        return { planMode: "real", chainPresetId: DEFAULT_CHAIN_PRESET_ID };
+      }
+    }
+
+    function saveRunChainSelection() {
+      try {
+        localStorage.setItem(RUN_CHAIN_SELECTION_STORAGE_KEY, JSON.stringify(selectedRunChainConfig));
+      } catch (_error) {
+        // The visible picker still reflects the current in-memory selection.
+      }
+    }
+
+    function selectedPlanMode() {
+      return normalizePlanMode(selectedRunChainConfig.planMode);
+    }
+
     function renderRunChainPresetSelect() {
       const presets = loadChainPresets();
+      const selectedId = presets.some((preset) => preset.id === selectedRunChainConfig.chainPresetId)
+        ? selectedRunChainConfig.chainPresetId
+        : presets[0]?.id || DEFAULT_CHAIN_PRESET_ID;
+      selectedRunChainConfig = {
+        planMode: normalizePlanMode(selectedRunChainConfig.planMode),
+        chainPresetId: selectedId,
+      };
+      planMode.value = selectedRunChainConfig.planMode;
       runChainPreset.replaceChildren(...presets.map((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
         option.textContent = preset.name;
+        option.selected = preset.id === selectedId;
         return option;
       }));
+      updateCurrentChainLabel();
     }
 
     function selectedRunChainPreset() {
       const presets = loadChainPresets();
-      return presets.find((preset) => preset.id === runChainPreset.value) || presets[0] || defaultChainPreset();
+      return presets.find((preset) => preset.id === selectedRunChainConfig.chainPresetId) || presets[0] || defaultChainPreset();
+    }
+
+    function updateCurrentChainLabel() {
+      const chainPreset = selectedRunChainPreset();
+      currentChainLabel.textContent = `Текущий чейн: ${chainPreset.name}`;
+      currentChainLabel.title = `Текущий чейн: ${chainPreset.name}`;
+    }
+
+    function selectCurrentRunChain() {
+      const presets = loadChainPresets();
+      const selectedId = presets.some((preset) => preset.id === runChainPreset.value)
+        ? runChainPreset.value
+        : presets[0]?.id || DEFAULT_CHAIN_PRESET_ID;
+      selectedRunChainConfig = {
+        planMode: normalizePlanMode(planMode.value),
+        chainPresetId: selectedId,
+      };
+      saveRunChainSelection();
+      renderRunChainPresetSelect();
+      const chainPreset = selectedRunChainPreset();
+      setMessage(`Выбран текущий чейн: ${chainPreset.name}`, "ok");
     }
 
     function runStatusClass(status) {
@@ -1731,6 +1903,11 @@
 
     function runSourceClass(run) {
       return runStatusClass(run.sourceKey || run.sourceLabel || "dispatcher");
+    }
+
+    function isSymphonyDaemonRun(run) {
+      return run.sourceKey === "symphony"
+        && (String(run.mode || "").startsWith("symphony-daemon") || Boolean(run.daemonSnapshot));
     }
 
     function stageStatusLabel(status) {
@@ -1817,10 +1994,16 @@
           return stageAgent === agentRole || stageLabel === runStatusClass(agentName);
         });
         return {
-          agent: agentName,
+          agent: agent.id || agentName,
           label: agentName,
           status: matched?.status || "pending",
           statusLabel: matched?.statusLabel || stageStatusLabel(matched?.status || "pending"),
+          model: matched?.model || agent.llm || "",
+          threadId: matched?.threadId || "",
+          turnCount: matched?.turnCount || 0,
+          tokens: matched?.tokens || 0,
+          lastEvent: matched?.lastEvent || "",
+          output: matched?.output || "",
         };
       });
     }
@@ -2050,6 +2233,9 @@
       if (status === "failed") {
         return "human_review";
       }
+      if (status === "idle") {
+        return "backlog";
+      }
 
       const activeStage = stages.find((stage) => {
         const stageStatus = runStatusClass(stage.status);
@@ -2069,6 +2255,24 @@
         return "backlog";
       }
       return "in_progress";
+    }
+
+    function findAgentConfig(run, stage) {
+      const agents = run.chainPreset?.flow?.agents;
+      if (!Array.isArray(agents) || !stage) {
+        return {};
+      }
+      const stageAgent = runStatusClass(stage.agent || "");
+      const stageLabel = runStatusClass(stage.label || "");
+      return agents.find((agent) => {
+        const names = [
+          agent.id,
+          agent.name,
+          agent.role,
+          agent.preset,
+        ].map((value) => runStatusClass(value || ""));
+        return names.includes(stageAgent) || names.includes(stageLabel);
+      }) || {};
     }
 
     function detailValue(value) {
@@ -2164,6 +2368,48 @@
       runDetailsClose.focus();
     }
 
+    function openAgentDetails(run, profile, stage) {
+      const stages = stagesForRun(run, profile);
+      const selectedStage = stage || stages.find((item) => {
+        const status = runStatusClass(item.status);
+        return status === "running" || status === "waiting_approval" || status === "planning" || status === "queued";
+      }) || stages[0] || {};
+      const agentConfig = findAgentConfig(run, selectedStage);
+      const detailPayload = {
+        selectedStage,
+        agentConfig,
+        run,
+        profile,
+      };
+      runDetailsTitle.textContent = selectedStage.label || selectedStage.agent || currentAgentLabel(run, profile) || "Agent";
+      runDetailsSubtitle.textContent = `${run.runId || "-"} / ${runSourceLabel(run)}`;
+      runDetailsBody.replaceChildren(
+        runDetailsSection("Agent", [
+          ["Agent", selectedStage.agent || "-"],
+          ["Label", selectedStage.label || "-"],
+          ["Status", selectedStage.status || run.status || "unknown"],
+          ["Model", selectedStage.model || profile.model || agentConfig.llm || "-"],
+          ["Thread/session", selectedStage.threadId || run.thread?.threadId || "-"],
+          ["Turn count", selectedStage.turnCount ?? run.thread?.turnCount ?? 0],
+          ["Tokens", selectedStage.tokens ?? run.tokens?.total ?? 0],
+          ["Last event", selectedStage.lastEvent || run.lastEvent || "-"],
+        ]),
+        runDetailsSection("Run", [
+          ["Task", run.task?.title || run.task?.taskId || "-"],
+          ["Current agent", currentAgentLabel(run, profile) || "-"],
+          ["Source", runSourceLabel(run)],
+          ["Mode", run.mode || "-"],
+          ["Workspace", run.workspacePath || "-"],
+        ]),
+        runDetailsJson("Output", selectedStage.output || run.outputs || {}),
+        runDetailsJson("Agent config", agentConfig),
+        runDetailsJson("Chain", run.chainPreset || {}),
+        runDetailsJson("Full payload", detailPayload),
+      );
+      runDetailsBackdrop.hidden = false;
+      runDetailsClose.focus();
+    }
+
     function closeRunDetails() {
       runDetailsBackdrop.hidden = true;
       runDetailsBody.replaceChildren();
@@ -2198,18 +2444,24 @@
       current.className = "kanban-current-agent";
       const currentLabel = currentAgentLabel(run, profile);
       current.append(document.createTextNode("Current: "));
-      const currentName = document.createElement("span");
+      const currentName = document.createElement("button");
+      currentName.className = "kanban-agent-button";
+      currentName.type = "button";
       currentName.textContent = currentLabel || "-";
+      currentName.title = "Open current agent details";
+      currentName.addEventListener("click", () => openAgentDetails(run, profile));
       current.append(currentName);
 
       const stageRow = document.createElement("div");
       stageRow.className = "kanban-stage-row";
       for (const stage of configuredChainStagesForRun(run, profile)) {
         const chipStatus = runStatusClass(stage.status || "pending");
-        const chip = document.createElement("span");
+        const chip = document.createElement("button");
+        chip.type = "button";
         chip.className = `kanban-stage-chip ${chipStatus}`;
         chip.title = `${stage.label || stage.agent || "Worker"}: ${stage.statusLabel || stageStatusLabel(stage.status)}`;
         chip.textContent = stage.label || stage.agent || "Worker";
+        chip.addEventListener("click", () => openAgentDetails(run, profile, stage));
         stageRow.append(chip);
       }
 
@@ -2259,6 +2511,12 @@
       return article;
     }
 
+    function renderDaemonRunCard(run, profile) {
+      const card = renderKanbanRunCard(run, profile);
+      card.classList.add("daemon-card");
+      return card;
+    }
+
     function liveRunsSourceText(payload) {
       const label = payload.sourceLabel || payload.sourceMode || payload.source || "unknown";
       const generated = payload.generatedAt ? ` - ${payload.generatedAt}` : "";
@@ -2276,6 +2534,8 @@
       const kanbanScrollState = captureKanbanScrollState();
       const summary = payload.summary || {};
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
+      const taskRuns = runs.filter((run) => !isSymphonyDaemonRun(run));
+      const daemonRuns = runs.filter(isSymphonyDaemonRun);
       const profiles = payload.profiles || {};
       runsActive.textContent = textOf(summary.active);
       runsBlocked.textContent = textOf(summary.blocked);
@@ -2287,8 +2547,9 @@
       liveRunsStatus.textContent = symphonyModeError ? "Error" : (runs.length ? "Ready" : "Empty");
 
       liveRunsList.innerHTML = "";
+      symphonyDaemonList.innerHTML = "";
       const columnRuns = Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, []]));
-      for (const run of runs) {
+      for (const run of taskRuns) {
         const profile = profiles[run.profileSnapshotId] || {};
         const columnId = runKanbanColumnId(run, profile);
         columnRuns[columnId].push({ run, profile });
@@ -2323,11 +2584,17 @@
         liveRunsList.append(section);
       }
 
-      liveRunsList.hidden = runs.length === 0;
-      liveRunsEmpty.hidden = runs.length > 0;
+      for (const run of daemonRuns) {
+        const profile = profiles[run.profileSnapshotId] || {};
+        symphonyDaemonList.append(renderDaemonRunCard(run, profile));
+      }
+
+      liveRunsList.hidden = false;
+      symphonyDaemonList.hidden = daemonRuns.length === 0;
       liveRunsEmpty.textContent = symphonyModeError
         ? `Symphony unavailable: ${payload.daemonError}`
         : "No daemon runs yet.";
+      liveRunsEmpty.hidden = daemonRuns.length > 0 && !symphonyModeError;
       restoreKanbanScrollState(kanbanScrollState);
       window.requestAnimationFrame(() => restoreKanbanScrollState(kanbanScrollState));
     }
@@ -2418,7 +2685,7 @@
       setBusy(true, "Планирую");
       setMessage("Запрашиваю план...");
       try {
-        const payload = await postJson("/api/dispatcher/plan", { task, mode: planMode.value });
+        const payload = await postJson("/api/dispatcher/plan", { task, mode: selectedPlanMode() });
         lastPlanTask = task;
         approval.checked = false;
         renderPayload(payload);
@@ -2442,39 +2709,17 @@
       const chainPreset = selectedRunChainPreset();
       setMessage(`Выполняю approved workflow через цепочку: ${chainPreset.name}`);
       try {
-        const payload = await postJson("/api/dispatcher/run", {
+        const payload = await postJson((liveRunsSourceMode?.value || loadLiveRunsSourceMode()) === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run", {
           task: lastPlanTask,
           approved: true,
-          background: true,
-          mode: planMode.value,
+          background: (liveRunsSourceMode?.value || loadLiveRunsSourceMode()) !== "symphony",
+          mode: selectedPlanMode(),
           chainPreset,
         });
         renderPayload(payload);
         activeTab("tech");
         await loadLiveRuns();
-        setMessage("Workflow started. Watch Live Runs for agent progress.", "ok");
-      } catch (error) {
-        statusDot.className = "dot error";
-        setMessage(error.message, "error");
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    async function runCoreOrchestrator() {
-      const goal = taskInput.value.trim();
-      if (!goal) {
-        setMessage("Введите задачу.", "error");
-        return;
-      }
-
-      setBusy(true, "Выполняю");
-      setMessage("Запускаю core orchestrator...");
-      try {
-        const payload = await postJson("/api/run", { goal });
-        renderPayload(payload);
-        activeTab("json");
-        setMessage("Core run завершен.", payload.status === "done" ? "ok" : "");
+        setMessage("Workflow accepted. Watch Live Runs for agent progress, Symphony state, or intake status.", "ok");
       } catch (error) {
         statusDot.className = "dot error";
         setMessage(error.message, "error");
@@ -2492,8 +2737,8 @@
     agentsBuilderButton.addEventListener("click", () => {
       window.open("/agents-builder", "mini-orchestrator-agents-builder");
     });
+    selectChainButton.addEventListener("click", selectCurrentRunChain);
     runButton.addEventListener("click", runApprovedWorkflow);
-    coreButton.addEventListener("click", runCoreOrchestrator);
     runDetailsClose.addEventListener("click", closeRunDetails);
     runDetailsBackdrop.addEventListener("click", (event) => {
       if (event.target === runDetailsBackdrop) {

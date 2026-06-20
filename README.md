@@ -181,10 +181,12 @@ gone or the log has not updated past
 `MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS` (default 15 minutes). Stale
 runs leave the active count and appear in Human Review with the stale reason.
 
-`POST /api/symphony/runs` is intentionally a blocker endpoint for now. It
-validates approved task-run payloads and returns `symphony-intake-missing` until
-Symphony exposes a documented config-service-resolved task-intake contract.
-The supported Symphony bridge operations are observability/control only:
+`POST /api/symphony/runs` is a local Symphony gateway endpoint. It requires
+approved task-run payloads, checks that Symphony observability is live, records
+the selected chain preset, and returns a visible gateway run with
+`symphony-intake-missing` while upstream Symphony still lacks a documented
+config-service-resolved task-intake contract. The supported upstream Symphony
+operations remain observability/control only:
 `GET /api/daemon/runs?source=symphony`, `POST /api/symphony/refresh`, and
 `GET /api/symphony/issues/{issueIdentifier}`.
 

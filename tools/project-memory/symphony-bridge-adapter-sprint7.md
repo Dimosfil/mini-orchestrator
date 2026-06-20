@@ -60,13 +60,16 @@ The default freshness window is 15 minutes. Stale runs move out of active counts
 and into Human Review in the dashboard, with the stale reason visible on the
 card.
 
-## Symphony Intake Blocker
+## Symphony Gateway And Intake Blocker
 
-`POST /api/symphony/runs` validates approved task-run payloads and returns:
+`POST /api/symphony/runs` validates approved task-run payloads, requires live
+Symphony observability, records the selected chain preset in a local gateway run
+card, and returns:
 
 - `status: blocked`
-- `code: symphony-intake-missing`
-- `accepted: false`
+- `mode: symphony-gateway`
+- `lastError: symphony-intake-missing`
+- selected `chainPreset` and per-stage placeholders
 
 The endpoint exists so UI and agents can call one stable local route, but the
 route must not mutate Symphony until config-service resolves a Symphony record
