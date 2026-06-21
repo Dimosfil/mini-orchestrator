@@ -28,6 +28,31 @@ Split durable knowledge by meaning instead of one giant file. Use feature
 specs, business-rule docs, data-model docs, integration contracts, and
 architecture migration history as needed.
 
+Recommended specification structure:
+
+```text
+tools/project-memory/
+  architecture-migrations.md
+  specs/
+    technology-stack.md
+    product-overview.md
+    glossary.md
+    features/
+    business-rules/
+    data-model/
+    integration-contracts/
+      connected-projects.md
+```
+
+Keep the current stack inventory in:
+
+```text
+tools/project-memory/specs/technology-stack.md
+```
+
+Update it when languages, runtimes, frameworks, package managers, build/test
+tools, storage engines, services, or deployment targets materially change.
+
 ## Reusable Experience For GI
 
 When this project reveals a reusable workflow, failure pattern, token-saving

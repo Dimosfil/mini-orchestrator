@@ -180,6 +180,21 @@ and current implementation map. Write them so another agent could rebuild the
 project on a different language, platform, or framework and preserve the same
 behavior. Split specifications by meaning instead of one giant file. Keep major
 rewrites in `tools/project-memory/architecture-migrations.md`.
+Keep a current technology stack inventory in
+`tools/project-memory/specs/technology-stack.md`. Record verified languages,
+runtimes, frameworks, package managers, build and test tools, storage,
+services, deployment targets, commands, evidence paths, and open verification
+gaps. Update it when stack components are added, removed, upgraded, replaced,
+or materially reconfigured. Follow
+`patterns/TECHNOLOGY_STACK_INVENTORY.md`.
+After any meaningful implementation, refactor, migration, or configuration
+cleanup batch, verify the batch at the right abstraction level. Check touched
+layers for duplicated defaults, policies, workflows, contracts, or
+interpretation rules; keep one authoritative source where possible; update
+durable project-memory specs when behavior or architecture changes; inspect the
+changed-file list for unrelated edits or generated noise; and separate
+harmless line-ending warnings from real whitespace errors in `git diff --check`.
+Follow `patterns/COHERENT_BATCH_VERIFICATION.md`.
 
 Keep GI agent-runtime neutral. These instructions are for any compatible AI
 agent or assistant, not only Codex. Mention Codex only when a rule is about a

@@ -55,6 +55,13 @@
   architecture work, update the relevant project-memory specification in the
   same scoped change so behavior can be rebuilt on another language, framework,
   or platform. A handoff summary is not a substitute.
+- After any meaningful implementation, refactor, migration, or configuration
+  cleanup batch, verify that every touched layer uses the intended
+  source-of-truth for changed defaults, policies, workflows, contracts, or
+  interpretation rules. Check backend, frontend, tests, docs, generated
+  examples, build metadata, and project-memory specs as relevant; keep unrelated
+  files and generated noise out of the batch; and distinguish harmless
+  line-ending warnings from real `git diff --check` whitespace errors.
 
 ## Git
 
