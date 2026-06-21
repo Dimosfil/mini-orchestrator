@@ -368,7 +368,7 @@ def _stage(entry: Dict[str, Any], status: str) -> Dict[str, Any]:
         "status": status,
         "statusLabel": status.replace("_", " ").title(),
         "startedAt": entry.get("started_at") or entry.get("blocked_at") or entry.get("due_at"),
-        "completedAt": None,
+        "completedAt": entry.get("completed_at") if status == "done" else None,
         "threadId": entry.get("session_id"),
         "turnCount": _int(entry.get("turn_count")),
         "model": None,
@@ -389,6 +389,7 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
     )
     updated_at = (
         _text(entry.get("last_event_at"))
+        or _text(entry.get("completed_at"))
         or _text(entry.get("blocked_at"))
         or _text(entry.get("due_at"))
         or _text(entry.get("started_at"))
@@ -526,8 +527,8 @@ def build_symphony_live_runs(state: Dict[str, Any], state_url: str) -> Dict[str,
     generated_at = _text(state.get("generated_at")) or _utc_now()
     runs: list[Dict[str, Any]] = []
 
-    for status in ("running", "retrying", "blocked"):
-        entries = state.get(status)
+    for bucket, status in (("running", "running"), ("retrying", "retrying"), ("blocked", "blocked"), ("completed", "done")):
+        entries = state.get(bucket)
         if not isinstance(entries, list):
             entries = []
         for entry in entries:

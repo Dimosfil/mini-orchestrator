@@ -72,13 +72,16 @@ resume old work, call task managers, mutate files, or execute the listed
 commands unless the user asks for a specific command next.
 
 Treat `оркестратор <task>` and `orchestrator <task>` as project-local
-mini-orchestrator chat commands. For early tests, run the Codex dispatcher full
-chain in dry-run mode unless the user explicitly asks to launch a real Codex
-worker:
-`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain --dry-run`.
-If the user explicitly asks for a real approved workflow, run the release
-dispatcher chain through Codex app-server:
-`python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain`.
+mini-orchestrator chat commands and real orchestration requests by default. Do
+not use dry-run unless the user explicitly asks for parser/log smoke testing.
+When the web UI/dashboard has a selected execution mode or saved chain preset,
+honor that product workflow through Mini Orchestrator's documented API instead
+of bypassing it with an unrelated low-level CLI dispatcher run. If the selected
+mode is Symphony, submit through `POST /api/symphony/runs` with `approved=true`
+and the saved selected chain preset. If the selected mode is Dispatcher, submit
+through the approved dispatcher workflow or release dispatcher chain with the
+saved chain preset. Mini Orchestrator is the product; generated apps such as a
+CRM are workload artifacts for testing the orchestrator, not the project goal.
 For chat-gated plan commands, first return only the planner proposal in chat:
 `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --plan-only`.
 Do not create files from that plan until the user explicitly approves it. After

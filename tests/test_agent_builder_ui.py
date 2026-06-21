@@ -245,16 +245,36 @@ def test_dashboard_splits_task_cards_from_symphony_daemon_cards() -> None:
 
     assert 'id="symphony-daemon-board"' in html
     assert 'id="symphony-daemon-list"' in html
+    assert 'id="symphony-monitor-count"' in html
     assert 'id="workflow-log-panel"' in html
     assert "function renderWorkflowLog(run, profile)" in html
     assert "function renderDaemonHealthCard(run, profile)" in html
+    assert "function renderSymphonyWorkerMonitor(run, profile)" in html
     assert "function isSymphonyDaemonRun(run)" in html
-    assert "const taskRuns = runs.filter((run) => !isSymphonyDaemonRun(run));" in html
-    assert "const daemonRuns = runs.filter(isSymphonyDaemonRun);" in html
+    assert "function isSymphonyDaemonSummary(run)" in html
+    assert "function isSymphonyWorkerMonitorRun(run)" in html
+    assert "const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run));" in html
+    assert "const daemonSummaryRuns = runs.filter(isSymphonyDaemonSummary);" in html
+    assert "const daemonWorkerRuns = runs.filter(isSymphonyWorkerMonitorRun);" in html
+    assert "const daemonRuns = [...daemonWorkerRuns, ...daemonSummaryRuns];" in html
     assert "for (const run of taskRuns)" in html
-    assert "for (const run of daemonRuns)" in html
+    assert "for (const run of daemonWorkerRuns)" in html
+    assert "for (const run of daemonSummaryRuns)" in html
+    assert "symphonyDaemonList.append(renderSymphonyWorkerMonitor(run, profile));" in html
     assert "symphonyDaemonList.append(renderDaemonHealthCard(run, profile));" in html
     assert "symphonyDaemonList.append(renderDaemonRunCard(run, profile));" not in html
+
+
+def test_dashboard_is_framed_as_worknest_kanban_with_symphony_monitors() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "WorkNest Kanban" in html
+    assert "Tasks from WorkNest or project chat move through the selected agent chain here." in html
+    assert 'aria-label="WorkNest task Kanban"' in html
+    assert "Symphony monitors" in html
+    assert "Each observed Symphony worker copy gets its own monitor" in html
+    assert "No Symphony worker monitors yet." in html
 
 
 def test_dashboard_live_runs_skips_unchanged_refresh_rerenders() -> None:

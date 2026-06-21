@@ -72,27 +72,49 @@ flowchart TD
         SY6{"Intake endpoint documented?"}
         SY7["POST endpoints.taskIntake / agentIntake / intake"]
         SY8["Visible blocked gateway run"]
+        SY9["Poll state completed[] and GET /api/v1/{issue_identifier}"]
+        SY10["Normalize completed Symphony issue as Done/Review result"]
     end
 
     SY0 --> SY1 --> SY2 --> SY3
     SY3 --> P
     SF --> SY4 --> SY5 --> SY6
-    SY6 -- "Yes" --> SY7 --> P
+    SY6 -- "Yes" --> SY7 --> SY9 --> SY10 --> P
     SY6 -- "No" --> SY8 --> P
 ```
 
 ## Current responsibilities
 
+- Mini Orchestrator is the product being built and evaluated. Generated apps
+  such as CRM or dental CRM are workload/test artifacts used to exercise the
+  orchestrator's planning, execution, validation, Kanban, and Symphony
+  observability loop; they must not become the project identity or replace the
+  orchestration dashboard goal.
 - Dispatcher executes approved tasks through the selected chain preset.
 - Symphony mode converts the selected preset into one `agentTasks[]` item per
   configured preset agent and submits it only through a documented intake
   endpoint.
+- Symphony completed Mini-origin issues must remain queryable after worker exit.
+  The daemon snapshot exposes retained results in `completed[]`, and Mini uses
+  `GET /api/v1/{issue_identifier}` as the documented issue-result endpoint.
+  Mini normalizes these retained results as `done` Live Runs instead of dropping
+  them when `running[]`, `retrying[]`, and `blocked[]` become empty.
 - `Planner -> Executor -> Reviewer` is the default example, not a fixed
   workflow.
 - A preset may contain any approved number of configured agents/stages.
 - Agent models and behavior come from saved card/chain presets.
 - Mini Orchestrator keeps one visible task card while a chain is running.
+- The web dashboard presents the main task surface as a WorkNest/chat Kanban:
+  incoming or approved tasks move through backlog/ready, agent work, human
+  review, and done states from normalized run records.
+- Symphony worker activity is duplicated into a separate monitor area below the
+  Kanban. Each observed `symphony-daemon` worker copy gets a monitor card, and
+  the `symphony-daemon-summary` record stays there as health context. These
+  monitors are observability only; they do not replace WorkNest as source of
+  truth or terminal completion sink.
 - SQLite stores runtime state except generated runnable artifacts.
 - `test-runs/` stores generated release/demo artifacts.
-- Symphony must be running and visible, but currently provides read-only
-  daemon observability, not task execution.
+- Symphony must be running and visible before Symphony-mode tasks start. When
+  its contract exposes intake and issue-result endpoints, Mini may submit the
+  selected preset payload and poll until the Symphony result is `done`,
+  `blocked`, `failed`, or timed out.

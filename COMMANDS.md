@@ -34,5 +34,6 @@
 - `оркестратор ревью <task>` / `orchestrator review <task>`: start with a
   reviewer-directed task, then continue through the full chain.
 
-For early chat tests, use dispatcher `--chain --dry-run` mode unless the user
-explicitly asks to launch a real Codex worker.
+Chat `orchestrator` / `оркестратор` requests are real orchestration requests by
+default. Use `--dry-run` only when the user explicitly asks for parser/log smoke
+testing.

@@ -313,7 +313,7 @@
     }
 
     .daemon-board {
-      min-height: 92px;
+      min-height: 128px;
       border: 1px dashed var(--line-strong);
       border-radius: 8px;
       background: #fbfcfd;
@@ -322,9 +322,45 @@
       margin-top: 10px;
     }
 
+    .daemon-board-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .daemon-board-title {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .daemon-board-subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .daemon-monitor-count {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
     .daemon-card-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 8px;
       align-content: start;
     }
@@ -1607,8 +1643,8 @@
     <section class="live-runs-section" aria-labelledby="live-runs-title">
       <div class="section-header">
         <div>
-          <h2 id="live-runs-title" class="section-title">Live Runs</h2>
-          <p id="live-runs-source" class="subtitle">Loading daemon run state...</p>
+          <h2 id="live-runs-title" class="section-title">WorkNest Kanban</h2>
+          <p id="live-runs-source" class="subtitle">Tasks from WorkNest or project chat move through the selected agent chain here.</p>
         </div>
         <div class="section-actions">
           <label class="source-selector" for="live-runs-source-mode">
@@ -1629,11 +1665,11 @@
 
       <div class="runs-overview" aria-label="Run summary">
         <div class="run-stat">
-          <div class="run-stat-label">Active</div>
+          <div class="run-stat-label">Agent work</div>
           <div id="runs-active" class="run-stat-value">-</div>
         </div>
         <div class="run-stat">
-          <div class="run-stat-label">Blocked</div>
+          <div class="run-stat-label">Review / blocked</div>
           <div id="runs-blocked" class="run-stat-value">-</div>
         </div>
         <div class="run-stat">
@@ -1641,13 +1677,13 @@
           <div id="runs-done" class="run-stat-value">-</div>
         </div>
         <div class="run-stat">
-          <div class="run-stat-label">Total</div>
+          <div class="run-stat-label">Cards</div>
           <div id="runs-total" class="run-stat-value">-</div>
         </div>
       </div>
 
       <div id="runs-board" class="runs-board">
-        <div id="live-runs-list" class="kanban-board" aria-label="Live run Kanban"></div>
+        <div id="live-runs-list" class="kanban-board" aria-label="WorkNest task Kanban"></div>
         <button id="runs-board-resize-handle" class="runs-board-resize-handle" type="button" aria-label="Resize Kanban window"></button>
       </div>
       <section id="workflow-log-panel" class="workflow-log-panel" aria-labelledby="workflow-log-title">
@@ -1659,7 +1695,14 @@
           <div class="workflow-log-empty">Запуск и стадии появятся здесь.</div>
         </div>
       </section>
-      <div id="symphony-daemon-board" class="daemon-board" aria-label="Symphony daemon state">
+      <div id="symphony-daemon-board" class="daemon-board" aria-label="Symphony worker monitors">
+        <div class="daemon-board-head">
+          <div>
+            <h3 class="daemon-board-title">Symphony monitors</h3>
+            <p class="daemon-board-subtitle">Each observed Symphony worker copy gets its own monitor; the daemon snapshot stays here as health context.</p>
+          </div>
+          <span id="symphony-monitor-count" class="daemon-monitor-count">0 monitors</span>
+        </div>
         <div id="symphony-daemon-list" class="daemon-card-list"></div>
         <div id="live-runs-empty" class="empty runs-empty">No daemon runs yet.</div>
       </div>
@@ -1776,6 +1819,7 @@
     const runsTotal = document.querySelector("#runs-total");
     const liveRunsList = document.querySelector("#live-runs-list");
     const symphonyDaemonList = document.querySelector("#symphony-daemon-list");
+    const symphonyMonitorCount = document.querySelector("#symphony-monitor-count");
     const liveRunsEmpty = document.querySelector("#live-runs-empty");
     const workflowLogTitle = document.querySelector("#workflow-log-title");
     const workflowLogMeta = document.querySelector("#workflow-log-meta");
@@ -2255,6 +2299,17 @@
         && (String(run.mode || "").startsWith("symphony-daemon") || Boolean(run.daemonSnapshot));
     }
 
+    function isSymphonyDaemonSummary(run) {
+      return run.sourceKey === "symphony"
+        && (run.mode === "symphony-daemon-summary" || Boolean(run.daemonSnapshot));
+    }
+
+    function isSymphonyWorkerMonitorRun(run) {
+      return run.sourceKey === "symphony"
+        && String(run.mode || "") === "symphony-daemon"
+        && !isSymphonyDaemonSummary(run);
+    }
+
     function isActiveRunStatus(status) {
       return ["queued", "planning", "running", "waiting_approval", "retrying"].includes(runStatusClass(status));
     }
@@ -2355,6 +2410,45 @@
       meta.className = "daemon-health-meta";
       meta.textContent = run.lastEvent || run.task?.summary || "Daemon observability status only.";
       card.append(head, counts, meta);
+      return card;
+    }
+
+    function renderSymphonyWorkerMonitor(run, profile) {
+      const card = document.createElement("article");
+      card.className = "daemon-health-card";
+      const head = document.createElement("div");
+      head.className = "daemon-health-head";
+      const title = document.createElement("h3");
+      title.className = "daemon-health-title";
+      title.textContent = run.currentAgent || runDisplayTitle(run, profile) || "Symphony worker";
+      const badge = document.createElement("span");
+      badge.className = `run-status ${runStatusClass(run.status)}`;
+      badge.textContent = run.status || "unknown";
+      head.append(title, badge);
+
+      const counts = document.createElement("div");
+      counts.className = "daemon-health-counts";
+      for (const [label, value] of [
+        ["task", run.runId || run.task?.taskId || "-"],
+        ["turns", run.thread?.turnCount ?? 0],
+        ["tokens", run.tokens?.total ?? 0],
+      ]) {
+        const item = document.createElement("span");
+        item.textContent = `${label}=${value}`;
+        counts.append(item);
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "daemon-health-meta";
+      meta.textContent = run.lastError || run.lastEvent || run.task?.title || "Symphony worker activity.";
+
+      const detailsButton = document.createElement("button");
+      detailsButton.className = "btn-secondary kanban-details-button";
+      detailsButton.type = "button";
+      detailsButton.textContent = "Monitor details";
+      detailsButton.addEventListener("click", () => openAgentDetails(run, profile));
+
+      card.append(head, counts, meta, detailsButton);
       return card;
     }
 
@@ -3067,8 +3161,10 @@
       const kanbanScrollState = captureKanbanScrollState();
       const summary = payload.summary || {};
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
-      const taskRuns = runs.filter((run) => !isSymphonyDaemonRun(run));
-      const daemonRuns = runs.filter(isSymphonyDaemonRun);
+      const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run));
+      const daemonSummaryRuns = runs.filter(isSymphonyDaemonSummary);
+      const daemonWorkerRuns = runs.filter(isSymphonyWorkerMonitorRun);
+      const daemonRuns = [...daemonWorkerRuns, ...daemonSummaryRuns];
       const profiles = payload.profiles || {};
       const primaryRun = primaryWorkflowRun(taskRuns);
       const primaryProfile = primaryRun ? (profiles[primaryRun.profileSnapshotId] || {}) : {};
@@ -3119,17 +3215,24 @@
         liveRunsList.append(section);
       }
 
-      for (const run of daemonRuns) {
+      for (const run of daemonWorkerRuns) {
+        const profile = profiles[run.profileSnapshotId] || {};
+        symphonyDaemonList.append(renderSymphonyWorkerMonitor(run, profile));
+      }
+      for (const run of daemonSummaryRuns) {
         const profile = profiles[run.profileSnapshotId] || {};
         symphonyDaemonList.append(renderDaemonHealthCard(run, profile));
       }
       renderWorkflowLog(primaryRun, primaryProfile);
 
       liveRunsList.hidden = false;
+      if (symphonyMonitorCount) {
+        symphonyMonitorCount.textContent = `${daemonWorkerRuns.length} monitors`;
+      }
       symphonyDaemonList.hidden = daemonRuns.length === 0;
       liveRunsEmpty.textContent = symphonyModeError
         ? `Symphony unavailable: ${payload.daemonError}`
-        : "No daemon runs yet.";
+        : "No Symphony worker monitors yet.";
       liveRunsEmpty.hidden = daemonRuns.length > 0 && !symphonyModeError;
       restoreKanbanScrollState(kanbanScrollState);
       window.requestAnimationFrame(() => restoreKanbanScrollState(kanbanScrollState));

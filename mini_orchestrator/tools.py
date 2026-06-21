@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterator
 
 from .command_adapter import run_command_argv
 from .config import DEFAULT_ALLOWED_TOOLS, OrchestratorConfig
@@ -110,11 +110,7 @@ class ToolRuntime:
                 error="search path is outside allowed workspace roots",
             )
         hits = []
-        for candidate in sorted(root.rglob("*")):
-            if self._is_noisy_search_path(candidate):
-                continue
-            if not candidate.is_file():
-                continue
+        for candidate in self._iter_search_files(root):
             try:
                 content = candidate.read_text(encoding="utf-8", errors="ignore").lower()
             except UnicodeDecodeError:
@@ -127,6 +123,26 @@ class ToolRuntime:
                     break
         output = "\n".join(hits)
         return ToolResult(tool="search", success=True, output=output, metadata={"count": len(hits)})
+
+    def _iter_search_files(self, root: Path) -> Iterator[Path]:
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                entries = sorted(current.iterdir(), key=lambda path: path.name.casefold())
+            except OSError:
+                continue
+
+            directories: list[Path] = []
+            for entry in entries:
+                if self._is_noisy_search_path(entry):
+                    continue
+                if entry.is_dir():
+                    directories.append(entry)
+                elif entry.is_file():
+                    yield entry
+
+            stack.extend(reversed(directories))
 
     def _is_noisy_search_path(self, path: Path) -> bool:
         noisy_dirs = {

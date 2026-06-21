@@ -50,7 +50,8 @@ project scope, privacy rules, and explicit user request.
   `http://127.0.0.1:4000/api/v1/state`, API root
   `http://127.0.0.1:4000/api/v1`, contract
   `GET /agent/contract`, task intake `POST /api/v1/intake`, refresh
-  `POST /api/v1/refresh`, and issue details `GET /api/v1/{issue_identifier}`.
+  `POST /api/v1/refresh`, and issue result/details
+  `GET /api/v1/{issue_identifier}`.
   `MINI_ORCHESTRATOR_DAEMON_STATE_URL` remains an explicit manual state URL
   override.
 - Owner or source of truth: local reference workspace until a canonical source
@@ -58,23 +59,29 @@ project scope, privacy rules, and explicit user request.
 - Data/API contract: reference workspace plus observability/control runtime
   bridge for `GET /api/v1/state`, `POST /api/v1/refresh`, and
   `GET /api/v1/{issue_identifier}`. State snapshots provide `running`,
-  `retrying`, `blocked`, `codex_totals`, and `rate_limits` data. The local
-  Symphony checkout also exposes `GET /agent/contract` and accepts
+  `retrying`, `blocked`, `completed`, `codex_totals`, and `rate_limits` data.
+  Completed Mini-origin issues remain queryable after worker exit through the
+  issue-result endpoint. The local Symphony checkout also exposes
+  `GET /agent/contract` and accepts
   `mini-orchestrator.symphony-intake.v1` through `POST /api/v1/intake`, one
   synthetic Symphony issue per selected Mini Orchestrator preset agent.
 - Setup, sync, build, test, or update commands: for the approved local
   Symphony integration update, `cd D:\AI\symphony\elixir`, `mise exec -- mix
-  test test\symphony_elixir\external_intake_test.exs
-  test\symphony_elixir\extensions_test.exs`, `mise exec -- mix escript.build`.
+  test test\symphony_elixir\core_test.exs
+  test\symphony_elixir\external_intake_test.exs
+  test\symphony_elixir\extensions_test.exs
+  test\symphony_elixir\orchestrator_status_test.exs --timeout 30000`,
+  `mise exec -- mix escript.build`.
 - Version, branch, or update cadence: not recorded yet.
 - Privacy, secret, license, and access boundaries: agents may read and inspect
   this workspace for this project, but must not edit, delete, move, commit, or
   publish files there without a separate explicit user request.
 - Status and caveats: approved external reference workspace and active local
-  daemon integration for mini-orchestrator Kanban/Live Runs. As of 2026-06-20,
-  it also has a local task-intake adapter for Mini Orchestrator preset-agent
-  payloads. Linear polling still logs missing-token errors when no Linear token
-  is configured; Mini-origin intake can run independently of Linear polling.
+  daemon integration for mini-orchestrator Kanban/Live Runs. As of 2026-06-21,
+  it has a local task-intake adapter for Mini Orchestrator preset-agent
+  payloads and retained completed-result payloads. Linear polling still logs
+  missing-token errors when no Linear token is configured; Mini-origin intake
+  can run independently of Linear polling.
 - Reason this dependency still exists: supports Symphony-style orchestration
   research and design decisions for `mini-orchestrator`.
 

@@ -83,3 +83,41 @@
 - Конфигурируемый `orchestrator` с двумя моделями.
 - Поведенческая трассировка каждой итерации.
 - Минимальная пригодная версия, которую можно расширять на прод‑режим.
+
+## 8) Release Readiness Contract (v1.0)
+
+Цель: определить и зафиксировать минимально-необходимый релизный контракт.
+
+### Runtime contract
+- Install command: `python -m pip install -e .` (или `python -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -e .`).
+- Run command (CLI): `python -m mini_orchestrator "<request>"`.
+- UI command (opt-in): `python -m mini_orchestrator --ui`.
+- Smoke test command: `python -m mini_orchestrator "search AGENTS"`.
+- Health endpoints (если включён UI): `/health`, `/api/run`.
+- Build command: пока не определена; документировать как `No build pipeline yet` до появления.
+
+### Environment contract
+- Python runtime и зависимости должны устанавливаться в editable режиме.
+- `OPENAI_API_KEY` опционален; при его отсутствии система обязана работать в детерминированном fallback режиме.
+- `MINI_ORCHESTRATOR_LLM_PROVIDER` поддерживает значения: `auto|openai|rules|off`.
+- При включении LLM должны быть документированы и переопределяемы `MINI_ORCHESTRATOR_COORDINATOR_MODEL` и `MINI_ORCHESTRATOR_EXECUTOR_MODEL`.
+
+### Functional release criteria (MVP)
+- Единый путь выполнения: request -> parse -> plan -> execute -> validate -> final status.
+- Никакой запрос не должен застревать в `needs_routing_check` для поддерживаемых интентов.
+- Для неизвестных/неподдерживаемых запросов возвращается понятный `respond`.
+- UI отражает переход статусов и финальный статус задачи.
+- Ошибки зависимости от внешних служб (`config-service`, `Symphony`) должны быть явными.
+
+### Go/No-Go checklist
+- [ ] Проверены install + run команды на чистом окружении (или зафиксированы ограничения).
+- [ ] Все env-переменные и значения по умолчанию задокументированы в README/project memory.
+- [ ] Стабильное поведение и для `rules`, и для LLM-enabled fallback режима.
+- [ ] Health + smoke команды возвращают ожидаемые статусы.
+- [ ] Критичные сценарии релиза покрыты тестами/проверками.
+- [ ] Перед релизом git-изменения ограничены релизным scope и не раздуваются посторонним шумом.
+
+### Release done definition
+- [ ] Все позиции Go/No-Go выполнены.
+- [ ] Нет блокирующих рисков без workaround, зафиксированного в project memory.
+- [ ] Есть краткий release note с контрактом install/run/test/build и известными лимитами.

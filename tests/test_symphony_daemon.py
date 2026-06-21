@@ -78,14 +78,31 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
                     "blocked_at": "2026-06-18T20:52:00Z",
                 }
             ],
+            "completed": [
+                {
+                    "issue_id": "issue-4",
+                    "issue_identifier": "MT-4",
+                    "issue_url": "https://tracker.example/MT-4",
+                    "state": "Done",
+                    "workspace_path": "workspace/MT-4",
+                    "session_id": "thread-4",
+                    "turn_count": 1,
+                    "last_event": "turn_completed",
+                    "last_message": "turn completed (completed)",
+                    "started_at": "2026-06-18T20:53:00Z",
+                    "completed_at": "2026-06-18T20:54:00Z",
+                    "last_event_at": "2026-06-18T20:54:00Z",
+                    "tokens": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                }
+            ],
             "codex_totals": {"total_tokens": 120},
         },
         "http://127.0.0.1:4000/api/v1/state",
     )
 
     assert payload["source"] == "symphony-daemon"
-    assert payload["summary"] == {"total": 3, "active": 2, "blocked": 1, "done": 0, "failed": 0}
-    assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked", "running"]
+    assert payload["summary"] == {"total": 4, "active": 2, "blocked": 1, "done": 1, "failed": 0}
+    assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked", "done", "running"]
     running = payload["runs"][0]
     assert running["schemaVersion"] == 1
     assert running["runId"] == "MT-1"
@@ -97,7 +114,11 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
     blocked = payload["runs"][2]
     assert blocked["approval"]["required"] is True
     assert blocked["lastError"] == "approval required"
-    summary = payload["runs"][3]
+    done = payload["runs"][3]
+    assert done["runId"] == "MT-4"
+    assert done["status"] == "done"
+    assert done["stages"][0]["completedAt"] == "2026-06-18T20:54:00Z"
+    summary = payload["runs"][4]
     assert summary["runId"] == "symphony-daemon-summary"
     assert summary["daemonSnapshot"]["counts"] == {"running": 1, "retrying": 1, "blocked": 1, "total": 3}
 

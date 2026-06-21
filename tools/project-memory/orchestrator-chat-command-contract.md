@@ -8,6 +8,11 @@ Provide a temporary chat-first entry point for the Codex-native dispatcher while
 the full mini-orchestrator UI/API flow is still evolving. A user can send a
 short chat command and the agent can route it through the dispatcher chain.
 
+Project goal reminder: Mini Orchestrator is the product. Generated applications
+such as calculator, CRM, or dental CRM are workload artifacts used to test and
+demonstrate orchestration behavior; they are not the product goal and must not
+be treated as the project identity.
+
 ## Command Forms
 
 - `оркестратор <task>` or `orchestrator <task>`: pass `<task>` through the
@@ -19,12 +24,20 @@ short chat command and the agent can route it through the dispatcher chain.
 - `оркестратор ревью <task>` or `orchestrator review <task>`: normalize as a
   reviewer-directed task, then run planner -> executor -> reviewer.
 
-## Initial Safety Rule
+## Execution Rule
 
-For early tests from this chat, run the dispatcher in dry-run mode unless the
-user explicitly asks to launch a real Codex worker. Use `--chain --dry-run` for
-chat commands. Dry-run still verifies the command parser, normalized
-`next_input`, chain role order, and event log contract.
+Chat `orchestrator` / `оркестратор` requests are real orchestration requests by
+default. Do not use `--dry-run` unless the user explicitly asks for parser/log
+smoke testing. When the web UI or dashboard has a selected execution mode and
+chain preset, the chat command must honor that product workflow instead of
+starting an unrelated low-level dispatcher run.
+
+If the selected mode is Symphony, submit through Mini Orchestrator's
+`POST /api/symphony/runs` with `approved=true` and the saved selected chain
+preset. If the selected mode is Dispatcher, submit through the approved
+dispatcher workflow endpoint or release dispatcher chain with the saved chain
+preset. Do not bypass the UI/API workflow with a standalone CLI command when
+that would ignore selected mode, preset settings, or Kanban state.
 
 ## Chat-Gated Release Chain
 
@@ -49,9 +62,9 @@ python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain
 ```
 
 The release dispatcher no longer supports local calculator/CRM demo generation
-or `--local-test-project`. Approved work is routed through planner -> executor
--> reviewer workers via Codex app-server. Use `--dry-run` only for parser/log
-smoke checks.
+or `--local-test-project`. Approved work is routed through the selected
+orchestrator workflow and selected chain preset. Use `--dry-run` only for
+parser/log smoke checks.
 
 ## Implementation Map
 
@@ -70,4 +83,4 @@ smoke checks.
 - Unit tests must cover plan-only chat approval mode.
 - Release chain tests must show planner -> executor -> reviewer handoff order
   through an injectable Codex transport.
-- A dry-run smoke command must show only the selected worker in `agents`.
+- Dry-run smoke commands are only valid when explicitly requested by the user.

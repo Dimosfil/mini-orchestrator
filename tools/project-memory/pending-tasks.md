@@ -14,6 +14,149 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Mini Orchestrator Release Runtime Cleanup
+
+Goal: reset the runtime surface for Mini Orchestrator release work by stopping
+crooked worker processes and clearing live task cards/logs/artifacts that came
+from orchestration workload tests, while preserving agent presets and workflow
+configuration.
+
+Planned changes:
+
+- [x] Record the release-cleanup intent and preserve the product goal:
+  Mini Orchestrator, not the generated CRM workload.
+- [x] Stop Mini/Symphony worker processes from the current crooked runs.
+- [x] Quarantine generated runtime logs/cards/artifacts instead of deleting
+  evidence.
+- [x] Clear runtime DB run/card tables while preserving agent presets, saved
+  flows, worker profiles, and dispatcher chain presets.
+- [x] Restart Mini Orchestrator and Symphony cleanly and verify an empty board.
+
+Result, 2026-06-21:
+
+- Stopped the previous Mini/Symphony listeners and the runaway Codex
+  `app-server --stdio` worker processes.
+- Moved runtime/workload evidence to
+  `.mini_orchestrator/test-runs/orchestrator-release-cleanup-2026-06-21_17-55-59/`.
+- Preserved `agent_cards`, `agent_flows`, `worker_profiles`, and
+  `dispatcher_chain_presets`; cleared task/run state tables including
+  `symphony_runs`.
+- Restarted through config-service records and verified Mini `/health`,
+  Symphony `/api/v1/state`, and Combined live-runs summary with zero task runs.
+
+Risks or dependencies:
+
+- Do not remove source files, project-memory specs, agent presets, saved flows,
+  worker profiles, or selected chain presets.
+- Workload artifacts such as CRM demos are evidence/test outputs, not the
+  project goal.
+
+### Mini Orchestrator Pipeline 1-7 Live Validation
+
+Goal: validate the accepted business pipeline where Mini Orchestrator receives
+one task, shows it as one Kanban task card, executes a selected workflow preset
+through an explicit execution mode, mirrors Symphony workers as monitors, and
+requires Human Review before final Done.
+
+Live run, 2026-06-21:
+
+- [x] Verified Mini `/agent/contract`, Symphony `/agent/contract`, Mini
+  `/api/daemon/runs?source=combined`, and Symphony `/api/v1/state`.
+- [x] Submitted an approved Symphony-mode pipeline validation through Mini
+  `/api/symphony/runs` without dry-run.
+- [x] Confirmed Symphony accepted three preset agent tasks for request
+  `f2f3c129d6af` and Mini recorded gateway run
+  `symphony-gateway-91170db66c4d`.
+- [ ] Fix Unicode corruption: Cyrillic task payloads sent through the
+  Mini-to-Symphony intake path are rendered as `????`.
+- [ ] Fix stale saved preset contamination: the current
+  `dispatcher_chain_presets` row preserved from earlier work still contains
+  dental CRM work packages, even though the project goal is Mini Orchestrator.
+- [ ] Fix Symphony chain semantics or UI labeling: Symphony intake currently
+  starts Planner, Executor, and Reviewer worker tasks concurrently, so it does
+  not yet enforce planner output -> executor input -> reviewer input sequencing.
+- [ ] Ensure Kanban and monitor counts remain separated: Combined live-runs
+  currently exposes daemon summary, worker monitors, and the gateway run in one
+  payload; the dashboard must keep user task cards separate from Symphony
+  monitor records.
+
+### Dedicated Symphony Module And Result Polling
+
+Goal: isolate Symphony integration behind a dedicated module that can submit a
+Mini Orchestrator intake payload, poll Symphony state/issues, and report a
+terminal result instead of stopping at "accepted".
+
+Planned changes:
+
+- [x] Add a dedicated Symphony client/gateway module.
+- [x] Move task submission and result polling behind that module.
+- [x] Add focused tests for accepted intake, running state, and terminal result
+  detection.
+- [x] Run a live Symphony validation until Symphony returns a result or a
+  concrete blocker.
+
+Live result, 2026-06-21:
+
+- Added `mini_orchestrator/symphony_gateway.py` as the dedicated Mini-side
+  Symphony integration module.
+- Submitted a one-agent live Symphony smoke request `cde80fa35647`.
+- Symphony accepted issue `MO-cde80fa35647-1-smoke-result-agent`, ran it, and
+  returned to `running=0`, `retrying=0`, `blocked=0` after about 12 seconds.
+- Mini-side polling reported `completed_without_result`: Symphony stopped
+  reporting the issue as active, but `/api/v1/MO-cde80fa35647-1-smoke-result-agent`
+  returned HTTP 404 instead of completed result details.
+- Release blocker: Symphony must retain completed issue/result details, or
+  expose a documented completed-result endpoint, before Mini Orchestrator can
+  truthfully display final Symphony outputs.
+
+Release completion update, 2026-06-21:
+
+- Updated the local Symphony integration so completed Mini-origin intake issues
+  are retained in the daemon snapshot under `completed[]`.
+- Updated the Symphony contract to document `issueResult`:
+  `GET /api/v1/{issue_identifier}`.
+- Updated Mini's Symphony daemon normalizer so Symphony `completed[]` entries
+  render as `done` Live Runs instead of disappearing after worker exit.
+- Live proof: request `4524ea89b9b6` created issue
+  `MO-4524ea89b9b6-1-retained-result-agent`; polling returned `status=done`,
+  and `/api/v1/MO-4524ea89b9b6-1-retained-result-agent` returned
+  `status=completed` with session, workspace, token totals, timestamps, and the
+  final worker message.
+- Verification passed:
+  `python -m pytest tests/test_symphony_gateway.py tests/test_symphony_daemon.py`
+  (`19 passed`), `python -m compileall mini_orchestrator`,
+  `mise exec -- mix test test/symphony_elixir/external_intake_test.exs test/symphony_elixir/extensions_test.exs`
+  (`16 tests, 0 failures`), and `mise exec -- mix escript.build`.
+- Follow-up hardening completed: the broader Symphony release gate now passes on
+  Windows after normalizing local path/YAML handling, local copy hooks, fake
+  Codex/SSH test harnesses, and retry timing tolerance.
+- Final verification passed:
+  `mise exec -- mix test test/symphony_elixir/core_test.exs test/symphony_elixir/external_intake_test.exs test/symphony_elixir/extensions_test.exs test/symphony_elixir/orchestrator_status_test.exs --timeout 30000`
+  (`107 tests, 0 failures`), `mise exec -- mix escript.build`,
+  `python -m pytest tests/test_symphony_gateway.py tests/test_symphony_daemon.py`
+  (`19 passed`), and `python -m compileall mini_orchestrator`.
+- No leftover `fake-codex` or `codex app-server --stdio` processes remained
+  after the release-gate run.
+
+### WorkNest Kanban And Symphony Monitor Dashboard
+
+Goal: shape the dashboard as a WorkNest/chat task Kanban with visible agent-chain
+movement, while duplicating Symphony worker activity in a separate monitor area
+with one monitor per observed Symphony worker copy.
+
+Planned changes:
+
+- [x] Rename/framing of the Live Runs board as a WorkNest task Kanban.
+- [x] Keep task cards moving through source, ready, in-progress, review, and done states.
+- [x] Render Symphony worker-copy monitor cards separately from the Kanban task flow.
+- [x] Verify focused UI checks.
+
+Risks or dependencies:
+
+- WorkNest remains contract-limited: Mini can request/complete tasks through
+  documented endpoints, but must not invent a full WorkNest queue until the
+  manager contract exposes it.
+
 ### Symphony Workflow Visibility And Stable Refresh
 
 Goal: make any generated-project task useful for debugging the orchestrator by
@@ -1342,3 +1485,57 @@ Risks and dependencies:
   worker behavior compatible.
 - Do not touch legacy `launch-desk/` or external connected projects in this
   batch.
+
+### Mini Orchestrator Release Checklist
+
+Goal: prepare a stable, minimal release bundle for Mini Orchestrator (tooling, runtime, UI, and validation).
+
+Release criteria:
+- [ ] Confirm runtime contract is recorded in:
+  - `mini-orchestrator-plan.md`
+  - project memory architecture/spec docs
+- [ ] Validate CLI install/run/test/build commands and document build status (`No build pipeline yet` until available).
+- [ ] Confirm environment contract and fallback matrix:
+  - `OPENAI_API_KEY` absent => rule-based path works.
+  - `MINI_ORCHESTRATOR_*` overrides are read and safe.
+- [ ] Verify request path for MVP intents:
+  - parse -> plan -> execute -> validate -> final status.
+  - known-safe unknowns return explicit `respond`.
+  - no `needs_routing_check` for expected intents.
+- [ ] Add/update release docs:
+  - install and run prerequisites
+  - optional UI run command (`--ui`)
+  - smoke checks and health checks
+  - known limitations + fallback behavior
+- [ ] Verify UI and API smoke checks:
+  - `python -m mini_orchestrator --help`
+  - `python -m mini_orchestrator "search AGENTS"`
+  - `python -m mini_orchestrator --ui` (or API check)
+  - `/health` and `/api/run` behavior noted
+- [ ] Validate orchestration dependencies are either healthy or explicitly fail-loud:
+  - config-service (if expected)
+  - symphony gateway paths/contracts (if selected mode is Symphony)
+- [ ] Produce release artifact note with execution date, tested hash/commands, and blocker list.
+- [ ] Close pending tasks tied to release blockers:
+  - Dispatcher/Symphony sequencing if not fully enforced by contract.
+  - Unicode/cyrillic payload correctness end-to-end if required by user expectations.
+
+Notes:
+- Keep the focus on Mini Orchestrator as the product, not generated demos/artifacts.
+- Any generated test outputs should stay isolated in versioned folders under `.mini_orchestrator/test-runs/`.
+
+Validation update, 2026-06-21:
+
+- Found and fixed a release-smoke blocker: `python -m mini_orchestrator "search AGENTS" --no-log`
+  timed out because `ToolRuntime._search` enumerated the full workspace tree before filtering noisy paths.
+- Updated `ToolRuntime._search` to prune noisy directories during traversal.
+- Passed checks:
+  - `python -m mini_orchestrator --help`
+  - `python -m mini_orchestrator "hello" --llm-provider rules --no-log`
+  - `python -m mini_orchestrator "search AGENTS" --no-log`
+  - `python -m pytest tests/test_tool_runtime.py -q`
+  - `python -m pytest tests/test_symphony_gateway.py tests/test_symphony_daemon.py tests/test_agent_builder_ui.py -q`
+  - `python -m pytest -q` (`119 passed`)
+  - `python -m compileall mini_orchestrator`
+  - `git diff --check` (only existing LF -> CRLF warnings; no whitespace errors)
+  - `Invoke-RestMethod -Uri http://127.0.0.1:8000/health -TimeoutSec 5` (`status=ok`)
