@@ -8,6 +8,7 @@ import json
 import re
 
 from . import runtime_store
+from .model_defaults import DEFAULT_VISUAL_AGENT_MODEL
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,7 @@ def default_project_builder_agent_card(root: Path = ROOT) -> dict[str, Any]:
         "name": "Project Builder",
         "preset": "executor",
         "role": "Executor",
-        "llm": "gpt-5.4",
+        "llm": DEFAULT_VISUAL_AGENT_MODEL,
         "speed": "balanced",
         "reasoning": "medium",
         "accessMode": "workspace-write",

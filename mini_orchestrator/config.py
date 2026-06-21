@@ -5,6 +5,15 @@ from pathlib import Path
 from typing import Iterable, List
 import os
 
+from .model_defaults import (
+    DEFAULT_CAMPAIGN_IMAGE_MODEL,
+    DEFAULT_COORDINATOR_MODEL,
+    DEFAULT_EXECUTOR_MODEL,
+    DEFAULT_TRANSLATION_MODEL,
+    coordinator_model as env_coordinator_model,
+    executor_model as env_executor_model,
+    env_model,
+)
 
 DEFAULT_ALLOWED_TOOLS = ("read_file", "search", "apply_patch", "run_command", "respond")
 
@@ -18,11 +27,11 @@ class OrchestratorConfig:
     command_timeout_seconds: int = 20
     command_output_limit: int = 12000
     llm_provider: str = "auto"
-    coordinator_model: str = "gpt-5.5"
-    executor_model: str = "gpt-5.3-codex-spark"
-    translation_model: str = "gpt-4.1-mini"
-    campaign_text_model: str = "gpt-5.5"
-    campaign_image_model: str = "gpt-image-2"
+    coordinator_model: str = DEFAULT_COORDINATOR_MODEL
+    executor_model: str = DEFAULT_EXECUTOR_MODEL
+    translation_model: str = DEFAULT_TRANSLATION_MODEL
+    campaign_text_model: str = DEFAULT_COORDINATOR_MODEL
+    campaign_image_model: str = DEFAULT_CAMPAIGN_IMAGE_MODEL
     campaign_image_size: str = "1024x1024"
     campaign_image_quality: str = "medium"
     campaign_image_count: int = 3
@@ -56,13 +65,11 @@ def parse_runtime_config(
         command_timeout_seconds=int(os.environ.get("MINI_ORCHESTRATOR_COMMAND_TIMEOUT_SECONDS", 20)),
         command_output_limit=int(os.environ.get("MINI_ORCHESTRATOR_COMMAND_OUTPUT_LIMIT", 12000)),
         llm_provider=(llm_provider or os.environ.get("MINI_ORCHESTRATOR_LLM_PROVIDER", "auto")).strip().lower(),
-        coordinator_model=coordinator_model
-        or os.environ.get("MINI_ORCHESTRATOR_COORDINATOR_MODEL", "gpt-5.5"),
-        executor_model=executor_model
-        or os.environ.get("MINI_ORCHESTRATOR_EXECUTOR_MODEL", "gpt-5.3-codex-spark"),
-        translation_model=os.environ.get("MINI_ORCHESTRATOR_TRANSLATION_MODEL", "gpt-4.1-mini"),
-        campaign_text_model=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_TEXT_MODEL", "gpt-5.5"),
-        campaign_image_model=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_MODEL", "gpt-image-2"),
+        coordinator_model=coordinator_model or env_coordinator_model(),
+        executor_model=executor_model or env_executor_model(),
+        translation_model=env_model("MINI_ORCHESTRATOR_TRANSLATION_MODEL", DEFAULT_TRANSLATION_MODEL),
+        campaign_text_model=env_model("MINI_ORCHESTRATOR_CAMPAIGN_TEXT_MODEL", DEFAULT_COORDINATOR_MODEL),
+        campaign_image_model=env_model("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_MODEL", DEFAULT_CAMPAIGN_IMAGE_MODEL),
         campaign_image_size=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_SIZE", "1024x1024"),
         campaign_image_quality=os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_QUALITY", "medium"),
         campaign_image_count=max(1, int(os.environ.get("MINI_ORCHESTRATOR_CAMPAIGN_IMAGE_COUNT", "3"))),

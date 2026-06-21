@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any, Callable
 import tempfile
 
+from .model_defaults import DEFAULT_VISUAL_TRANSLATION_MODEL
+
 
 DispatcherRunner = Callable[[list[str], int], dict[str, Any]]
 FailureDetailProvider = Callable[[dict[str, Any]], str]
 DirectTranslator = Callable[[str, str, str], str]
 VisualAgentChatRunner = Callable[[dict[str, Any], str, int], dict[str, Any]]
-TRANSLATION_HELPER_MODEL = "gpt-5.4-mini"
+TRANSLATION_HELPER_MODEL = DEFAULT_VISUAL_TRANSLATION_MODEL
 
 
 @dataclass(frozen=True)

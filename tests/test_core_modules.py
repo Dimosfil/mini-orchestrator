@@ -10,6 +10,7 @@ from mini_orchestrator.cli import run_from_args
 from mini_orchestrator.config import OrchestratorConfig, parse_runtime_config
 from mini_orchestrator.executor import Executor
 from mini_orchestrator.llm import LlmJsonResult, LlmRequestError, OpenAiResponsesClient, _extract_first_json_object
+from mini_orchestrator.model_defaults import DEFAULT_COORDINATOR_MODEL, DEFAULT_EXECUTOR_MODEL
 from mini_orchestrator.models import TaskAction, TaskState, dump_state_line, state_to_json_payload
 from mini_orchestrator.orchestrator import Orchestrator
 from mini_orchestrator.planner import Planner
@@ -48,7 +49,7 @@ def test_task_state_serializes_events_and_plan() -> None:
             description="Read README",
             tool="read_file",
             args={"path": "README.md"},
-            model="gpt-5.3-codex-spark",
+            model=DEFAULT_EXECUTOR_MODEL,
         )
     )
 
@@ -64,10 +65,10 @@ def test_task_state_serializes_events_and_plan() -> None:
 def test_router_sends_high_risk_goals_to_coordinator() -> None:
     router = Router()
 
-    assert router.route_goal("run tests").model == "gpt-5.3-codex-spark"
+    assert router.route_goal("run tests").model == DEFAULT_EXECUTOR_MODEL
     decision = router.route_goal("deploy and push release")
 
-    assert decision.model == "gpt-5.5"
+    assert decision.model == DEFAULT_COORDINATOR_MODEL
     assert "high-risk" in decision.reason
 
 
@@ -101,7 +102,7 @@ def test_llm_planner_normalizes_safe_actions_and_discards_bad_ones(tmp_path: Pat
     plan = planner.plan("hello")
 
     assert [action.tool for action in plan.actions] == ["respond", "search"]
-    assert plan.actions[0].model == "gpt-5.5"
+    assert plan.actions[0].model == DEFAULT_COORDINATOR_MODEL
     assert plan.actions[1].args["path"] == str(tmp_path)
 
 
@@ -162,6 +163,8 @@ def test_parse_runtime_config_uses_environment_and_cli_overrides(tmp_path: Path,
     monkeypatch.setenv("MINI_ORCHESTRATOR_MAX_RETRIES", "4")
     monkeypatch.setenv("MINI_ORCHESTRATOR_LLM_PROVIDER", "openai")
     monkeypatch.setenv("MINI_ORCHESTRATOR_COMMAND_OUTPUT_LIMIT", "321")
+    monkeypatch.setenv("MINI_ORCHESTRATOR_COORDINATOR_MODEL", "coordinator-test-model")
+    monkeypatch.setenv("MINI_ORCHESTRATOR_EXECUTOR_MODEL", "executor-test-model")
 
     config = parse_runtime_config(str(tmp_path), max_iterations=2, max_retries=None, llm_provider="rules")
 
@@ -171,6 +174,8 @@ def test_parse_runtime_config_uses_environment_and_cli_overrides(tmp_path: Path,
     assert config.max_retries == 4
     assert config.llm_provider == "rules"
     assert config.command_output_limit == 321
+    assert config.coordinator_model == "coordinator-test-model"
+    assert config.executor_model == "executor-test-model"
 
 
 def test_command_adapter_blocks_destructive_commands_and_preserves_quoted_args() -> None:

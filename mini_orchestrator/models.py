@@ -5,6 +5,8 @@ from typing import Any, Dict, List
 import json
 import uuid
 
+from .model_defaults import DEFAULT_COORDINATOR_MODEL
+
 
 @dataclass
 class TaskAction:
@@ -51,7 +53,7 @@ class TaskState:
             goal=goal,
             state="received",
             next_action="router",
-            model="gpt-5.5",
+            model=DEFAULT_COORDINATOR_MODEL,
             tool="",
             status="queued",
             result=None,

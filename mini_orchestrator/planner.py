@@ -7,6 +7,7 @@ import re
 from uuid import uuid4
 
 from .llm import LlmRequestError, LlmUnavailable, OpenAiResponsesClient
+from .model_defaults import DEFAULT_COORDINATOR_MODEL, DEFAULT_EXECUTOR_MODEL
 from .models import PlanResult, TaskAction
 
 
@@ -46,7 +47,7 @@ def _add_read_action(actions: List[TaskAction], segment: str, workspace_root: Pa
             description=f"Read file: {Path(path).name}",
             tool="read_file",
             args={"path": path},
-            model="gpt-5.3-codex-spark",
+            model=DEFAULT_EXECUTOR_MODEL,
         )
     )
 
@@ -64,7 +65,7 @@ def _add_search_action(actions: List[TaskAction], segment: str, workspace_root: 
             description=f"Search for: {query[:50]}",
             tool="search",
             args={"query": query, "path": str(workspace_root)},
-            model="gpt-5.3-codex-spark",
+            model=DEFAULT_EXECUTOR_MODEL,
         )
     )
 
@@ -78,7 +79,7 @@ def _add_run_action(actions: List[TaskAction], segment: str) -> None:
             description=f"Run command: {command[:50]}",
             tool="run_command",
             args={"command": command},
-            model="gpt-5.3-codex-spark",
+            model=DEFAULT_EXECUTOR_MODEL,
         )
     )
 
@@ -100,7 +101,7 @@ def _add_patch_action(actions: List[TaskAction], segment: str, workspace_root: P
             description=f"Patch file: {Path(path).name}",
             tool="apply_patch",
             args={"path": path, "old": old, "new": new},
-            model="gpt-5.3-codex-spark",
+            model=DEFAULT_EXECUTOR_MODEL,
         )
     )
 
@@ -271,8 +272,8 @@ def _normalize_llm_action(
 @dataclass(frozen=True)
 class Planner:
     workspace_root: Path
-    coordinator_model: str = "gpt-5.5"
-    executor_model: str = "gpt-5.3-codex-spark"
+    coordinator_model: str = DEFAULT_COORDINATOR_MODEL
+    executor_model: str = DEFAULT_EXECUTOR_MODEL
     llm_client: OpenAiResponsesClient | None = None
 
     def plan(self, goal: str) -> PlanResult:

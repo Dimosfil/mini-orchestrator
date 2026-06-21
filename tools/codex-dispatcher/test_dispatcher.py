@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import dispatcher
+from mini_orchestrator.model_defaults import DEFAULT_COORDINATOR_MODEL, DEFAULT_EXECUTOR_MODEL
 
 
 class FakeCodexAppServer:
@@ -34,6 +36,26 @@ class FakeCodexAppServer:
 
 
 class DispatchDecisionTests(unittest.TestCase):
+    def test_default_workers_use_shared_model_defaults_and_env_overrides(self) -> None:
+        workers = dispatcher.default_workers(dispatcher.ROOT)
+
+        self.assertEqual([worker.model for worker in workers[:2]], [DEFAULT_COORDINATOR_MODEL, DEFAULT_EXECUTOR_MODEL])
+
+        with patch.dict(
+            os.environ,
+            {
+                "MINI_ORCHESTRATOR_COORDINATOR_MODEL": "coordinator-test-model",
+                "MINI_ORCHESTRATOR_EXECUTOR_MODEL": "executor-test-model",
+                "MINI_ORCHESTRATOR_REVIEWER_MODEL": "reviewer-test-model",
+            },
+        ):
+            overridden = dispatcher.default_workers(dispatcher.ROOT)
+
+        self.assertEqual(
+            [worker.model for worker in overridden],
+            ["coordinator-test-model", "executor-test-model", "reviewer-test-model"],
+        )
+
     def test_planner_directed_task_routes_to_planner(self) -> None:
         decision = dispatcher.decide_dispatch(
             "Plan the next smallest improvement to the dispatcher",

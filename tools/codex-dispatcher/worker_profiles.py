@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import json
-import os
 import re
+
+from mini_orchestrator.model_defaults import coordinator_model, executor_model, reviewer_model
 
 from models import Worker
 
@@ -29,13 +30,13 @@ ROLE_KEYS = {
 }
 
 def default_workers(root: Path) -> list[Worker]:
-    coordinator_model = _env("MINI_ORCHESTRATOR_COORDINATOR_MODEL", "gpt-5.5")
-    executor_model = _env("MINI_ORCHESTRATOR_EXECUTOR_MODEL", "gpt-5.3-codex-spark")
-    reviewer_model = _env("MINI_ORCHESTRATOR_REVIEWER_MODEL", coordinator_model)
+    coordinator_model_value = coordinator_model()
+    executor_model_value = executor_model()
+    reviewer_model_value = reviewer_model()
     return [
-        Worker("planner", coordinator_model, "high", root / ".codex" / "agents" / "planner.toml"),
-        Worker("executor", executor_model, "medium", root / ".codex" / "agents" / "executor.toml"),
-        Worker("reviewer", reviewer_model, "high", root / ".codex" / "agents" / "reviewer.toml"),
+        Worker("planner", coordinator_model_value, "high", root / ".codex" / "agents" / "planner.toml"),
+        Worker("executor", executor_model_value, "medium", root / ".codex" / "agents" / "executor.toml"),
+        Worker("reviewer", reviewer_model_value, "high", root / ".codex" / "agents" / "reviewer.toml"),
     ]
 
 
@@ -83,10 +84,6 @@ def workers_from_chain_preset(preset: dict[str, Any], root: Path) -> list[Worker
     if not workers:
         raise ValueError("Chain preset did not produce executable workers.")
     return workers
-
-
-def _env(name: str, default: str) -> str:
-    return os.environ.get(name, default).strip() or default
 
 
 def _ordered_agent_ids(agents: list[Any], connections: list[Any]) -> list[str]:

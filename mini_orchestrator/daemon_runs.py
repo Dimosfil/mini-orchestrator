@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from . import runtime_store
+from .model_defaults import (
+    DEFAULT_COORDINATOR_MODEL,
+    DEFAULT_VISUAL_AGENT_MODEL,
+    DEFAULT_VISUAL_TRANSLATION_MODEL,
+)
 
 
 LOCAL_DAEMON_RUN_DIR = ".mini_orchestrator/daemon-runs"
@@ -165,17 +170,17 @@ def build_demo_daemon_runs() -> Dict[str, Any]:
         "profile-planner-demo": {
             "displayName": "Planner Demo",
             "role": "Planner",
-            "model": "gpt-5.5",
+            "model": DEFAULT_COORDINATOR_MODEL,
         },
         "profile-executor-demo": {
             "displayName": "Executor Demo",
             "role": "Executor",
-            "model": "gpt-5.4",
+            "model": DEFAULT_VISUAL_AGENT_MODEL,
         },
         "profile-reviewer-demo": {
             "displayName": "Reviewer Demo",
             "role": "Reviewer",
-            "model": "gpt-5.4-mini",
+            "model": DEFAULT_VISUAL_TRANSLATION_MODEL,
         },
     }
     active_statuses = {"queued", "claimed", "running", "blocked", "retrying"}

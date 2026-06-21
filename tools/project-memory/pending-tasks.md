@@ -1320,3 +1320,25 @@ Verification:
   `test-runs/`.
 - [x] `python -m pytest tests tools\codex-dispatcher\test_dispatcher.py`
 - [x] `python -m compileall mini_orchestrator tools\codex-dispatcher tools\migrate_runtime_to_sqlite.py`
+
+### GI Refactor Batch 2026-06-21
+
+Goal: execute the first coherent `gi refactor` batch without changing
+user-visible workflow behavior.
+
+Planned changes:
+
+- [x] Restore local command and architecture context.
+- [x] Run the current test suite as a baseline.
+- [x] Centralize default model identifiers behind a package configuration
+  boundary while preserving existing environment-variable overrides.
+- [x] Update core planner/router/daemon/agent API and dispatcher defaults to
+  use the shared model defaults.
+- [x] Add focused tests for the shared defaults and run the affected checks.
+
+Risks and dependencies:
+
+- Keep public CLI flags, environment variables, UI presets, and dispatcher
+  worker behavior compatible.
+- Do not touch legacy `launch-desk/` or external connected projects in this
+  batch.
