@@ -10,6 +10,7 @@ from mini_orchestrator import ui
 from mini_orchestrator import service_discovery
 from mini_orchestrator.symphony_daemon import (
     SymphonyDaemonError,
+    build_symphony_intake_payload,
     build_local_symphony_gateway_runs,
     build_symphony_live_runs,
     create_symphony_gateway_run,
@@ -298,6 +299,114 @@ def test_symphony_gateway_run_preserves_chain_and_is_listed(tmp_path):
 
     assert payload["summary"]["blocked"] == 1
     assert payload["runs"][0]["runId"] == run["runId"]
+    assert run["symphony"]["intakePayload"]["dispatchStrategy"] == "one-symphony-agent-per-preset-stage"
+
+
+def test_symphony_intake_payload_expands_preset_agents():
+    payload = build_symphony_intake_payload(
+        {
+            "approved": True,
+            "project": "mini-orchestrator",
+            "task": "Build release CRM",
+            "chainPreset": {
+                "id": "chain-eight",
+                "name": "Eight agent preset",
+                "flow": {
+                    "agents": [
+                        {
+                            "id": "planner",
+                            "name": "Planner",
+                            "role": "planner",
+                            "preset": "planner",
+                            "llm": "gpt-5.5",
+                            "reasoning": "high",
+                            "accessMode": "read-only",
+                            "workPackage": {"currentObjective": "Plan the release."},
+                        },
+                        {
+                            "id": "executor",
+                            "name": "Executor",
+                            "role": "executor",
+                            "preset": "executor",
+                            "llm": "gpt-5.3-codex-spark",
+                            "reasoning": "medium",
+                            "accessMode": "danger-full-access",
+                            "workPackage": {"currentObjective": "Build the app."},
+                        },
+                    ],
+                },
+            },
+        }
+    )
+
+    assert payload["schemaVersion"] == "mini-orchestrator.symphony-intake.v1"
+    assert payload["dispatchStrategy"] == "one-symphony-agent-per-preset-stage"
+    assert [item["agent"]["id"] for item in payload["agentTasks"]] == ["planner", "executor"]
+    assert payload["agentTasks"][0]["codex"]["model"] == "gpt-5.5"
+    assert payload["agentTasks"][1]["codex"]["accessMode"] == "danger-full-access"
+    assert payload["agentTasks"][1]["task"]["global"]["title"] == "Build release CRM"
+
+
+def test_symphony_gateway_run_submits_when_intake_contract_exists(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_resolve(service_id):
+        assert service_id == "symphony"
+        return service_discovery.ResolvedServiceRuntime(
+            service_id="symphony",
+            base_url="http://symphony.test",
+            config_service_url="http://config.test",
+            endpoints={
+                "availability": "/api/v1/state",
+                "api": "/api/v1",
+                "contract": "/agent/contract",
+                "taskIntake": "/agent-intake/tasks",
+            },
+            record={},
+        )
+
+    def fake_urlopen(request, timeout):
+        body = None
+        if request.data:
+            body = json.loads(request.data.decode("utf-8"))
+        calls.append((request.full_url, request.get_method(), timeout, body))
+        if request.full_url.endswith("/agent/contract"):
+            return FakeResponse({"capabilities": ["task-intake"]})
+        if request.full_url.endswith("/agent-intake/tasks"):
+            return FakeResponse({"status": "queued", "externalRunId": "sym-run-1"})
+        raise AssertionError(request.full_url)
+
+    monkeypatch.setattr(service_discovery, "resolve_service_runtime", fake_resolve)
+    monkeypatch.setattr("mini_orchestrator.symphony_daemon.urlopen", fake_urlopen)
+
+    run = create_symphony_gateway_run(
+        tmp_path,
+        {
+            "approved": True,
+            "project": "mini-orchestrator",
+            "task": "Bridge task",
+            "chainPreset": {
+                "id": "chain-1",
+                "name": "Two agents",
+                "flow": {
+                    "agents": [
+                        {"id": "planner", "name": "Planner", "llm": "gpt-5.5"},
+                        {"id": "executor", "name": "Executor", "llm": "gpt-5.3-codex-spark"},
+                    ]
+                },
+            },
+        },
+        {"stateUrl": "http://daemon/state", "summary": {"total": 0}},
+        submit=True,
+    )
+
+    assert run["status"] == "queued"
+    assert run["lastError"] == ""
+    assert run["symphony"]["intakeSubmitted"] is True
+    assert calls[0][:3] == ("http://symphony.test/agent/contract", "GET", 5.0)
+    assert calls[1][0] == "http://symphony.test/agent-intake/tasks"
+    assert calls[1][1] == "POST"
+    assert [item["agent"]["id"] for item in calls[1][3]["agentTasks"]] == ["planner", "executor"]
 
 
 def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_path, monkeypatch):
@@ -309,6 +418,10 @@ def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_p
             {"generated_at": "2026-06-18T00:00:02Z", "running": [], "retrying": [], "blocked": []},
             "http://daemon/state",
         ),
+    )
+    monkeypatch.setattr(
+        "mini_orchestrator.symphony_daemon.submit_symphony_intake",
+        lambda _payload: (_ for _ in ()).throw(SymphonyDaemonError("symphony-intake-missing")),
     )
 
     handler = ui._OrchestratorUIHandler
@@ -342,8 +455,9 @@ def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_p
         assert response.status == 202
         assert body["status"] == "blocked"
         assert body["mode"] == "symphony-gateway"
-        assert body["lastError"] == "symphony-intake-missing"
+        assert body["lastError"]
         assert body["task"]["taskId"] == "task-1"
+        assert body["symphony"]["intakePayload"]["schemaVersion"] == "mini-orchestrator.symphony-intake.v1"
     finally:
         server.shutdown()
         server.server_close()

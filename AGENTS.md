@@ -43,6 +43,17 @@ notes, old refactoring phases, or local commits ahead of a remote as the next
 action. Mention them only as compact context when relevant, then ask for the
 user's current task instead of offering to continue, run, push, or finish them.
 
+Treat `gi start sprint`, `gi sprint start`, and equivalent active-sprint wording
+as more specific than plain `gi start`. Restore only the startup context needed
+for task-manager work, resolve the configured manager through config-service,
+read the manager guide when present, then read the manager contract and request
+the active Sprint/Cycle or next task through the documented manager operation.
+Move work through the manager's documented lifecycle states and submit
+completion through the manager contract. Stop with the exact blocker if
+discovery, auth, contract, lifecycle, completion, or object-type support is
+missing; do not fall back to generic `gi start`, local task notes, raw intake,
+guessed endpoints, or filesystem task edits.
+
 Treat `init <source>`, `инит <source>`, `инициализируй <source>`, and
 `инит правила <source>` as shared-instruction bootstrap/startup requests when
 `<source>` points to `https://github.com/Dimosfil/general-instructions.git`, the
@@ -71,15 +82,18 @@ dispatcher chain through Codex app-server:
 For chat-gated plan commands, first return only the planner proposal in chat:
 `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --plan-only`.
 Do not create files from that plan until the user explicitly approves it. After
-approval, run the approved release workflow with `--chain`; it routes planner
--> executor -> reviewer through Codex app-server and returns final role outputs.
+approval, run the approved release workflow with `--chain` or with the selected
+saved chain preset when the UI/dashboard provides one. The product workflow is
+not fixed to planner -> executor -> reviewer; that is only the default example
+chain. A saved preset may contain any approved number of configured agents and
+stages.
 The command `оркестратор план <task>` / `orchestrator plan <task>` starts from a
 planner-directed task; `оркестратор исполнитель <task>` / `orchestrator executor
 <task>` starts from an executor-directed task; `оркестратор ревью <task>` /
 `orchestrator review <task>` starts from a reviewer-directed task. In full-chain
-mode the dispatcher still runs planner -> executor -> reviewer. Use the
-low-level dispatcher without `--chain` only when the user asks for one selected
-worker.
+mode without an explicit preset, the dispatcher may use the default example
+chain. Use the low-level dispatcher without `--chain` only when the user asks
+for one selected worker.
 
 The copied instruction kit is a token-economy and RAG-startup layer for this
 project. Use it to restore only the needed context from local instructions,
@@ -293,7 +307,19 @@ Inspect logs:
   transient canvas state. Agent Builder must keep a selectable default chain and
   let saved user chains have names so they can be selected again from a dropdown.
   The executable Kanban/dashboard must also expose a chain dropdown for selecting
-  which preset should run the next approved task.
+  which preset should run the next approved task. Do not treat
+  `planner -> executor -> reviewer` as a fixed workflow; it is only the default
+  example preset. A saved preset may contain any approved number of configured
+  agents and stages, such as 2, 3, 8, or more.
+- Treat Dispatcher and Symphony as separate execution modes selected explicitly
+  in the dashboard. A mode change is not active until the user confirms it.
+  Dispatcher runs the selected preset through Mini Orchestrator's Codex
+  dispatcher. Symphony mode must send the same selected preset as a documented
+  task-intake payload with one `agentTasks[]` item per configured preset agent,
+  including that agent's model, reasoning, access mode, work package, and the
+  shared task card. If Symphony has no config-service-resolved intake contract
+  or endpoint, record a visible blocked gateway run instead of pretending the
+  task was accepted.
 - When a feature has an agreed runtime workflow, loading order, branching state
   flow, background work, or user-visible guarantee, record it in project-local
   docs or project memory. Before changing that feature, read the relevant
@@ -351,6 +377,14 @@ Inspect logs:
   implementing Symphony-style orchestration in `mini-orchestrator`. Do not edit,
   delete, move, or commit files in that external workspace unless the user gives
   a separate explicit action for that path.
+- When starting or restarting the Mini Orchestrator web UI, also resolve and
+  verify the `symphony` service record through GI config-service. If the
+  Symphony availability endpoint is not healthy, start Symphony with the
+  startup command from its service record, then verify `endpoints.availability`
+  such as `/api/v1/state`. Report startup as incomplete if Symphony cannot be
+  verified, because Live Runs Combined/Symphony views depend on it. This does
+  not authorize task submission to Symphony until a documented task-intake
+  contract exists.
 - Keep connected external projects in
   `tools/project-memory/specs/integration-contracts/connected-projects.md`.
   Read that register before touching integrations, nested repositories, cloned
@@ -456,16 +490,21 @@ Inspect logs:
   tokens, private keys, or private remote paths unless project policy explicitly
   marks them non-secret.
 - Treat `gi reboot`, `ги ребут`, `gi restart`, and `ги рестарт` as requests to
-  start or restart the current application using project-local run instructions.
-  If the app is running, restart it; if it is not running, start it. Launch in
-  the background so focus does not jump away from the user's current window.
-  After launch, wait briefly and verify the documented startup success signal:
-  a still-running expected process, visible desktop window when applicable,
-  health/discovery endpoint for web/API apps, and relevant startup or crash
-  logs when documented. Do not report reboot success from a PID alone. If the
-  process exits, no expected window or health signal appears, or a new startup
-  traceback is present, report the reboot as failed or unverified with the
-  concrete evidence.
+  start or restart all documented applications in the current project using
+  project-local run instructions. Before starting anything, identify the full
+  project app set from local run instructions, manifests, service records,
+  desktop packaging metadata, or project memory. If local instructions define a
+  preferred command that launches the full app set, use it. Otherwise enumerate
+  every documented app or runtime, such as desktop app, web/API app, and
+  background workers; restart each running app and start each missing app in the
+  background so focus does not jump away from the user's current window. Verify
+  each documented startup signal: expected processes, visible desktop windows
+  when applicable, health/discovery endpoints for web/API apps, worker readiness
+  signals, and relevant startup or crash logs when documented. The final report
+  must account for each app by name or role with started/restarted/skipped
+  status and verification evidence. Do not report success from a PID alone, from
+  a web health check alone, or while any expected desktop app, web/API app, or
+  worker is unlaunched or unverified.
 - Treat `gi first test`, `gi первый тест`, and `ги первый тест` as requests to
   verify the current application's first-launch experience by resetting only
   documented project-owned app cache, generated state, temporary first-run
@@ -477,6 +516,21 @@ Inspect logs:
   question instead of guessing. After reset, start the app, run the documented
   first-launch smoke/onboarding checks, and report what was cleared, what
   passed, and what was intentionally left untouched.
+- Treat `gi default`, `gi defaults`, and `ги дефолт` as default-state reset
+  requests for the current project. Read project-local reset, cleanup,
+  first-run, run, backup, and test instructions before clearing anything. Use
+  only documented reset scripts, paths, keys, or contracts for project-owned app
+  state, generated caches, local settings, onboarding flags, temporary profiles,
+  and other rebuildable first-run/default state. Do not delete source files,
+  project-memory specifications, instruction-kit files, user documents,
+  production data, secrets, credentials, external service data, shared system
+  caches, sibling projects, or arbitrary user-home folders. If reset targets are
+  not documented, ask one concise clarification question instead of guessing. If
+  a reset could be irreversible or remove user-owned data, stop for explicit
+  confirmation and prefer a backup or rename step when local rules allow it.
+  After reset, start the project through documented run instructions, verify the
+  default or first-launch success signals, and report what was reset, what was
+  left untouched, what passed, and any blocker.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and clear typo variants as
   requests to build the current project and produce an installer. Read local
   build/package instructions, resolve the application version from project
@@ -647,10 +701,12 @@ Inspect logs:
 - If `gi язык` or an equivalent unified project-language command is sent
   without explicit languages, run a three-step chat flow instead of asking for
   one free-form line. At each step, show the same numbered Markdown checklist of
-  available languages with the current selection checked, name the current
-  surface, and tell the user they may reply with numbers or language names.
-  Render each option as a task-list bullet with the number inside the label,
-  such as `- [x] 1. English`; do not use ordered-task syntax such as
+  available languages with the current selection checked, or `English` then
+  `Russian` checked when that surface has no current ordered selection. Name the
+  current surface and tell the user they may reply with numbers or language
+  names. Render each option as a plain inline checkbox marker, number, and label
+  on one physical Markdown line, such as `[x] 1. English`; do not use Markdown
+  task-list syntax such as `- [x] 1. English` or ordered-task syntax such as
   `1. [x] English`, because some chat renderers split the checkbox and label
   onto separate lines.
 - When the user replies to that flow with a numeric-only answer such as `1 2`,

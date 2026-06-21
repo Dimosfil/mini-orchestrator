@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from . import runtime_store
+
 
 LOCAL_DAEMON_RUN_DIR = ".mini_orchestrator/daemon-runs"
 REVIEW_DECISIONS = {"done", "rework"}
@@ -210,9 +212,7 @@ def run_single_card_dry_run(
 
     run_id = f"daemon-{uuid.uuid4().hex[:12]}"
     created_at = _utc_now()
-    run_dir = root / LOCAL_DAEMON_RUN_DIR
-    run_dir.mkdir(parents=True, exist_ok=True)
-    event_log = run_dir / f"{run_id}.jsonl"
+    event_log = runtime_store.runtime_uri("daemon-runs", f"{run_id}/events")
     workspace_path = f".mini_orchestrator/generated-workspaces/{run_id}"
     state = _run_state(
         run_id=run_id,
@@ -228,18 +228,18 @@ def run_single_card_dry_run(
         output_tokens=0,
         last_event="queued",
         last_error=None,
-        event_log_path=_project_path(event_log, root),
+        event_log_path=event_log,
         created_at=created_at,
         updated_at=created_at,
     )
-    _append_event(event_log, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
+    _append_event(root, run_id, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
 
     for status, event_type in (("claimed", "workspace_prepared"), ("running", "dry_run_started")):
         now = _utc_now()
         state["status"] = status
         state["lastEvent"] = event_type
         state["updatedAt"] = now
-        _append_event(event_log, {"time": now, "type": event_type, "runId": run_id, "profileSnapshotId": profile_snapshot_id})
+        _append_event(root, run_id, {"time": now, "type": event_type, "runId": run_id, "profileSnapshotId": profile_snapshot_id})
 
     output_text = f"Dry-run completed for {profile.get('displayName') or profile_snapshot_id}."
     done_at = _utc_now()
@@ -259,7 +259,8 @@ def run_single_card_dry_run(
     state["stages"][0]["lastEvent"] = "dry_run_completed"
     state["stages"][0]["output"] = output_text
     _append_event(
-        event_log,
+        root,
+        run_id,
         {
             "time": done_at,
             "type": "ready_for_human_review",
@@ -297,9 +298,7 @@ def run_manifest_dry_run(
 
     run_id = f"daemon-{uuid.uuid4().hex[:12]}"
     created_at = _utc_now()
-    run_dir = root / LOCAL_DAEMON_RUN_DIR
-    run_dir.mkdir(parents=True, exist_ok=True)
-    event_log = run_dir / f"{run_id}.jsonl"
+    event_log = runtime_store.runtime_uri("daemon-runs", f"{run_id}/events")
     workspace_path = f".mini_orchestrator/generated-workspaces/{run_id}"
     state = _run_state(
         run_id=run_id,
@@ -315,14 +314,14 @@ def run_manifest_dry_run(
         output_tokens=0,
         last_event="queued",
         last_error=None,
-        event_log_path=_project_path(event_log, root),
+        event_log_path=event_log,
         created_at=created_at,
         updated_at=created_at,
     )
     state["manifestId"] = manifest.get("manifestId")
     state["nodeStates"] = []
     state["flowArtifacts"] = []
-    _append_event(event_log, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
+    _append_event(root, run_id, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
 
     previous_artifacts: list[dict[str, str]] = []
     for index, profile in enumerate(ordered_profiles):
@@ -345,7 +344,8 @@ def run_manifest_dry_run(
             }
         )
         _append_event(
-            event_log,
+            root,
+            run_id,
             {
                 "time": now,
                 "type": "node_started",
@@ -372,7 +372,8 @@ def run_manifest_dry_run(
         state["lastEvent"] = f"{node_id}: completed"
         state["updatedAt"] = done_at
         _append_event(
-            event_log,
+            root,
+            run_id,
             {
                 "time": done_at,
                 "type": "node_completed",
@@ -401,7 +402,8 @@ def run_manifest_dry_run(
     state["reviewerVerdict"] = final_verdict
     state["updatedAt"] = completed_at
     _append_event(
-        event_log,
+        root,
+        run_id,
         {
             "time": completed_at,
             "type": "ready_for_human_review" if final_status == "review" else "run_completed",
@@ -415,15 +417,16 @@ def run_manifest_dry_run(
 
 
 def build_local_daemon_runs(root: Path) -> Dict[str, Any]:
+    runs: list[dict[str, Any]] = runtime_store.list_json_documents(root, "daemon_runs")
+    seen = {str(run.get("runId") or "") for run in runs}
     run_dir = root / LOCAL_DAEMON_RUN_DIR
-    runs: list[dict[str, Any]] = []
     if run_dir.exists():
         for path in sorted(run_dir.glob("*.state.json"), key=lambda item: item.stat().st_mtime, reverse=True):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if isinstance(data, dict):
+            if isinstance(data, dict) and str(data.get("runId") or "") not in seen:
                 runs.append(data)
     profiles = {
         str(run.get("profileSnapshotId")): {
@@ -452,9 +455,7 @@ def build_local_daemon_runs(root: Path) -> Dict[str, Any]:
 
 
 def _write_state(root: Path, state: dict[str, Any]) -> None:
-    path = root / LOCAL_DAEMON_RUN_DIR / f"{state['runId']}.state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    runtime_store.upsert_json_document(root, "daemon_runs", str(state["runId"]), state)
 
 
 def set_run_review_decision(run_id: str, decision: str, root: Path) -> dict[str, Any]:
@@ -465,13 +466,15 @@ def set_run_review_decision(run_id: str, decision: str, root: Path) -> dict[str,
     if normalized_decision not in REVIEW_DECISIONS:
         raise ValueError("Field 'decision' must be 'done' or 'rework'.")
 
+    state = runtime_store.get_json_document(root, "daemon_runs", normalized_run_id)
     path = root / LOCAL_DAEMON_RUN_DIR / f"{normalized_run_id}.state.json"
-    if not path.exists():
+    if state is None and path.exists():
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Daemon run state is not valid JSON: {normalized_run_id}") from exc
+    if state is None:
         raise ValueError(f"Daemon run state was not found: {normalized_run_id}")
-    try:
-        state = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Daemon run state is not valid JSON: {normalized_run_id}") from exc
     if not isinstance(state, dict):
         raise ValueError(f"Daemon run state is not an object: {normalized_run_id}")
 
@@ -489,10 +492,9 @@ def set_run_review_decision(run_id: str, decision: str, root: Path) -> dict[str,
         state["status"] = "review"
         state["lastEvent"] = "user requested rework"
 
-    event_log_value = state.get("artifacts", {}).get("eventLogPath") if isinstance(state.get("artifacts"), dict) else ""
-    event_log = root / str(event_log_value) if event_log_value else path.with_suffix(".jsonl")
     _append_event(
-        event_log,
+        root,
+        normalized_run_id,
         {
             "time": decided_at,
             "type": "review_decision",
@@ -505,10 +507,8 @@ def set_run_review_decision(run_id: str, decision: str, root: Path) -> dict[str,
     return state
 
 
-def _append_event(path: Path, event: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+def _append_event(root: Path, run_id: str, event: dict[str, Any]) -> None:
+    runtime_store.insert_daemon_event(root, run_id, event)
 
 
 def _simulated_node_output(profile: dict[str, Any], previous_artifacts: list[dict[str, str]], verdict: str) -> dict[str, str]:

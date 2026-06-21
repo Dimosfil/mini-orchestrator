@@ -17,6 +17,12 @@ inspectable.
   `v002`, or a timestamp like `2026-06-18_23-40-00`.
 - Do not overwrite or delete older version folders during a new test run unless
   the user explicitly asks for cleanup.
+- Orchestrator release-chain repeats that generate apps must use a
+  project-named slug and version folder, for example
+  `.mini_orchestrator/test-runs/dental-crm/v001/`, then
+  `.mini_orchestrator/test-runs/dental-crm/v002/`.
+- Do not modify `launch-desk/` or another existing application folder as the
+  generated artifact target unless the user explicitly names that folder.
 - A stable `latest` folder, link, or copy is optional and may be updated only
   when the user explicitly asks for a latest-style convenience target.
 

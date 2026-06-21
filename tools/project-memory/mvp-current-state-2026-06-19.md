@@ -30,6 +30,11 @@ release hardening.
 - UI startup is `python -m mini_orchestrator --ui`.
 - Web UI startup must resolve the `mini-orchestrator` service record through GI
   config-service before binding a port.
+- Full dashboard startup also requires Symphony availability. On Mini
+  Orchestrator start or restart, resolve the `symphony` service through GI
+  config-service, check its availability endpoint, and start it from the service
+  record startup command if it is not already healthy. Treat unavailable
+  Symphony as an incomplete startup for Live Runs Combined/Symphony views.
 - `launch-desk/` is retained as legacy/experimental and is not part of the
   active runtime.
 
@@ -53,9 +58,12 @@ release hardening.
 - Dispatcher supports:
   - single-worker planner/executor/reviewer routing;
   - `--plan-only` planner proposal mode;
-  - full `planner -> executor -> reviewer` chain mode;
+  - approved chain-preset execution;
   - dry-run mode for parser/log smoke checks;
   - WorkNest task claim input through config-service-resolved manager records.
+- `planner -> executor -> reviewer` is the default example chain, not a fixed
+  workflow. A selected chain preset may contain any approved number of
+  configured agents and stages.
 - Local calculator/CRM demo generation was removed from the active release
   dispatcher surface.
 - Dispatcher JSONL logs are consumed by Live Runs for visible progress.
@@ -67,6 +75,7 @@ release hardening.
 - Main dashboard supports:
   - dispatcher plan preview;
   - approved dispatcher workflow runs;
+  - confirmed execution mode selection between Dispatcher and Symphony;
   - chain preset selection;
   - core orchestrator run;
   - Live Runs/Kanban style state;
@@ -107,8 +116,15 @@ release hardening.
 - `live_runs.py` normalizes dispatcher event logs into planner/executor/reviewer
   stage state.
 - `symphony_daemon.py` can read and normalize a configured Symphony daemon state
-  endpoint, then fall back to dispatcher JSONL replay with a clear source/error
-  signal.
+  endpoint, build a preset-based Symphony intake payload, and submit it only
+  when the config-service-resolved Symphony contract exposes a documented intake
+  endpoint.
+- Symphony intake payloads use
+  `schemaVersion=mini-orchestrator.symphony-intake.v1` and one `agentTasks[]`
+  item per selected preset agent, carrying that agent's Codex model, reasoning,
+  access mode, work package, translations, and shared task card.
+- When Symphony intake is missing, the gateway records a visible blocked run
+  instead of claiming the task was accepted.
 - Dashboard Live Runs renders task cards, active stage state, node artifacts,
   reviewer verdicts, Human Review, and Done areas.
 

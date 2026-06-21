@@ -68,3 +68,27 @@ def test_visual_agent_task_uses_selected_card_name_as_worker(tmp_path) -> None:
     assert fake_server.started_workers[0]["name"] == "Dental CRM Builder"
     assert fake_server.turns[0]["workerName"] == "Dental CRM Builder"
     assert result["agents"]["Dental CRM Builder"] == "visual agent task done"
+
+
+def test_visual_agent_task_requires_card_model(tmp_path) -> None:
+    service = PersistentCodexDispatcher(
+        root=tmp_path,
+        runs_dir=tmp_path / "tools" / "codex-dispatcher" / "runs",
+    )
+
+    try:
+        service.run_visual_agent_task(
+            {
+                "id": "reviewer",
+                "name": "Reviewer",
+                "role": "Reviewer",
+                "reasoning": "high",
+                "accessMode": "workspace-write",
+            },
+            "Review the result.",
+            "worker-profile-reviewer-test",
+        )
+    except ValueError as exc:
+        assert "missing an explicit llm setting" in str(exc)
+    else:
+        raise AssertionError("visual agent task accepted a card without llm")

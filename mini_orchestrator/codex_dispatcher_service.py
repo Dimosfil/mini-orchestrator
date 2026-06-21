@@ -22,13 +22,10 @@ from events import write_event  # type: ignore  # noqa: E402
 from models import Worker  # type: ignore  # noqa: E402
 from prompts import build_worker_prompt  # type: ignore  # noqa: E402
 from routing import decide_dispatch, find_worker  # type: ignore  # noqa: E402
+from worker_profiles import default_workers  # type: ignore  # noqa: E402
 
 
-DEFAULT_WORKERS = [
-    Worker("planner", "gpt-5.5", "high", ROOT / ".codex" / "agents" / "planner.toml"),
-    Worker("executor", "gpt-5.4", "medium", ROOT / ".codex" / "agents" / "executor.toml"),
-    Worker("reviewer", "gpt-5.4-mini", "high", ROOT / ".codex" / "agents" / "reviewer.toml"),
-]
+DEFAULT_WORKERS = default_workers(ROOT)
 
 WORK_PACKAGE_FIELDS = [
     ("role/instructions", "instructions"),
@@ -214,7 +211,7 @@ class PersistentCodexDispatcher:
             planOnly=False,
         )
 
-        model = str(agent.get("llm") or "gpt-5.4-mini").strip()
+        model = _required_agent_model(agent)
         reasoning = _normalized_reasoning(str(agent.get("reasoning") or "medium"))
         name = str(agent.get("name") or "Agent").strip()[:80] or "Agent"
         worker = Worker("visual-agent", model, reasoning, ROOT / ".codex" / "agents" / "visual-agent.toml")
@@ -290,7 +287,7 @@ class PersistentCodexDispatcher:
             planOnly=False,
         )
 
-        model = str(agent.get("llm") or "gpt-5.4-mini").strip()
+        model = _required_agent_model(agent)
         reasoning = _normalized_reasoning(str(agent.get("reasoning") or "medium"))
         name = str(agent.get("name") or "Agent").strip()[:80] or "Agent"
         worker = Worker("visual-agent", model, reasoning, ROOT / ".codex" / "agents" / "visual-agent.toml")
@@ -386,7 +383,7 @@ class PersistentCodexDispatcher:
             visualAgentName=name,
         )
 
-        model = str(agent.get("llm") or "gpt-5.4-mini").strip()
+        model = _required_agent_model(agent)
         reasoning = _normalized_reasoning(str(agent.get("reasoning") or "medium"))
         worker = Worker(name, model, reasoning, ROOT / ".codex" / "agents" / "visual-agent.toml")
 
@@ -478,7 +475,18 @@ class PersistentCodexDispatcher:
 
         workers = DEFAULT_WORKERS
         if model:
-            workers = [Worker(worker.name, model, worker.reasoning, worker.instructions_path) for worker in workers]
+            workers = [
+                Worker(
+                    worker.name,
+                    model,
+                    worker.reasoning,
+                    worker.instructions_path,
+                    access_mode=worker.access_mode,
+                    source_agent_id=worker.source_agent_id,
+                    instructions_text=worker.instructions_text,
+                )
+                for worker in workers
+            ]
 
         decision = decide_dispatch(task, workers)
         selected_worker = find_worker(workers, decision.role)
@@ -550,6 +558,14 @@ def _normalized_reasoning(value: str) -> str:
     return "medium"
 
 
+def _required_agent_model(agent: dict[str, Any]) -> str:
+    model = str(agent.get("llm") or "").strip()
+    if model:
+        return model
+    name = str(agent.get("name") or agent.get("id") or "Agent").strip() or "Agent"
+    raise ValueError(f"Agent card {name!r} is missing an explicit llm setting.")
+
+
 def _visual_agent_profile(agent: dict[str, Any]) -> dict[str, Any]:
     work_package_value = agent.get("workPackage", {})
     work_package = work_package_value if isinstance(work_package_value, dict) else {}
@@ -557,7 +573,7 @@ def _visual_agent_profile(agent: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": str(agent.get("name") or "Agent").strip()[:80],
         "role": str(agent.get("role") or "Agent").strip()[:80],
-        "model": str(agent.get("llm") or "gpt-5.4-mini").strip()[:80],
+        "model": _required_agent_model(agent)[:80],
         "speed": str(agent.get("speed") or "balanced").strip()[:40],
         "reasoning": _normalized_reasoning(str(agent.get("reasoning") or "medium")),
         "accessMode": access_mode or "danger-full-access",

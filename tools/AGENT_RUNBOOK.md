@@ -16,6 +16,18 @@ python -m pip install -e .
 python -m mini_orchestrator "прочитай AGENTS.md"
 ```
 
+For the web UI, start from the config-service-resolved Mini Orchestrator
+service record:
+
+```powershell
+python -m mini_orchestrator --ui
+```
+
+Also resolve the `symphony` service record through GI config-service, start
+Symphony with its recorded startup command when it is not already healthy, and
+verify its availability endpoint before treating the dashboard startup as
+complete.
+
 ## Test
 
 ```powershell

@@ -7,6 +7,8 @@ import hashlib
 import json
 import re
 
+from . import runtime_store
+
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_CARDS_DIR = ROOT / ".mini_orchestrator" / "agent-cards"
@@ -82,21 +84,23 @@ def default_dental_crm_agent_card(root: Path = ROOT) -> dict[str, Any]:
 
 def persist_agent_card(card: dict[str, Any], root: Path = ROOT) -> dict[str, Any]:
     normalized = validate_agent_card(card)
-    cards_dir = root / ".mini_orchestrator" / "agent-cards"
-    cards_dir.mkdir(parents=True, exist_ok=True)
-    path = cards_dir / f"{normalized['id']}.json"
     payload = {
         "card": normalized,
         "updatedAt": _utc_now(),
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    runtime_store.upsert_json_document(root, "agent_cards", normalized["id"], payload)
     return {
         "card": normalized,
-        "path": _project_path(path, root),
+        "path": runtime_store.runtime_uri("agent-cards", normalized["id"]),
     }
 
 
 def load_or_create_default_agent_card(root: Path = ROOT) -> dict[str, Any]:
+    stored = runtime_store.get_json_document(root, "agent_cards", DEFAULT_DENTAL_CRM_CARD_ID)
+    if stored is not None:
+        card = stored.get("card") if isinstance(stored, dict) else None
+        if isinstance(card, dict):
+            return validate_agent_card(card)
     path = root / ".mini_orchestrator" / "agent-cards" / f"{DEFAULT_DENTAL_CRM_CARD_ID}.json"
     if path.exists():
         try:
@@ -195,11 +199,8 @@ def compile_worker_profile(
         },
     }
 
-    profiles_dir = root / ".mini_orchestrator" / "worker-profiles"
-    profiles_dir.mkdir(parents=True, exist_ok=True)
-    path = profiles_dir / f"{snapshot_id}.json"
-    path.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    profile["path"] = _project_path(path, root)
+    runtime_store.upsert_json_document(root, "worker_profiles", snapshot_id, profile)
+    profile["path"] = runtime_store.runtime_uri("worker-profiles", snapshot_id)
     return profile
 
 

@@ -67,6 +67,10 @@ until a backend save/validate/run contract is implemented.
   `gpt-5.4-mini`, and must not inherit the selected `llm` value from an agent
   card. A card's `llm` is content/runtime configuration for the workflow being
   designed; the translator is UI infrastructure owned by the builder.
+- Reviewer runtime settings are separate from the translation helper. Reviewer
+  execution must use the `llm` stored on the selected chain preset/card. The
+  dispatcher must not silently replace a preset/card reviewer model with a role
+  fallback.
 - Work-package fields are prompt text. They are stored with the visual card and
   should be passed to future orchestrator execution as a structured handoff
   package instead of forwarding the whole mini-chat history.
@@ -87,9 +91,22 @@ until a backend save/validate/run contract is implemented.
 - The executable dashboard also has an `Исполнительная цепочка` dropdown backed
   by the same browser-local chain presets. When the user starts an approved
   workflow, the selected chain preset is sent with the run request and recorded
-  in the dispatcher JSONL log as `chain_selected`. Live Runs then shows one task
-  card in `In Progress`, the current worker as `Current`, and the selected
-  chain's agents as stage chips inside that task card.
+  in the dispatcher JSONL log as `chain_selected`. The dashboard must send the
+  full agent runtime settings, including `llm`, `reasoning`, `accessMode`, and
+  `workPackage`; it must not reduce agents to display-only `id/name/role`
+  metadata.
+- Approved dispatcher workflows write the selected preset to SQLite table
+  `dispatcher_chain_presets` in `.mini_orchestrator/runtime.sqlite3` and pass
+  the run id to `tools/codex-dispatcher/dispatcher.py --chain-preset-id`.
+  The dispatcher compiles those agents into in-memory worker profile
+  instructions, orders workers by the chain graph, and launches Codex
+  app-server turns with each agent's selected model, reasoning, access mode,
+  and work package. Executable chain presets must carry each agent's selected
+  `llm`; missing model settings are validation errors, not a reason to apply
+  role defaults.
+- Live Runs then shows one task card in `In Progress`, the current worker as
+  `Current`, and the selected chain's agents as stage chips inside that task
+  card.
 - Supported MVP `llm` values include `gpt-5.5`, `gpt-5.4`,
   `gpt-5.4-mini`, `gpt-5.3-codex-spark`, `gpt-5`, `gpt-4.1-mini`,
   and `rules`. The default is `gpt-5.5`.
@@ -224,8 +241,9 @@ Validation should check:
 - cycles are rejected unless the flow explicitly supports loop semantics;
 - every agent has a supported LLM, speed, and reasoning value.
 
-Execution should translate the visual graph into the existing
-plan -> execute -> validate lifecycle only after validation succeeds.
+Execution should translate the visual graph into the configured agent chain
+preset and only fall back to the default plan -> execute -> validate lifecycle
+when no explicit executable preset is supplied.
 
 ## Implementation Map
 

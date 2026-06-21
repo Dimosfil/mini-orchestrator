@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
+from mini_orchestrator import runtime_store
 from mini_orchestrator.agent_profiles import (
     AgentProfileError,
     DEFAULT_DENTAL_CRM_CARD_ID,
@@ -30,10 +29,10 @@ def test_default_dental_crm_card_persists_and_compiles(tmp_path) -> None:
     assert profile["runtime"]["accessMode"] == "workspace-write"
     assert "dental CRM demo" in visual_agent_task_prompt(profile)
 
-    card_path = tmp_path / ".mini_orchestrator" / "agent-cards" / f"{DEFAULT_DENTAL_CRM_CARD_ID}.json"
-    profile_path = tmp_path / profile["path"]
-    assert json.loads(card_path.read_text(encoding="utf-8"))["card"]["name"] == "Dental CRM Builder"
-    assert json.loads(profile_path.read_text(encoding="utf-8"))["snapshotId"] == profile["snapshotId"]
+    stored_card = runtime_store.get_json_document(tmp_path, "agent_cards", DEFAULT_DENTAL_CRM_CARD_ID)
+    stored_profile = runtime_store.get_json_document(tmp_path, "worker_profiles", profile["snapshotId"])
+    assert stored_card and stored_card["card"]["name"] == "Dental CRM Builder"
+    assert stored_profile and stored_profile["snapshotId"] == profile["snapshotId"]
 
 
 def test_compile_rejects_rules_agent(tmp_path) -> None:

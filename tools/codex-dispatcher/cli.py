@@ -7,8 +7,15 @@ import tempfile
 import time
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from mini_orchestrator import runtime_store
+
 from models import Worker
 from pipeline import run_pipeline as pipeline_run_pipeline
+from worker_profiles import workers_from_chain_preset, workers_from_chain_preset_file
 from worknest_client import load_worknest_task
 
 
@@ -34,6 +41,8 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
     parser.add_argument("--run-id", help="Stable run id used for the generated JSONL log filename.")
     parser.add_argument("--dry-run", action="store_true", help="Write dispatcher events without starting Codex.")
     parser.add_argument("--chain", action="store_true", help="Run planner -> executor -> reviewer instead of one selected worker.")
+    parser.add_argument("--chain-preset-file", help="JSON file containing the selected dashboard agent chain preset.")
+    parser.add_argument("--chain-preset-id", help="Run id whose selected dashboard chain preset is stored in runtime SQLite.")
     parser.add_argument("--plan-only", action="store_true", help="Return only a chat approval plan without writing project files.")
     parser.add_argument("--from-worknest", action="store_true", help="Claim the next task from the configured WorkNest manager.")
     parser.add_argument("--project", default="mini-orchestrator", help="WorkNest project id for --from-worknest.")
@@ -75,8 +84,33 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
         parser.error("--task is required unless --from-worknest is used.")
 
     selected_workers = workers
+    if args.chain_preset_id:
+        chain_preset = runtime_store.get_dispatcher_chain_preset(root, args.chain_preset_id)
+        if chain_preset is None:
+            raise ValueError(f"Stored chain preset was not found: {args.chain_preset_id}")
+        selected_workers = workers_from_chain_preset(chain_preset, root)
+    if args.chain_preset_file:
+        preset_path = Path(args.chain_preset_file)
+        if not preset_path.is_absolute():
+            preset_path = (root / preset_path).resolve()
+        resolved_preset_path = preset_path.resolve()
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        if not (path_is_inside(resolved_preset_path, root) or path_is_inside(resolved_preset_path, temp_root)):
+            raise ValueError(f"--chain-preset-file must stay inside {root} or {temp_root}. Got: {resolved_preset_path}")
+        selected_workers = workers_from_chain_preset_file(resolved_preset_path, root)
     if args.model:
-        selected_workers = [Worker(worker.name, args.model, worker.reasoning, worker.instructions_path) for worker in workers]
+        selected_workers = [
+            Worker(
+                worker.name,
+                args.model,
+                worker.reasoning,
+                worker.instructions_path,
+                access_mode=worker.access_mode,
+                source_agent_id=worker.source_agent_id,
+                instructions_text=worker.instructions_text,
+            )
+            for worker in selected_workers
+        ]
 
     mode = "plan" if args.plan_only else "chain" if args.chain else "single"
     try:

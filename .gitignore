@@ -24,3 +24,6 @@ __pycache__/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
+launch-desk/backend/data/*.sqlite
+launch-desk/backend/data/*.sqlite-*

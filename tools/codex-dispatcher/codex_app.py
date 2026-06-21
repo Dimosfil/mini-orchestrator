@@ -280,9 +280,10 @@ class CodexAppServer:
         access_mode: str | None = None,
     ) -> str:
         thread_cwd = self.worker_chat_root or self.root
-        approval_policy = approval_policy_for_access(access_mode)
+        effective_access_mode = access_mode or worker.access_mode or None
+        approval_policy = approval_policy_for_access(effective_access_mode)
         approvals_reviewer = "user" if approval_policy else None
-        sandbox = thread_sandbox_for_access(access_mode)
+        sandbox = thread_sandbox_for_access(effective_access_mode)
         result = self.request(
             "thread/start",
             {
@@ -317,7 +318,7 @@ class CodexAppServer:
             threadId=thread_id,
             targetWorkspace=str(self.root),
             workerChatRoot=str(self.worker_chat_root) if self.worker_chat_root else None,
-            accessMode=normalize_access_mode(access_mode),
+            accessMode=normalize_access_mode(effective_access_mode),
         )
         return thread_id
 
@@ -329,9 +330,10 @@ class CodexAppServer:
         effort: str | None = None,
         access_mode: str | None = None,
     ) -> str:
-        approval_policy = approval_policy_for_access(access_mode)
+        effective_access_mode = access_mode or worker.access_mode or None
+        approval_policy = approval_policy_for_access(effective_access_mode)
         approvals_reviewer = "user" if approval_policy else None
-        sandbox_policy = turn_sandbox_policy_for_access(access_mode)
+        sandbox_policy = turn_sandbox_policy_for_access(effective_access_mode)
         result = self.request(
             "turn/start",
             {
@@ -348,7 +350,7 @@ class CodexAppServer:
                 "sandboxPolicy": sandbox_policy,
                 "permissions": None,
                 "model": None,
-                "effort": effort,
+                "effort": effort or worker.reasoning,
                 "summary": None,
                 "personality": None,
                 "outputSchema": None,
@@ -362,7 +364,7 @@ class CodexAppServer:
             agent=worker.name,
             threadId=thread_id,
             turnId=turn_id,
-            accessMode=normalize_access_mode(access_mode),
+            accessMode=normalize_access_mode(effective_access_mode),
         )
         return self.collect_final_response(turn_id)
 

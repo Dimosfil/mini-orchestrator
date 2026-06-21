@@ -95,12 +95,9 @@ def parse_orchestrator_chat_command(task: str) -> OrchestratorChatCommand | None
 
 
 def decide_dispatch(task: str, workers: list[Worker]) -> DispatchDecision:
-    find_worker(workers, "planner")
-    find_worker(workers, "executor")
-    find_worker(workers, "reviewer")
+    worker_names = {worker.name for worker in workers}
     chat_command = parse_orchestrator_chat_command(task)
-    if chat_command and chat_command.forced_role:
-        find_worker(workers, chat_command.forced_role)
+    if chat_command and chat_command.forced_role and chat_command.forced_role in worker_names:
         return DispatchDecision(
             role=chat_command.forced_role,
             reason=f"orchestrator chat command forced {chat_command.forced_role} role",
@@ -109,34 +106,38 @@ def decide_dispatch(task: str, workers: list[Worker]) -> DispatchDecision:
         )
     next_input = chat_command.task if chat_command else task.strip()
     normalized = next_input.casefold()
-    if any(marker in normalized for marker in PLANNER_TASK_MARKERS):
+    if "planner" in worker_names and any(marker in normalized for marker in PLANNER_TASK_MARKERS):
         return DispatchDecision(
             role="planner",
             reason="planner-directed task marker matched",
             confidence=0.85,
             next_input=next_input,
         )
-    if any(marker in normalized for marker in REVIEWER_TASK_MARKERS):
+    if "reviewer" in worker_names and any(marker in normalized for marker in REVIEWER_TASK_MARKERS):
         return DispatchDecision(
             role="reviewer",
             reason="reviewer-directed task marker matched",
             confidence=0.8,
             next_input=next_input,
         )
-    if any(marker in normalized for marker in EXECUTOR_TASK_MARKERS):
+    if "executor" in worker_names and any(marker in normalized for marker in EXECUTOR_TASK_MARKERS):
         return DispatchDecision(
             role="executor",
             reason="executor-directed task marker matched",
             confidence=0.75,
             next_input=next_input,
         )
+    fallback_role = "planner" if "planner" in worker_names else workers[0].name
     return DispatchDecision(
-        role="planner",
-        reason="ambiguous request; planner fallback",
+        role=fallback_role,
+        reason="ambiguous request; selected chain start fallback",
         confidence=0.5,
         next_input=next_input,
     )
 
 
 def ordered_chain_workers(workers: list[Worker]) -> list[Worker]:
-    return [find_worker(workers, role) for role in CHAIN_ROLES]
+    worker_names = {worker.name for worker in workers}
+    if set(CHAIN_ROLES).issubset(worker_names):
+        return [find_worker(workers, role) for role in CHAIN_ROLES]
+    return list(workers)

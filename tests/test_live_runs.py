@@ -112,6 +112,33 @@ def test_dispatcher_run_state_has_normalized_shape(tmp_path):
     assert run["stale"]["isStale"] is False
 
 
+def test_dispatcher_live_runs_keep_pending_executor_model_distinct(tmp_path):
+    root = tmp_path
+    log_path = root / "tools" / "codex-dispatcher" / "runs" / "planner-running-run.jsonl"
+    log_path.parent.mkdir(parents=True)
+
+    write_event(log_path, {"time": "2999-06-18T00:00:00Z", "type": "task_created", "task": "calc", "chain": True})
+    write_event(
+        log_path,
+        {
+            "time": "2999-06-18T00:00:01Z",
+            "type": "agent_thread_started",
+            "agent": "planner",
+            "model": "gpt-5.5",
+            "threadId": "thread-planner",
+        },
+    )
+
+    payload = build_dispatcher_live_runs(root)
+
+    run = payload["runs"][0]
+    assert [stage["agent"] for stage in run["stages"]] == ["planner", "executor", "reviewer"]
+    assert run["stages"][0]["model"] == "gpt-5.5"
+    assert run["stages"][1]["status"] == "pending"
+    assert run["stages"][1]["model"] is None
+    assert payload["profiles"]["executor"]["model"] is None
+
+
 def test_dispatcher_live_runs_marks_old_incomplete_log_stale(tmp_path, monkeypatch):
     monkeypatch.setenv("MINI_ORCHESTRATOR_DISPATCHER_STALE_AFTER_SECONDS", "30")
     root = tmp_path

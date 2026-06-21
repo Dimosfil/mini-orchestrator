@@ -145,6 +145,11 @@
       max-width: 270px;
     }
 
+    .topbar-field.execution select {
+      min-width: 126px;
+      max-width: 150px;
+    }
+
     .current-chain-label {
       display: inline-flex;
       align-items: center;
@@ -159,6 +164,27 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .current-execution-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      max-width: 150px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(231, 245, 245, 0.9);
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .current-execution-label.symphony {
+      background: rgba(236, 232, 255, 0.95);
+      color: #4b3a8f;
     }
 
     .dot {
@@ -444,6 +470,69 @@
 
     .kanban-card-header > div {
       min-width: 0;
+    }
+
+    .run-status-stack {
+      display: grid;
+      justify-items: end;
+      gap: 7px;
+      min-width: 58px;
+      flex: 0 0 auto;
+    }
+
+    .run-progress-ring {
+      --progress-degrees: 0deg;
+      display: grid;
+      place-items: center;
+      width: 46px;
+      aspect-ratio: 1;
+      border: 0;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, var(--surface) 0 57%, transparent 58%),
+        conic-gradient(var(--accent) var(--progress-degrees), #dbe5ec 0deg);
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(47, 111, 139, 0.08);
+    }
+
+    .run-progress-ring.running,
+    .run-progress-ring.claimed,
+    .run-progress-ring.queued,
+    .run-progress-ring.retrying,
+    .run-progress-ring.planning {
+      color: var(--warn);
+      background:
+        radial-gradient(circle at center, var(--surface) 0 57%, transparent 58%),
+        conic-gradient(var(--warn) var(--progress-degrees), #f2e4bf 0deg);
+    }
+
+    .run-progress-ring.blocked,
+    .run-progress-ring.failed,
+    .run-progress-ring.waiting_approval,
+    .run-progress-ring.stale {
+      color: var(--danger);
+      background:
+        radial-gradient(circle at center, var(--surface) 0 57%, transparent 58%),
+        conic-gradient(var(--danger) var(--progress-degrees), #efd0d0 0deg);
+    }
+
+    .run-progress-ring.done,
+    .run-progress-ring.review {
+      color: var(--ok);
+      background:
+        radial-gradient(circle at center, var(--surface) 0 57%, transparent 58%),
+        conic-gradient(var(--ok) var(--progress-degrees), #cfe6d8 0deg);
+    }
+
+    .run-progress-ring:hover,
+    .run-progress-ring:focus-visible {
+      outline: 2px solid rgba(47, 111, 139, 0.22);
+      outline-offset: 2px;
     }
 
     .kanban-current-agent {
@@ -1361,6 +1450,15 @@
           </label>
           <button id="select-chain-button" class="btn-primary mini-button" type="button">Выбрать!</button>
           <span id="current-chain-label" class="current-chain-label">Текущий чейн: -</span>
+          <label class="topbar-field execution" for="execution-mode">
+            Execution
+            <select id="execution-mode">
+              <option value="dispatcher" selected>Dispatcher</option>
+              <option value="symphony">Symphony</option>
+            </select>
+          </label>
+          <button id="select-execution-button" class="btn-secondary mini-button" type="button">Confirm mode</button>
+          <span id="current-execution-label" class="current-execution-label">Execution: Dispatcher</span>
         </div>
         <button id="agents-builder-button" class="btn-secondary" type="button">Настройка агентов</button>
         <div class="status-pill" aria-live="polite">
@@ -1509,11 +1607,14 @@
 
   <script>
     const RUN_REVIEW_DECISIONS_STORAGE_KEY = "mini-orchestrator-run-review-decisions-v1";
+    const AGENT_FLOW_STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
     const RUN_CHAIN_SELECTION_STORAGE_KEY = "mini-orchestrator-run-chain-selection-v1";
+    const EXECUTION_MODE_STORAGE_KEY = "mini-orchestrator-execution-mode-v1";
     const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
     const LIVE_RUNS_SOURCE_MODE_STORAGE_KEY = "mini-orchestrator-live-runs-source-mode-v1";
     const LIVE_RUNS_SOURCE_MODES = new Set(["dispatcher", "symphony", "combined"]);
+    const EXECUTION_MODES = new Set(["dispatcher", "symphony"]);
     const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
@@ -1536,6 +1637,9 @@
     const runChainPreset = document.querySelector("#run-chain-preset");
     const selectChainButton = document.querySelector("#select-chain-button");
     const currentChainLabel = document.querySelector("#current-chain-label");
+    const executionMode = document.querySelector("#execution-mode");
+    const selectExecutionButton = document.querySelector("#select-execution-button");
+    const currentExecutionLabel = document.querySelector("#current-execution-label");
     const runButton = document.querySelector("#run-button");
     const approval = document.querySelector("#approval");
     const message = document.querySelector("#message");
@@ -1565,6 +1669,7 @@
     function setBusy(nextBusy, label = "Работаю") {
       busy = nextBusy;
       selectChainButton.disabled = busy;
+      selectExecutionButton.disabled = busy;
       runButton.disabled = busy || !approval.checked || !lastPlanTask;
       statusDot.className = `dot ${busy ? "busy" : ""}`;
       statusText.textContent = busy ? label : "Готов";
@@ -1730,17 +1835,34 @@
       }
       const agents = Array.isArray(flow.agents)
         ? flow.agents.map((agent) => ({
+            ...agent,
             id: String(agent.id || agent.name || agent.role || "agent"),
             name: String(agent.name || agent.role || "Agent"),
             preset: String(agent.preset || ""),
             role: String(agent.role || agent.preset || "Agent"),
+            llm: String(agent.llm || ""),
+            speed: String(agent.speed || ""),
+            reasoning: String(agent.reasoning || ""),
+            accessMode: String(agent.accessMode || ""),
+            workPackage: agent.workPackage && typeof agent.workPackage === "object" ? agent.workPackage : {},
+            workPackageTranslations:
+              agent.workPackageTranslations && typeof agent.workPackageTranslations === "object"
+                ? agent.workPackageTranslations
+                : {},
           }))
         : [];
-      const connections = Array.isArray(flow.connections) ? flow.connections : [];
+      const connections = Array.isArray(flow.connections) ? flow.connections.map((connection) => ({ ...connection })) : [];
       return {
         id,
         name: name.slice(0, 80),
-        flow: { agents, connections },
+        flow: {
+          ...flow,
+          agents,
+          connections,
+          chainPresetId: String(flow.chainPresetId || id),
+          name: String(flow.name || name),
+        },
+        updatedAt: String(value.updatedAt || ""),
       };
     }
 
@@ -1765,11 +1887,56 @@
       } catch {
         // Keep the built-in chain if browser-local presets are unavailable.
       }
+      const currentFlowPreset = loadCurrentAgentFlowPreset();
+      if (currentFlowPreset) {
+        const existingIndex = presets.findIndex((preset) => preset.id === currentFlowPreset.id);
+        if (existingIndex >= 0) {
+          presets[existingIndex] = currentFlowPreset;
+        } else {
+          presets.push(currentFlowPreset);
+        }
+      }
       return presets;
+    }
+
+    function loadCurrentAgentFlowPreset() {
+      try {
+        const raw = localStorage.getItem(AGENT_FLOW_STORAGE_KEY);
+        const flow = raw ? JSON.parse(raw) : null;
+        if (!flow || typeof flow !== "object" || !Array.isArray(flow.agents) || !flow.agents.length) {
+          return null;
+        }
+        const id = String(flow.chainPresetId || DEFAULT_CHAIN_PRESET_ID).trim() || DEFAULT_CHAIN_PRESET_ID;
+        const name = String(flow.name || "Default planner -> executor -> reviewer").trim() || "Agent chain";
+        return normalizeChainPreset({ id, name, flow });
+      } catch (_error) {
+        return null;
+      }
     }
 
     function normalizePlanMode(value) {
       return value === "dry-run" ? "dry-run" : "real";
+    }
+
+    function normalizeExecutionMode(value) {
+      return value === "symphony" ? "symphony" : "dispatcher";
+    }
+
+    function loadExecutionMode() {
+      try {
+        const stored = localStorage.getItem(EXECUTION_MODE_STORAGE_KEY);
+        return normalizeExecutionMode(stored);
+      } catch (_error) {
+        return "dispatcher";
+      }
+    }
+
+    function saveExecutionMode(mode) {
+      try {
+        localStorage.setItem(EXECUTION_MODE_STORAGE_KEY, normalizeExecutionMode(mode));
+      } catch (_error) {
+        // The visible selector still reflects the current in-memory mode.
+      }
     }
 
     function loadRunChainSelection() {
@@ -1779,9 +1946,10 @@
         return {
           planMode: normalizePlanMode(parsed?.planMode),
           chainPresetId: String(parsed?.chainPresetId || DEFAULT_CHAIN_PRESET_ID),
+          executionMode: normalizeExecutionMode(parsed?.executionMode || loadExecutionMode()),
         };
       } catch (_error) {
-        return { planMode: "real", chainPresetId: DEFAULT_CHAIN_PRESET_ID };
+        return { planMode: "real", chainPresetId: DEFAULT_CHAIN_PRESET_ID, executionMode: loadExecutionMode() };
       }
     }
 
@@ -1797,6 +1965,10 @@
       return normalizePlanMode(selectedRunChainConfig.planMode);
     }
 
+    function selectedExecutionMode() {
+      return normalizeExecutionMode(selectedRunChainConfig.executionMode || loadExecutionMode());
+    }
+
     function renderRunChainPresetSelect() {
       const presets = loadChainPresets();
       const selectedId = presets.some((preset) => preset.id === selectedRunChainConfig.chainPresetId)
@@ -1805,8 +1977,10 @@
       selectedRunChainConfig = {
         planMode: normalizePlanMode(selectedRunChainConfig.planMode),
         chainPresetId: selectedId,
+        executionMode: selectedExecutionMode(),
       };
       planMode.value = selectedRunChainConfig.planMode;
+      executionMode.value = selectedExecutionMode();
       runChainPreset.replaceChildren(...presets.map((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
@@ -1815,6 +1989,7 @@
         return option;
       }));
       updateCurrentChainLabel();
+      updateCurrentExecutionLabel();
     }
 
     function selectedRunChainPreset() {
@@ -1828,6 +2003,14 @@
       currentChainLabel.title = `Текущий чейн: ${chainPreset.name}`;
     }
 
+    function updateCurrentExecutionLabel() {
+      const mode = selectedExecutionMode();
+      const label = mode === "symphony" ? "Symphony" : "Dispatcher";
+      currentExecutionLabel.textContent = `Execution: ${label}`;
+      currentExecutionLabel.title = `Execution mode: ${label}`;
+      currentExecutionLabel.classList.toggle("symphony", mode === "symphony");
+    }
+
     function selectCurrentRunChain() {
       const presets = loadChainPresets();
       const selectedId = presets.some((preset) => preset.id === runChainPreset.value)
@@ -1836,11 +2019,23 @@
       selectedRunChainConfig = {
         planMode: normalizePlanMode(planMode.value),
         chainPresetId: selectedId,
+        executionMode: selectedExecutionMode(),
       };
       saveRunChainSelection();
       renderRunChainPresetSelect();
       const chainPreset = selectedRunChainPreset();
       setMessage(`Выбран текущий чейн: ${chainPreset.name}`, "ok");
+    }
+
+    function selectCurrentExecutionMode() {
+      selectedRunChainConfig = {
+        ...selectedRunChainConfig,
+        executionMode: normalizeExecutionMode(executionMode.value),
+      };
+      saveExecutionMode(selectedRunChainConfig.executionMode);
+      saveRunChainSelection();
+      updateCurrentExecutionLabel();
+      setMessage(`Execution mode confirmed: ${selectedRunChainConfig.executionMode}`, "ok");
     }
 
     function runStatusClass(status) {
@@ -2006,6 +2201,54 @@
           output: matched?.output || "",
         };
       });
+    }
+
+    function runProgressPercent(run, profile) {
+      const status = runStatusClass(run.status);
+      if (status === "done" || status === "review") {
+        return 100;
+      }
+      const stages = configuredChainStagesForRun(run, profile);
+      if (!Array.isArray(stages) || stages.length === 0) {
+        if (status === "running" || status === "planning" || status === "retrying" || status === "claimed") {
+          return 50;
+        }
+        if (status === "queued" || status === "idle") {
+          return 0;
+        }
+        return status === "failed" || status === "blocked" || status === "stale" ? 0 : 0;
+      }
+      const score = stages.reduce((total, stage) => {
+        const stageStatus = runStatusClass(stage.status || "pending");
+        if (stageStatus === "done" || stageStatus === "review") {
+          return total + 1;
+        }
+        if (
+          stageStatus === "running"
+          || stageStatus === "planning"
+          || stageStatus === "queued"
+          || stageStatus === "retrying"
+          || stageStatus === "waiting_approval"
+        ) {
+          return total + 0.5;
+        }
+        return total;
+      }, 0);
+      return Math.max(0, Math.min(100, Math.round((score / stages.length) * 100)));
+    }
+
+    function renderRunProgress(run, profile) {
+      const status = runStatusClass(run.status);
+      const percent = runProgressPercent(run, profile);
+      const ring = document.createElement("button");
+      ring.type = "button";
+      ring.className = `run-progress-ring ${status}`;
+      ring.style.setProperty("--progress-degrees", `${Math.round((percent / 100) * 360)}deg`);
+      ring.textContent = `${percent}%`;
+      ring.title = `Progress: ${percent}% based on visible chain stages`;
+      ring.setAttribute("aria-label", `Run progress ${percent} percent`);
+      ring.addEventListener("click", () => openRunDetails(run, profile));
+      return ring;
     }
 
     function renderPipelineRun(run, profile) {
@@ -2435,7 +2678,10 @@
       const pill = document.createElement("span");
       pill.className = `run-status ${status}`;
       pill.textContent = run.status || "unknown";
-      header.append(titleWrap, pill);
+      const statusStack = document.createElement("div");
+      statusStack.className = "run-status-stack";
+      statusStack.append(pill, renderRunProgress(run, profile));
+      header.append(titleWrap, statusStack);
 
       const current = document.createElement("p");
       current.className = "kanban-current-agent";
@@ -2705,13 +2951,16 @@
 
       setBusy(true, "Запускаю");
       const chainPreset = selectedRunChainPreset();
-      setMessage(`Выполняю approved workflow через цепочку: ${chainPreset.name}`);
+      const execution = selectedExecutionMode();
+      setMessage(`Выполняю approved workflow через ${execution}: ${chainPreset.name}`);
       try {
-        const payload = await postJson((liveRunsSourceMode?.value || loadLiveRunsSourceMode()) === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run", {
+        const payload = await postJson(execution === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run", {
           task: lastPlanTask,
           approved: true,
-          background: (liveRunsSourceMode?.value || loadLiveRunsSourceMode()) !== "symphony",
+          background: execution !== "symphony",
           mode: selectedPlanMode(),
+          executionMode: execution,
+          submitToSymphony: execution === "symphony",
           chainPreset,
         });
         renderPayload(payload);
@@ -2736,6 +2985,7 @@
       window.open("/agents-builder", "mini-orchestrator-agents-builder");
     });
     selectChainButton.addEventListener("click", selectCurrentRunChain);
+    selectExecutionButton.addEventListener("click", selectCurrentExecutionMode);
     runButton.addEventListener("click", runApprovedWorkflow);
     runDetailsClose.addEventListener("click", closeRunDetails);
     runDetailsBackdrop.addEventListener("click", (event) => {
@@ -2761,6 +3011,7 @@
     });
     window.addEventListener("focus", renderRunChainPresetSelect);
     setLiveRunsSourceMode(loadLiveRunsSourceMode());
+    selectedRunChainConfig.executionMode = selectedExecutionMode();
     renderRunChainPresetSelect();
     restoreRunsBoardHeight();
     setupRunsBoardResize();

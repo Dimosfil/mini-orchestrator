@@ -10,6 +10,9 @@ class Worker:
     model: str
     reasoning: str
     instructions_path: Path
+    access_mode: str = ""
+    source_agent_id: str = ""
+    instructions_text: str = ""
 
 
 @dataclass(frozen=True)

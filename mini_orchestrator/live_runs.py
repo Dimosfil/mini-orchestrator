@@ -12,6 +12,21 @@ CHAIN_AGENTS = ["planner", "executor", "reviewer"]
 DEFAULT_STALE_AFTER_SECONDS = 15 * 60
 
 
+def _env_optional(name: str) -> str | None:
+    value = os.environ.get(name, "").strip()
+    return value or None
+
+
+def _default_stage_model(agent: str) -> str | None:
+    if agent == "planner":
+        return _env_optional("MINI_ORCHESTRATOR_COORDINATOR_MODEL")
+    if agent == "executor":
+        return _env_optional("MINI_ORCHESTRATOR_EXECUTOR_MODEL")
+    if agent == "reviewer":
+        return _env_optional("MINI_ORCHESTRATOR_REVIEWER_MODEL")
+    return None
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -171,7 +186,7 @@ def _ensure_stage(
             "completedAt": None,
             "threadId": None,
             "turnCount": 0,
-            "model": None,
+            "model": _default_stage_model(agent),
             "tokens": 0,
             "lastEvent": "",
             "output": "",
@@ -544,9 +559,9 @@ def build_dispatcher_live_runs(root: Path, limit: int = 8) -> Dict[str, Any]:
     }
     profiles = {
         "dispatcher": {"displayName": "Dispatcher", "role": "dispatcher", "model": "-"},
-        "planner": {"displayName": "Planner", "role": "planner", "model": "gpt-5.5"},
-        "executor": {"displayName": "Executor", "role": "executor", "model": "gpt-5.4"},
-        "reviewer": {"displayName": "Reviewer", "role": "reviewer", "model": "gpt-5.4-mini"},
+        "planner": {"displayName": "Planner", "role": "planner", "model": _default_stage_model("planner")},
+        "executor": {"displayName": "Executor", "role": "executor", "model": _default_stage_model("executor")},
+        "reviewer": {"displayName": "Reviewer", "role": "reviewer", "model": _default_stage_model("reviewer")},
     }
     return {
         "source": "dispatcher-jsonl",

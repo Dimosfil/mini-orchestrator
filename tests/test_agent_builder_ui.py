@@ -173,6 +173,20 @@ def test_dashboard_kanban_cards_have_clickable_agent_details() -> None:
     assert 'runDetailsJson("Agent config", agentConfig)' in html
 
 
+def test_dashboard_kanban_cards_show_stage_based_progress_ring() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert ".run-progress-ring" in html
+    assert "function runProgressPercent(run, profile)" in html
+    assert "configuredChainStagesForRun(run, profile)" in html
+    assert "stageStatus === \"running\"" in html
+    assert "return total + 0.5;" in html
+    assert "ring.style.setProperty(\"--progress-degrees\"" in html
+    assert "ring.addEventListener(\"click\", () => openRunDetails(run, profile));" in html
+    assert 'statusStack.append(pill, renderRunProgress(run, profile));' in html
+
+
 def test_dashboard_keeps_running_reviewer_as_bot_work() -> None:
     html_path = Path("mini_orchestrator/web/index.html")
     html = html_path.read_text(encoding="utf-8")
@@ -188,8 +202,12 @@ def test_dashboard_can_route_approved_workflow_to_symphony_gateway() -> None:
     html = html_path.read_text(encoding="utf-8")
 
     assert '"/api/symphony/runs"' in html
-    assert '(liveRunsSourceMode?.value || loadLiveRunsSourceMode()) === "symphony"' in html
-    assert 'background: (liveRunsSourceMode?.value || loadLiveRunsSourceMode()) !== "symphony"' in html
+    assert 'id="execution-mode"' in html
+    assert 'id="select-execution-button"' in html
+    assert "EXECUTION_MODE_STORAGE_KEY" in html
+    assert 'execution === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run"' in html
+    assert 'background: execution !== "symphony"' in html
+    assert 'submitToSymphony: execution === "symphony"' in html
 
 
 def test_dashboard_kanban_refresh_preserves_column_scroll_positions() -> None:
@@ -244,9 +262,12 @@ def test_dashboard_chain_picker_is_in_topbar_without_plan_or_core_buttons() -> N
     assert 'id="run-chain-preset"' in html
     assert 'id="select-chain-button"' in html
     assert 'id="current-chain-label"' in html
+    assert 'id="current-execution-label"' in html
     assert "RUN_CHAIN_SELECTION_STORAGE_KEY" in html
     assert "function selectCurrentRunChain()" in html
+    assert "function selectCurrentExecutionMode()" in html
     assert "currentChainLabel.textContent" in html
+    assert "currentExecutionLabel.textContent" in html
     assert "mode: selectedPlanMode()" in html
     assert 'id="plan-button"' not in html
     assert 'id="core-button"' not in html
@@ -261,6 +282,26 @@ def test_dashboard_loads_persisted_default_chain_override() -> None:
     assert "if (preset.id === DEFAULT_CHAIN_PRESET_ID) {" in html
     assert "presets[0] = preset;" in html
     assert "if (preset && preset.id !== DEFAULT_CHAIN_PRESET_ID)" not in html
+
+
+def test_dashboard_preserves_chain_agent_runtime_settings() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "llm: String(agent.llm || \"\")" in html
+    assert "reasoning: String(agent.reasoning || \"\")" in html
+    assert "accessMode: String(agent.accessMode || \"\")" in html
+    assert "workPackage: agent.workPackage && typeof agent.workPackage === \"object\" ? agent.workPackage : {}" in html
+
+
+def test_dashboard_loads_current_agent_flow_as_chain_preset_source() -> None:
+    html = Path("mini_orchestrator/web/index.html").read_text(encoding="utf-8")
+
+    assert 'const AGENT_FLOW_STORAGE_KEY = "mini-orchestrator-agent-flow-v1";' in html
+    assert "function loadCurrentAgentFlowPreset()" in html
+    assert "localStorage.getItem(AGENT_FLOW_STORAGE_KEY)" in html
+    assert "presets[existingIndex] = currentFlowPreset;" in html
+    assert "return normalizeChainPreset({ id, name, flow });" in html
 
 
 def test_dashboard_rework_action_starts_background_workflow() -> None:

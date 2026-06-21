@@ -17,9 +17,11 @@ Single-worker mode:
 Chain mode:
 
 1. Classify and normalize the user task into a `DispatchDecision`.
-2. Run `planner` with the normalized `next_input`.
-3. Pass planner output to `executor`.
-4. Pass planner and executor output to `reviewer`.
+2. Load workers from `--chain-preset-id` when the dashboard selected a chain.
+3. Run the workers in the selected chain graph order, passing prior worker
+   outputs forward.
+4. If no chain preset id is supplied, run the configured default
+   `planner -> executor -> reviewer` chain.
 5. Return all role outputs and write a JSONL event log with `chain=true`.
 
 The decision includes `role`, `reason`, `confidence`, and `next_input`.
@@ -27,16 +29,38 @@ Planner-directed tasks route to `planner`; explicit implementation/editing
 tasks route to `executor`; explicit review/verification tasks route to
 `reviewer`. Ambiguous tasks still fall back to `planner`.
 
-## Roles
+## Worker Profiles
 
-- `planner`: `gpt-5.5`, high reasoning
-- `executor`: `gpt-5.4`, medium reasoning
-- `reviewer`: `gpt-5.4-mini`, high reasoning
+Default worker models are configuration-backed:
 
-The role instructions are sourced from `.codex/agents/*.toml`.
+- `planner`: `MINI_ORCHESTRATOR_COORDINATOR_MODEL`, default `gpt-5.5`
+- `executor`: `MINI_ORCHESTRATOR_EXECUTOR_MODEL`, default `gpt-5.3-codex-spark`
+- `reviewer`: `MINI_ORCHESTRATOR_REVIEWER_MODEL`, default follows the
+  coordinator model
+
+When `--chain-preset-id` is provided, worker names, models, reasoning levels,
+access modes, order, and instructions are derived from the selected agent chain
+preset stored in `.mini_orchestrator/runtime.sqlite3`. Generated profile
+instructions stay in memory on the worker object instead of being written under
+`.mini_orchestrator/dispatcher-chain-profiles/`. Every executable agent in that
+preset must include its own `llm`; missing models are rejected instead of being
+filled from role defaults. `--chain-preset-file` remains available for manual
+compatibility runs outside the dashboard path.
 Real Codex app-server runs pass the selected worker model by default. Use
 `--model <name>` to override all worker model labels for a run, or
 `--use-codex-default-models` to let the current Codex config choose the model.
+
+## Generated App Artifacts
+
+Release-chain tests that ask workers to generate a runnable app, CRM, demo, or
+prototype must create a separate project-named version folder under
+`.mini_orchestrator/test-runs/<task-slug>/<version>/`.
+
+Workers must not modify `launch-desk/` or another existing app only because it
+looks like a convenient web project. Use an existing folder only when the user
+explicitly names it as the target. Every repeat run should leave the previous
+artifact inspectable, with a README or manifest describing the original task,
+entry point, run date, and verification notes.
 
 ## Usage
 
@@ -62,6 +86,12 @@ Real full chain run:
 
 ```powershell
 python tools\codex-dispatcher\dispatcher.py --task "оркестратор план Сделай калькулятор" --chain
+```
+
+Real full chain run with a dashboard-selected preset:
+
+```powershell
+python tools\codex-dispatcher\dispatcher.py --task "Approved workflow task" --chain --chain-preset-id ui-abc123
 ```
 
 Chat-style command dry run:

@@ -17,6 +17,30 @@ from routing import decide_dispatch, find_worker, ordered_chain_workers
 CodexServerFactory = Callable[..., AbstractContextManager[CodexAppServer]]
 
 
+def _worker_access_mode(worker: Worker) -> str | None:
+    return worker.access_mode or None
+
+
+def _start_thread(server: CodexAppServer, worker: Worker) -> str:
+    access_mode = _worker_access_mode(worker)
+    if access_mode:
+        return server.start_thread(worker, access_mode=access_mode)
+    return server.start_thread(worker)
+
+
+def _run_turn(server: CodexAppServer, thread_id: str, worker: Worker, prompt: str) -> str:
+    access_mode = _worker_access_mode(worker)
+    if access_mode:
+        return server.run_turn(
+            thread_id,
+            worker,
+            prompt,
+            effort=worker.reasoning,
+            access_mode=access_mode,
+        )
+    return server.run_turn(thread_id, worker, prompt, effort=worker.reasoning)
+
+
 def has_cyrillic(text: str) -> bool:
     return any("\u0400" <= char <= "\u04ff" for char in text)
 
@@ -158,9 +182,9 @@ def run_pipeline(
                 turn_timeout_seconds=turn_timeout_seconds,
                 use_worker_models=use_worker_models,
             ) as server:
-                thread_id = server.start_thread(planner)
+                thread_id = _start_thread(server, planner)
                 try:
-                    output = server.run_turn(thread_id, planner, prompt)
+                    output = _run_turn(server, thread_id, planner, prompt)
                 except Exception as exc:
                     write_event(log_path, "error", agent=planner.name, error=str(exc), planOnly=True)
                     raise
@@ -185,12 +209,12 @@ def run_pipeline(
             use_worker_models=use_worker_models,
         ) as server:
             for worker in ordered_chain_workers(workers):
-                thread_id = server.start_thread(worker)
+                thread_id = _start_thread(server, worker)
                 prior = build_chain_prior(outputs)
                 prompt = build_worker_prompt(worker, decision.next_input, prior=prior)
                 write_event(log_path, "handoff", to=worker.name, prompt=prompt, chain=True)
                 try:
-                    output = server.run_turn(thread_id, worker, prompt)
+                    output = _run_turn(server, thread_id, worker, prompt)
                 except Exception as exc:
                     write_event(log_path, "error", agent=worker.name, error=str(exc), chain=True)
                     raise
@@ -214,11 +238,11 @@ def run_pipeline(
         turn_timeout_seconds=turn_timeout_seconds,
         use_worker_models=use_worker_models,
     ) as server:
-        thread_id = server.start_thread(selected_worker)
+        thread_id = _start_thread(server, selected_worker)
         prompt = build_worker_prompt(selected_worker, decision.next_input)
         write_event(log_path, "handoff", to=selected_worker.name, prompt=prompt)
         try:
-            output = server.run_turn(thread_id, selected_worker, prompt)
+            output = _run_turn(server, thread_id, selected_worker, prompt)
         except Exception as exc:
             write_event(log_path, "error", agent=selected_worker.name, error=str(exc))
             raise

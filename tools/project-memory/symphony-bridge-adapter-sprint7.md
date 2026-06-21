@@ -7,10 +7,23 @@ Date: 2026-06-19
 This document records the accepted runtime workflow for the WorkNest sprint
 `2026-06-19_17-01-10_symphony-bridge-adapter-sprint`.
 
-Mini Orchestrator can read and display Symphony daemon state, but it must not
-invent a Symphony task-intake protocol. Until Symphony exposes a documented
-agent-facing intake endpoint through config-service, Mini Orchestrator treats
-Symphony task-run submission as a blocker.
+Mini Orchestrator can read and display Symphony daemon state. It can also build
+a documented intake payload from the selected Mini Orchestrator chain preset.
+Submission is allowed only when the `symphony` config-service record and its
+contract expose a task-intake endpoint. If the endpoint is missing, Mini
+Orchestrator records a visible blocked gateway run instead of pretending
+Symphony accepted the task.
+
+As of 2026-06-20, the connected local Symphony workspace exposes the required
+contract and intake endpoint:
+
+- `GET /agent/contract`
+- `POST /api/v1/intake`
+
+The config-service `symphony` record points `endpoints.contract` at
+`http://127.0.0.1:4000/agent/contract`. Mini Orchestrator resolves that
+contract, discovers `taskIntake: /api/v1/intake`, and submits the selected
+chain preset as `mini-orchestrator.symphony-intake.v1`.
 
 ## Runtime Sources
 
@@ -26,6 +39,13 @@ Live Runs has three source modes:
 Combined mode is the default. Symphony errors or empty state do not hide
 dispatcher runs. The UI shows a non-terminal Symphony unavailable note while
 keeping dispatcher cards visible.
+
+Startup contract: starting or restarting Mini Orchestrator must also start or
+verify Symphony through the `symphony` service record in GI config-service.
+Check `endpoints.availability` such as `/api/v1/state`; if it is unavailable,
+launch Symphony with the service record startup command and verify it before
+calling the full dashboard startup complete. This keeps observability live, but
+does not change the intake blocker below.
 
 Every run state should expose the same base fields:
 
@@ -60,22 +80,35 @@ The default freshness window is 15 minutes. Stale runs move out of active counts
 and into Human Review in the dashboard, with the stale reason visible on the
 card.
 
-## Symphony Gateway And Intake Blocker
+## Symphony Gateway And Task Intake
 
 `POST /api/symphony/runs` validates approved task-run payloads, requires live
-Symphony observability, records the selected chain preset in a local gateway run
-card, and returns:
+Symphony observability, converts the selected chain preset into
+`agentTasks[]`, reads the config-service-resolved Symphony contract, and posts
+to a documented intake endpoint when available:
+
+- `endpoints.taskIntake`
+- `endpoints.agentIntake`
+- `endpoints.intake`
+
+The outbound payload schema is:
+
+- `schemaVersion: mini-orchestrator.symphony-intake.v1`
+- `dispatchStrategy: one-symphony-agent-per-preset-stage`
+- `task`: one shared task card for the whole user-visible work item
+- `chainPreset`: selected preset id/name/raw payload
+- `agentTasks[]`: one item per configured preset agent, carrying that agent's
+  id/name/role/preset, Codex model/speed/reasoning/access mode, work package,
+  translations, and the agent-specific stage task derived from the shared card
+
+If no intake endpoint is documented, the route records a local gateway run with:
 
 - `status: blocked`
 - `mode: symphony-gateway`
 - `lastError: symphony-intake-missing`
 - selected `chainPreset` and per-stage placeholders
 
-The endpoint exists so UI and agents can call one stable local route, but the
-route must not mutate Symphony until config-service resolves a Symphony record
-with a documented external task-intake contract.
-
-The future Symphony-side adapter should define:
+The Symphony-side adapter contract should define:
 
 - service id and config-service record;
 - guide and contract endpoints;
@@ -86,15 +119,41 @@ The future Symphony-side adapter should define:
 - health and failure reporting;
 - no fallback-port behavior.
 
-Supported Symphony bridge operations before task intake exists:
+Current local Symphony behavior:
+
+- `POST /api/v1/intake` validates `approved=true`,
+  `schemaVersion=mini-orchestrator.symphony-intake.v1`, a shared `task`, and a
+  non-empty `agentTasks[]` array.
+- Symphony creates one synthetic issue per `agentTasks[]` item.
+- Each synthetic issue carries the Mini task card, the preset agent settings,
+  Codex model/reasoning/access mode, and work package in issue metadata.
+- Mini-origin synthetic issues skip the Linear `after_create` bootstrap hook so
+  they do not clone Symphony itself into the task workspace.
+- On Windows, Symphony launches Codex app-server through Node and the local
+  npm Codex `codex.js` entrypoint instead of broken `bash.exe`, PowerShell, or
+  direct `.cmd` execution.
+- The local `WORKFLOW.md` uses `codex app-server -c
+  shell_environment_policy.inherit=all`; the Mini preset payload supplies model
+  and reasoning settings per agent.
+
+Verified smoke on 2026-06-20:
+
+- Mini `POST /api/symphony/runs` returned `status=queued` with
+  `intakeSubmitted=true`.
+- Symphony accepted
+  `MO-sym-intake-smoke-20260620-h-1-smoke-reviewer`.
+- Symphony log recorded `Codex session completed` and
+  `External intake agent completed` for that synthetic issue.
+
+Supported Symphony bridge operations without task intake:
 
 - `GET /api/v1/state` through `/api/daemon/runs?source=symphony`.
 - `POST /api/v1/refresh` through `/api/symphony/refresh`.
 - `GET /api/v1/{issue_identifier}` through
   `/api/symphony/issues/{issueIdentifier}`.
 
-These are observability/control operations only. They do not create external
-task runs and do not replace the missing task-intake contract.
+These observability/control operations do not create external task runs and do
+not replace the task-intake contract.
 
 ## WorkNest Lifecycle
 

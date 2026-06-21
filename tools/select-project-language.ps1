@@ -38,7 +38,7 @@ function Select-LanguageOrder {
 
     $default = @($DefaultSelected | Where-Object { $available -contains $_ } | Select-Object -Unique)
     if ($default.Count -eq 0) {
-        $default = @("English")
+        $default = @("English", "Russian")
     }
 
     Write-Host ""
@@ -82,8 +82,8 @@ function Select-LanguageOrder {
     return $selected
 }
 
-$defaultProject = @("English")
-$defaultTasks = @("English")
+$defaultProject = @("English", "Russian")
+$defaultTasks = @("English", "Russian")
 if (Test-Path -LiteralPath $SystemOutputPath) {
     try {
         $existing = Get-Content -LiteralPath $SystemOutputPath -Raw | ConvertFrom-Json
@@ -109,7 +109,7 @@ if (Test-Path -LiteralPath $SystemOutputPath) {
     }
 }
 
-$defaultCommits = @("English")
+$defaultCommits = @("English", "Russian")
 if (Test-Path -LiteralPath $GitOutputPath) {
     try {
         $existingGit = Get-Content -LiteralPath $GitOutputPath -Raw | ConvertFrom-Json

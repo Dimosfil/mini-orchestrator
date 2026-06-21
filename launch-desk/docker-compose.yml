@@ -1,0 +1,38 @@
+services:
+  backend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install --prefix backend && npm run db:migrate --prefix backend && npm run db:seed --prefix backend && npm run start --prefix backend"
+    volumes:
+      - .:/app
+      - backend-data:/app/data
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/dental-crm.sqlite
+      - JWT_SECRET=change-me
+      - JWT_EXPIRES_IN_HOURS=12
+      - SEED_ADMIN_PASSWORD=change-me
+      - SEED_ADMIN_EMAIL=owner@dental.local
+      - WORKER_ENABLED=true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install --prefix frontend && npm run build --prefix frontend"
+    volumes:
+      - .:/app
+    ports:
+      - "5173:4173"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-data:

@@ -14,6 +14,35 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Generated Project Artifact Isolation
+
+Goal: make repeated orchestrator test runs create isolated, project-named
+artifacts instead of modifying legacy or unrelated app folders.
+
+- [x] Add dispatcher runtime prompt rules for generated app artifact folders.
+- [x] Add regression tests that chain prompts mention artifact isolation.
+- [x] Document the retry/debug workflow for real-token orchestrator runs.
+
+### Dispatcher Chain Preset Execution Contract
+
+Goal: make approved dashboard tasks execute through the selected agent chain
+preset instead of the dispatcher hard-coded worker model list.
+
+- [x] Preserve full chain preset agent settings from the dashboard payload.
+- [x] Let dispatcher runs load worker profiles from the selected chain preset.
+- [x] Record the selected chain execution contract in run logs and docs.
+- [x] Verify focused dispatcher/UI tests.
+
+### Live Runs Card Progress Indicator
+
+Goal: show a compact, recorded-stage-based progress indicator on dashboard task
+cards without inventing hidden runner progress.
+
+- [x] Add a circular progress indicator to Kanban task cards.
+- [x] Compute progress only from run status and visible stage statuses.
+- [x] Add a focused dashboard UI regression assertion.
+- [x] Verify the focused UI checks.
+
 ### Symphony-Governed Chain Dashboard Pass
 
 Goal: make the dashboard show a Symphony-aware task workflow with selected
@@ -1237,3 +1266,36 @@ Verification:
 - [x] Focused daemon run tests for `review`, `done`, and `rework`.
 - [x] Dashboard static/API tests for durable review actions.
 - [x] `python -m compileall mini_orchestrator`
+
+### Runtime SQLite Store
+
+Goal: move `.mini_orchestrator/` runtime state into SQLite, keeping
+`.mini_orchestrator/test-runs/` as the only file artifact tree.
+
+Planned changes:
+
+- [x] Inventory runtime folders and assign each to a storage theme.
+- [x] Add a project-local SQLite schema for agent profiles, flow drafts,
+  manifests, daemon/symphony run state, dispatcher tasks/process output, and
+  generic runtime blobs/logs.
+- [x] Add an idempotent migration command that imports all non-`test-runs`
+  files into SQLite with source path, theme, content type, and timestamps.
+- [x] Update code paths that create new flow/manifest/task/process/profile
+  state to prefer SQLite where the current runtime contract is clear.
+- [x] Verify migration counts and focused tests.
+
+Definition of done:
+
+- [x] Existing non-`test-runs` runtime files are represented in SQLite.
+- [x] New writes for supported runtime themes go through SQLite instead of
+  creating more ad hoc files.
+- [x] File-based `test-runs/` behavior is unchanged.
+
+Verification:
+
+- [x] `python tools\migrate_runtime_to_sqlite.py`
+- [x] `python tools\migrate_runtime_to_sqlite.py --prune-files`
+- [x] `.mini_orchestrator/` now contains only `runtime.sqlite3` and
+  `test-runs/`.
+- [x] `python -m pytest tests tools\codex-dispatcher\test_dispatcher.py`
+- [x] `python -m compileall mini_orchestrator tools\codex-dispatcher tools\migrate_runtime_to_sqlite.py`

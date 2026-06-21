@@ -10,16 +10,13 @@ from pipeline import build_chat_approval_plan, dry_run, dry_run_chain
 from pipeline import run_pipeline as pipeline_run_pipeline
 from prompts import build_chain_prior, build_plan_only_prompt, build_worker_prompt, read_instructions
 from routing import CHAIN_ROLES, decide_dispatch, find_worker, ordered_chain_workers, parse_orchestrator_chat_command
+from worker_profiles import default_workers, workers_from_chain_preset_file
 
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
 
-WORKERS = [
-    Worker("planner", "gpt-5.5", "high", ROOT / ".codex" / "agents" / "planner.toml"),
-    Worker("executor", "gpt-5.4", "medium", ROOT / ".codex" / "agents" / "executor.toml"),
-    Worker("reviewer", "gpt-5.4-mini", "high", ROOT / ".codex" / "agents" / "reviewer.toml"),
-]
+WORKERS = default_workers(ROOT)
 
 
 def run_pipeline(

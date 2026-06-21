@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import uuid
 import time
 import webbrowser
@@ -39,6 +40,7 @@ from .codex_dispatcher_service import PersistentCodexDispatcher
 from .daemon_runs import build_local_daemon_runs, run_manifest_dry_run, run_single_card_dry_run, set_run_review_decision
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
+from . import runtime_store
 from .symphony_daemon import (
     SymphonyDaemonError,
     build_local_symphony_gateway_runs,
@@ -54,7 +56,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT / "tools" / "codex-dispatcher" / "dispatcher.py"
 MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
-TASK_FILE_DIR = ROOT / ".mini_orchestrator" / "dispatcher-tasks"
 LIVE_RUN_SOURCE_MODES = {"dispatcher", "symphony", "combined"}
 APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS = 300
 
@@ -514,10 +515,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def _write_task_file(self, task: str, run_id: str | None = None) -> tuple[list[str], str | None]:
         selected_run_id = run_id or f"task-{uuid.uuid4().hex[:12]}"
-        TASK_FILE_DIR.mkdir(parents=True, exist_ok=True)
-        task_path = TASK_FILE_DIR / f"{selected_run_id}.txt"
-        task_path.write_text(task, encoding="utf-8")
-        return ["--task-file", str(task_path.relative_to(ROOT))], selected_run_id
+        runtime_store.store_dispatcher_task(ROOT, selected_run_id, task)
+        return ["--task", task], selected_run_id
+
+    def _write_chain_preset_file(self, chain_preset: Any, run_id: str) -> list[str]:
+        if not isinstance(chain_preset, dict):
+            return []
+        runtime_store.store_dispatcher_chain_preset(ROOT, run_id, chain_preset)
+        return ["--chain-preset-id", run_id]
 
     def _start_dispatcher_background(self, args: list[str], run_id: str) -> Dict[str, Any]:
         if not DISPATCHER.exists():
@@ -526,12 +531,6 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         env = dict(os.environ)
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         env["MINI_ORCHESTRATOR_DISPATCHER_BEST_EFFORT_LOGS"] = "1"
-        output_dir = ROOT / ".mini_orchestrator" / "dispatcher-processes"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        stdout_path = output_dir / f"{run_id}.stdout.json"
-        stderr_path = output_dir / f"{run_id}.stderr.txt"
-        stdout_handle = stdout_path.open("w", encoding="utf-8")
-        stderr_handle = stderr_path.open("w", encoding="utf-8")
         creationflags = 0
         startupinfo = None
         if os.name == "nt":
@@ -541,8 +540,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         process = subprocess.Popen(
             [sys.executable, str(DISPATCHER), *args],
             cwd=str(ROOT),
-            stdout=stdout_handle,
-            stderr=stderr_handle,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -550,16 +549,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             creationflags=creationflags,
             startupinfo=startupinfo,
         )
-        stdout_handle.close()
-        stderr_handle.close()
         self.dispatcher_processes[run_id] = process
+        self._capture_dispatcher_process_output(process, run_id)
         log_value = str((ROOT / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl").relative_to(ROOT))
         self._write_run_metadata_event(
             run_id,
             "dispatcher_process_started",
             processId=process.pid,
-            stdout=str(stdout_path.relative_to(ROOT)),
-            stderr=str(stderr_path.relative_to(ROOT)),
+            stdout=runtime_store.runtime_uri("dispatcher-processes", f"{run_id}/stdout"),
+            stderr=runtime_store.runtime_uri("dispatcher-processes", f"{run_id}/stderr"),
         )
         return {
             "status": "running",
@@ -569,9 +567,18 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "planOnly": False,
             "background": True,
             "processId": process.pid,
-            "stdout": str(stdout_path.relative_to(ROOT)),
-            "stderr": str(stderr_path.relative_to(ROOT)),
+            "stdout": runtime_store.runtime_uri("dispatcher-processes", f"{run_id}/stdout"),
+            "stderr": runtime_store.runtime_uri("dispatcher-processes", f"{run_id}/stderr"),
         }
+
+    def _capture_dispatcher_process_output(self, process: subprocess.Popen[str], run_id: str) -> None:
+        def capture() -> None:
+            stdout, stderr = process.communicate()
+            runtime_store.store_dispatcher_process_output(ROOT, run_id, "stdout", stdout or "")
+            runtime_store.store_dispatcher_process_output(ROOT, run_id, "stderr", stderr or "")
+
+        thread = threading.Thread(target=capture, name=f"dispatcher-output-{run_id}", daemon=True)
+        thread.start()
 
     def _write_run_metadata_event(self, run_id: str, event_type: str, **payload: Any) -> None:
         log_path = ROOT / "tools" / "codex-dispatcher" / "runs" / f"{run_id}.jsonl"
@@ -805,7 +812,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if path == "/api/symphony/runs":
             try:
                 state_payload = build_symphony_live_runs_from_url()
-                self._json_response(202, create_symphony_gateway_run(ROOT, payload, state_payload))
+                self._json_response(202, create_symphony_gateway_run(ROOT, payload, state_payload, submit=True))
             except SymphonyDaemonError as exc:
                 self._http_error(502, str(exc))
             except ValueError as exc:
@@ -946,8 +953,10 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if payload.get("background") is True:
                     run_id = "ui-" + uuid.uuid4().hex[:12]
                     task_args, _ = self._write_task_file(task, run_id)
+                    chain_preset = payload.get("chainPreset")
                     dispatcher_args = [
                         *task_args,
+                        *self._write_chain_preset_file(chain_preset, run_id),
                         "--run-id",
                         run_id,
                         "--chain",
@@ -957,22 +966,30 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     if str(payload.get("mode") or "").strip().casefold() == "dry-run":
                         dispatcher_args.append("--dry-run")
                     result = self._start_dispatcher_background(dispatcher_args, run_id)
-                    chain_preset = payload.get("chainPreset")
                     if isinstance(chain_preset, dict):
                         self._write_run_metadata_event(run_id, "chain_selected", chainPreset=chain_preset)
                         result["chainPreset"] = chain_preset
                     result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                     self._json_response(202, result)
                     return
+                run_id = "ui-" + uuid.uuid4().hex[:12]
+                task_args, _ = self._write_task_file(task, run_id)
+                chain_preset = payload.get("chainPreset")
                 result = self._run_dispatcher(
                     [
-                        *self._write_task_file(task)[0],
+                        *task_args,
+                        *self._write_chain_preset_file(chain_preset, run_id),
+                        "--run-id",
+                        run_id,
                         "--chain",
                         "--turn-timeout-seconds",
                         str(APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS),
                     ],
                     timeout_seconds=APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS * 4,
                 )
+                if isinstance(chain_preset, dict):
+                    self._write_run_metadata_event(run_id, "chain_selected", chainPreset=chain_preset)
+                    result["chainPreset"] = chain_preset
                 result["tech"] = build_dispatcher_tech_summary(result, ROOT)
                 self._json_response(200, result)
             except ValueError as exc:
@@ -1249,15 +1266,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
                         "Refresh Symphony daemon observability through /api/symphony/refresh.",
                         "Read Symphony issue debug records through /api/symphony/issues/{issueIdentifier}.",
-                        "Record approved Symphony gateway run requests through /api/symphony/runs while upstream intake is unavailable.",
+                        "Submit approved preset-based Symphony intake requests through /api/symphony/runs when the Symphony service record documents task intake.",
+                        "Record a visible blocked Symphony gateway run when intake is not documented.",
                     ],
                     "forbiddenActions": [
                         "Do not guess or bind fallback ports when config-service has no service record.",
                         "Do not treat browser-local agent flows as executable backend workflows.",
                         "Do not store secrets in config-service records or UI payloads.",
-                        "Do not mutate Symphony daemon state through the observability bridge.",
                         "Do not treat Symphony observability refresh as task intake or task creation.",
-                        "Do not claim Symphony accepted a task run until a config-service-resolved intake contract exists.",
+                        "Do not claim Symphony accepted a task run unless /api/symphony/runs receives a successful response from the config-service-resolved intake endpoint.",
                     ],
                     "startup": {
                         "requiresConfigService": True,
@@ -1360,9 +1377,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "POST",
                             "path": "/api/symphony/runs",
                             "required": ["task", "approved"],
-                            "optional": ["chainPreset", "mode", "project"],
-                            "mode": "gateway-record",
-                            "policy": "requires live Symphony observability, records the selected chain, and returns a visible gateway blocker until Symphony exposes documented intake",
+                            "optional": ["chainPreset", "mode", "project", "executionMode", "submitToSymphony"],
+                            "mode": "contract-gated-intake",
+                            "policy": "requires live Symphony observability, builds one agentTasks[] item per selected preset agent, reads endpoints.contract, and posts to endpoints.taskIntake/agentIntake/intake when documented; otherwise records a visible blocked gateway run",
+                            "intakePayload": {
+                                "schemaVersion": "mini-orchestrator.symphony-intake.v1",
+                                "dispatchStrategy": "one-symphony-agent-per-preset-stage",
+                                "agentTasks": "array of preset agent settings plus stage task/workPackage/codex model/reasoning/accessMode",
+                            },
                         },
                         "symphonyRefresh": {
                             "method": "POST",

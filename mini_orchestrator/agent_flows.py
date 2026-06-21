@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import runtime_store
+
 
 FLOW_DIR = ".mini_orchestrator/agent-flows"
 MANIFEST_DIR = ".mini_orchestrator/agent-flow-manifests"
@@ -30,16 +32,18 @@ class AgentFlowError(ValueError):
 
 
 def list_agent_flows(root: Path) -> list[dict[str, Any]]:
+    flows = [_summary(flow) for flow in runtime_store.list_json_documents(root, "agent_flows")]
+    seen = {str(flow.get("id") or "") for flow in flows}
     flow_dir = _flow_dir(root)
-    if not flow_dir.exists():
-        return []
-    flows = []
-    for path in sorted(flow_dir.glob("*.json")):
-        try:
-            flow = _read_flow_path(path)
-        except AgentFlowError:
-            continue
-        flows.append(_summary(flow))
+    if flow_dir.exists():
+        for path in sorted(flow_dir.glob("*.json")):
+            try:
+                flow = _read_flow_path(path)
+            except AgentFlowError:
+                continue
+            if str(flow.get("id") or "") in seen:
+                continue
+            flows.append(_summary(flow))
     flows.sort(key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
     return flows
 
@@ -54,7 +58,11 @@ def create_agent_flow(payload: dict[str, Any], root: Path) -> dict[str, Any]:
 
 
 def read_agent_flow(flow_id: str, root: Path) -> dict[str, Any]:
-    return _read_flow_path(_flow_path(root, flow_id))
+    normalized_id = _validate_flow_id(flow_id)
+    stored = runtime_store.get_json_document(root, "agent_flows", normalized_id)
+    if stored is not None:
+        return stored
+    return _read_flow_path(_flow_path(root, normalized_id))
 
 
 def update_agent_flow(flow_id: str, payload: dict[str, Any], root: Path) -> dict[str, Any]:
@@ -140,14 +148,17 @@ def compile_saved_agent_flow(flow_id: str, root: Path, payload: dict[str, Any]) 
             "validationStatus": validation["status"],
         },
     }
-    path = _manifest_path(root, manifest_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    manifest["path"] = _project_path(path, root)
+    runtime_store.upsert_json_document(root, "agent_flow_manifests", manifest_id, manifest)
+    manifest["path"] = runtime_store.runtime_uri("agent-flow-manifests", manifest_id)
     return manifest
 
 
 def read_compiled_manifest(manifest_id: str, root: Path) -> dict[str, Any]:
+    normalized_id = _validate_flow_id(manifest_id)
+    stored = runtime_store.get_json_document(root, "agent_flow_manifests", normalized_id)
+    if stored is not None:
+        stored["path"] = runtime_store.runtime_uri("agent-flow-manifests", normalized_id)
+        return stored
     path = _manifest_path(root, manifest_id)
     if not path.exists():
         raise AgentFlowError("Run manifest was not found.")
@@ -519,9 +530,7 @@ def _topological_order(nodes: list[dict[str, str]], edges: list[dict[str, str]])
 
 
 def _write_flow(root: Path, flow: dict[str, Any]) -> None:
-    path = _flow_path(root, flow["id"])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(flow, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    runtime_store.upsert_json_document(root, "agent_flows", flow["id"], flow)
 
 
 def _read_flow_path(path: Path) -> dict[str, Any]:
@@ -549,7 +558,7 @@ def _unique_flow_id(root: Path, name: str) -> str:
     base = _slug(name)
     candidate = base
     index = 2
-    while _flow_path(root, candidate).exists():
+    while runtime_store.json_document_exists(root, "agent_flows", candidate) or _flow_path(root, candidate).exists():
         candidate = f"{base}-{index}"
         index += 1
     return candidate

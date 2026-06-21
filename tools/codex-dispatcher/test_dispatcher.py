@@ -24,7 +24,7 @@ class FakeCodexAppServer:
     def start_thread(self, worker: dispatcher.Worker) -> str:
         return f"thread-{worker.name}"
 
-    def run_turn(self, thread_id: str, worker: dispatcher.Worker, prompt: str) -> str:
+    def run_turn(self, thread_id: str, worker: dispatcher.Worker, prompt: str, **_kwargs: object) -> str:
         self.prompts.append(prompt)
         if "User task:" in prompt:
             task = prompt.split("User task:", 1)[1].strip().splitlines()[0]
@@ -174,6 +174,7 @@ class DispatchDecisionTests(unittest.TestCase):
             self.assertIn("Make a calculator", outputs["planner"])
             self.assertEqual(len(FakeCodexAppServer.prompts), 1)
             self.assertIn("Do not reuse a generic template", FakeCodexAppServer.prompts[0])
+            self.assertIn(".mini_orchestrator/test-runs/<task-slug>/<version>/", FakeCodexAppServer.prompts[0])
             self.assertFalse((Path(temp_dir) / "test-projects" / "calculator").exists())
 
             events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
@@ -259,12 +260,110 @@ class DispatchDecisionTests(unittest.TestCase):
             self.assertIn("Make a release workflow", FakeCodexAppServer.prompts[0])
             self.assertIn("planner output", FakeCodexAppServer.prompts[1])
             self.assertIn("executor output", FakeCodexAppServer.prompts[2])
+            self.assertTrue(all(".mini_orchestrator/test-runs/<task-slug>/<version>/" in prompt for prompt in FakeCodexAppServer.prompts))
+            self.assertTrue(all("launch-desk" in prompt for prompt in FakeCodexAppServer.prompts))
 
             events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
             final_events = [event for event in events if event["type"] == "final"]
             self.assertEqual(len(final_events), 1)
             self.assertTrue(final_events[0]["chain"])
             self.assertNotIn("localTestProject", final_events[0])
+
+    def test_chain_preset_file_controls_worker_models_and_order(self) -> None:
+        original_runs_dir = dispatcher.RUNS_DIR
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            dispatcher.RUNS_DIR = temp_path / "runs"
+            preset_path = temp_path / "chain.json"
+            preset_path.write_text(
+                json.dumps(
+                    {
+                        "id": "custom-chain",
+                        "name": "Custom chain",
+                        "flow": {
+                            "agents": [
+                                {
+                                    "id": "planner-card",
+                                    "name": "Planner",
+                                    "role": "Planner",
+                                    "preset": "planner",
+                                    "llm": "gpt-5.5",
+                                    "reasoning": "high",
+                                    "accessMode": "read-only",
+                                    "workPackage": {"instructions": "Plan only."},
+                                },
+                                {
+                                    "id": "executor-card",
+                                    "name": "Spark Executor",
+                                    "role": "Executor",
+                                    "preset": "executor",
+                                    "llm": "gpt-5.3-codex-spark",
+                                    "reasoning": "medium",
+                                    "accessMode": "workspace-write",
+                                    "workPackage": {"instructions": "Execute with Spark."},
+                                },
+                            ],
+                            "connections": [
+                                {
+                                    "fromAgentId": "planner-card",
+                                    "toAgentId": "executor-card",
+                                    "fromPort": "success",
+                                }
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            try:
+                workers = dispatcher.workers_from_chain_preset_file(preset_path, temp_path)
+                log_path, outputs, _ = dispatcher.run_pipeline(
+                    task="orchestrator plan Use selected chain",
+                    dry=True,
+                    workers=workers,
+                    codex_command=None,
+                    request_timeout_seconds=1,
+                    turn_timeout_seconds=1,
+                    use_worker_models=False,
+                    chain=True,
+                )
+            finally:
+                dispatcher.RUNS_DIR = original_runs_dir
+
+            self.assertEqual([worker.name for worker in workers], ["planner", "executor"])
+            self.assertEqual([worker.model for worker in workers], ["gpt-5.5", "gpt-5.3-codex-spark"])
+            self.assertEqual(list(outputs), ["planner", "executor"])
+            events = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            started_events = [event for event in events if event["type"] == "agent_started"]
+            self.assertEqual([event["model"] for event in started_events], ["gpt-5.5", "gpt-5.3-codex-spark"])
+
+    def test_chain_preset_agents_require_explicit_models(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preset_path = temp_path / "legacy-chain.json"
+            preset_path.write_text(
+                json.dumps(
+                    {
+                        "id": "legacy-chain",
+                        "name": "Legacy chain",
+                        "flow": {
+                            "agents": [
+                                {
+                                    "id": "reviewer-card",
+                                    "name": "Reviewer",
+                                    "role": "Reviewer",
+                                    "preset": "reviewer",
+                                }
+                            ],
+                            "connections": [],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "missing an explicit llm setting"):
+                dispatcher.workers_from_chain_preset_file(preset_path, temp_path)
 
 
 if __name__ == "__main__":

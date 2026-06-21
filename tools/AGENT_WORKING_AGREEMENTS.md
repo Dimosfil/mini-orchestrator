@@ -101,10 +101,11 @@
   checklist showing `English` as always selected and current additional
   languages as checked. Explain that `English` is the required primary
   commit-message language and cannot be disabled. Ask the user to reply with
-  language names or numbers. Render each option as a task-list bullet with the
-  number inside the label, such as `- [x] 1. English`; do not use
-  `1. [x] English`, because some chat renderers split the checkbox and label
-  onto separate lines.
+  language names or numbers. Render each option as a plain inline checkbox
+  marker, number, and label on one physical Markdown line, such as
+  `[x] 1. English`; do not use Markdown task-list syntax such as
+  `- [x] 1. English` or ordered-task syntax such as `1. [x] English`, because
+  some chat renderers split the checkbox and label onto separate lines.
 - When reporting this change, mention the plain
   `tools/project-memory/git-preferences.json` path instead of malformed or
   placeholder markdown links.
@@ -143,8 +144,13 @@ or:
   environment, commit messages, and tasks.
 - If the unified project-language command does not include explicit languages,
   ask in three numbered steps. For each step, show a concise numbered Markdown
-  checklist with the available languages and the current selection, then accept
-  the user's next answer as numbers or language names for that step.
+  checklist with the available languages and the current selection, or `English`
+  then `Russian` checked when that surface has no current ordered selection.
+  Render each option as a plain inline checkbox marker, number, and label on one
+  physical Markdown line, such as `[x] 1. English`; do not use Markdown
+  task-list syntax such as `- [x] 1. English` or ordered-task syntax such as
+  `1. [x] English`. Then accept the user's next answer as numbers or language
+  names for that step.
 - If the user replies with only numbers, such as `1 2`, map them to the most
   recent checklist and preserve that order. Do not ask what those numbers mean
   after showing the checklist.
@@ -293,6 +299,17 @@ or:
   build-and-installer requests. The task is complete only after the packaging
   command runs and a current installer artifact is produced or explicitly
   verified; restore/build/test alone are preliminary checks.
+- Treat `gi reboot`, `ги ребут`, `gi restart`, and `ги рестарт` as requests to
+  start or restart all documented applications in the current project. Before
+  starting anything, identify the full project app set from local run
+  instructions, manifests, service records, desktop packaging metadata, or
+  project memory. Use a documented full-app-set start/restart command when one
+  exists; otherwise enumerate and launch/restart each documented desktop app,
+  web/API app, worker, or other runtime in the background. Verify each app's
+  documented startup signal and report each app by name or role with
+  started/restarted/skipped status and evidence. Do not report success from a
+  PID alone, from a web health check alone, or while any expected app or worker
+  is unlaunched or unverified.
 - Treat `gi first test`, `gi первый тест`, and `ги первый тест` as first-launch
   verification requests. Reset only documented project-owned app cache,
   generated state, temporary first-run profiles, and rebuildable local settings;
@@ -300,6 +317,18 @@ or:
   system caches, sibling projects, or arbitrary user-home folders. If exact
   reset paths or commands are missing, ask one concise question instead of
   guessing.
+- Treat `gi default`, `gi defaults`, and `ги дефолт` as default-state reset
+  requests for the current project. Read project-local reset, cleanup,
+  first-run, run, backup, and test instructions before clearing anything. Use
+  only documented reset scripts, paths, keys, or contracts for rebuildable
+  project-owned app state. Do not delete source files, project-memory
+  specifications, instruction-kit files, user documents, production data,
+  secrets, credentials, external service data, shared system caches, sibling
+  projects, or arbitrary user-home folders. If reset targets are undocumented,
+  ask one concise question instead of guessing; if a reset could remove
+  user-owned data, stop for explicit confirmation. After reset, start the
+  project through documented run instructions and report what was reset, what
+  was left untouched, what passed, and any blocker.
 - Treat `init <source>`, `инит <source>`, `инициализируй <source>`, and
   `инит правила <source>` as shared-instruction bootstrap/startup requests when
   `<source>` points to a known `general-instructions` source. Never reinterpret

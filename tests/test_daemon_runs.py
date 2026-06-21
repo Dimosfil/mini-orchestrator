@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mini_orchestrator.agent_flows import compile_saved_agent_flow, create_agent_flow
+from mini_orchestrator import runtime_store
 from mini_orchestrator.ui import build_live_runs_payload
 from mini_orchestrator.daemon_runs import (
     build_demo_daemon_runs,
@@ -101,16 +102,14 @@ def test_single_card_daemon_dry_run_writes_state_and_replayable_events(tmp_path)
     assert state["task"]["taskId"] == "task-1"
     assert state["profileSnapshotId"] == snapshot_id
     assert state["thread"]["turnCount"] == 1
-    assert state["artifacts"]["eventLogPath"].endswith(".jsonl")
+    assert state["artifacts"]["eventLogPath"].startswith("runtime-db://daemon-runs/")
     assert state["currentAgent"] == snapshot_id
     assert state["outputs"][snapshot_id].startswith("Dry-run completed")
     assert state["stages"][0]["status"] == "done"
 
-    event_log = tmp_path / state["artifacts"]["eventLogPath"]
-    assert event_log.exists()
-    event_text = event_log.read_text(encoding="utf-8")
-    assert "dry_run_started" in event_text
-    assert "ready_for_human_review" in event_text
+    event_types = [event.get("type") for event in runtime_store.list_daemon_events(tmp_path, state["runId"])]
+    assert "dry_run_started" in event_types
+    assert "ready_for_human_review" in event_types
 
     payload = build_local_daemon_runs(tmp_path)
     assert payload["source"] == "mini-daemon-jsonl"
@@ -136,10 +135,9 @@ def test_three_agent_daemon_dry_run_passes_artifacts_and_finishes_done(tmp_path)
     assert state["flowArtifacts"][2]["verdict"] == "done"
     assert state["thread"]["turnCount"] == 3
 
-    event_log = tmp_path / state["artifacts"]["eventLogPath"]
-    event_text = event_log.read_text(encoding="utf-8")
-    assert '"type": "node_started"' in event_text
-    assert '"type": "ready_for_human_review"' in event_text
+    event_types = [event.get("type") for event in runtime_store.list_daemon_events(tmp_path, state["runId"])]
+    assert "node_started" in event_types
+    assert "ready_for_human_review" in event_types
 
     accepted = set_run_review_decision(state["runId"], "done", tmp_path)
     assert accepted["status"] == "done"
