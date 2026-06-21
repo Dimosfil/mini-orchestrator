@@ -1,5 +1,5 @@
 ﻿{
-    "instruction_kit_version":  "2026.06.21.10",
+    "instruction_kit_version":  "2026.06.21.13",
     "source":  "https://github.com/Dimosfil/general-instructions.git",
     "installed_at":  "2026-06-16",
     "update_check":  {
@@ -10,10 +10,40 @@
                      },
     "copied_files":  [
                          "AGENTS.md",
+                         "CHANGELOG.md",
+                         "INDEX.md",
+                         "VERSION.md",
                          "tools/AGENT_WORKING_AGREEMENTS.md",
                          "tools/AGENT_RUNBOOK.md",
                          "tools/agent-start.ps1",
+                         "patterns/CONFIGURATION_BOUNDARIES.md",
+                         "patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md",
+                         "patterns/PROJECT_DOCUMENTATION_LAYERS.md",
+                         "patterns/PROJECT_MEMORY_SPECIFICATIONS.md",
+                         "patterns/AGENTS_RUNTIME/01-purpose.md",
+                         "patterns/AGENTS_RUNTIME/02-repository-map.md",
+                         "patterns/AGENTS_RUNTIME/03-rule-precedence.md",
+                         "patterns/AGENTS_RUNTIME/04-content-and-authoring.md",
+                         "patterns/AGENTS_RUNTIME/05-windows-command-policy.md",
+                         "patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md",
+                         "patterns/AGENTS_RUNTIME/07-startup-and-scope.md",
+                         "patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md",
+                         "patterns/AGENTS_RUNTIME/09-project-operation-commands.md",
+                         "patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md",
+                         "patterns/AGENTS_RUNTIME/11-language-preferences.md",
+                         "patterns/AGENTS_RUNTIME/12-ui-and-focus.md",
+                         "patterns/AGENTS_RUNTIME/13-progress-updates.md",
+                         "patterns/AGENTS_RUNTIME/14-update-intake.md",
+                         "patterns/AGENTS_RUNTIME/15-verification.md",
+                         "patterns/AGENTS_RUNTIME/16-git-policy.md",
                          "tools/project-memory/README.md",
+                         "tools/project-memory/specs/technology-stack.md",
+                         "templates/AGENTS.template.md",
+                         "templates/AGENT_WORKING_AGREEMENTS.template.md",
+                         "templates/instruction-kit.template.json",
+                         "templates/rag-system.template.json",
+                         "templates/TECHNOLOGY_STACK.template.md",
+                         "templates/project-memory-README.template.md",
                          "tools/project-memory/build_project_memory_index.py",
                          "tools/project-memory/build_chroma_index.py",
                          "tools/project-memory/STUDY_PLAN.md",
@@ -31,8 +61,7 @@
                          "patterns/ARCHITECTURE_AND_CODE_QUALITY.md",
                          "patterns/COHERENT_BATCH_VERIFICATION.md",
                          "patterns/TECHNOLOGY_STACK_INVENTORY.md",
-                         ".gitignore",
-                         "tools/project-memory/specs/technology-stack.md"
+                         ".gitignore"
                      ],
     "applied_migrations":  [
                                "2026.05.16.1__add_skill_modules",
@@ -145,7 +174,10 @@
                                "2026.06.21.7__add_gi_refactor_command",
                                "2026.06.21.8__extract_architecture_code_quality_pattern",
                                "2026.06.21.9__add_coherent_batch_verification",
-                               "2026.06.21.10__add_technology_stack_inventory"
+                               "2026.06.21.10__add_technology_stack_inventory",
+                               "2026.06.21.11__split_project_documentation_and_memory_layers",
+                               "2026.06.21.12__abstract_concrete_examples_before_shared_rules",
+                               "2026.06.21.13__modularize_agents_runtime_entrypoint"
                            ],
-    "last_update_check_at":  "2026-06-21T13:28:45+03:00"
+    "last_update_check_at":  "2026-06-21T21:57:10+03:00"
 }

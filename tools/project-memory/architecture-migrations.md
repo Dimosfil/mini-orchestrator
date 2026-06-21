@@ -41,3 +41,42 @@ private user data, generated logs, or local-only runtime state.
 - Rollback or follow-up notes: if future work changes RAG source rules,
   chunking, embedding metadata, or retrieval adapters beyond instruction text,
   rebuild the affected `rag-system.json` nodes and record successful status.
+
+## 2026-06-21: Instruction Update Surface Refactor
+
+- Reason: `gi обновить` migrations `2026.06.21.11` through
+  `2026.06.21.13` required runtime documentation changes: routing runtime
+  instructions through focused modules, abstracting project-specific evidence from
+  shared defaults, and separating project documentation from implementation
+  behavior docs.
+- Previous architecture: agent runtime guidance and copied instruction files were
+  largely monolithic in `AGENTS.md` and absent some documentation-split layers.
+- New architecture: runtime guidance now uses `patterns/AGENTS_RUNTIME/` modules as
+  the compact runtime shape and explicit update/docs/pattern files in `patterns/`,
+  `templates/`, and root docs (`INDEX.md`, `CHANGELOG.md`, `VERSION.md`).
+- Affected files or modules:
+  - `AGENTS.md`
+  - `INDEX.md`
+  - `CHANGELOG.md`
+  - `VERSION.md`
+  - `patterns/AGENTS_RUNTIME/*`
+  - `patterns/PROJECT_DOCUMENTATION_LAYERS.md`
+  - `patterns/PROJECT_MEMORY_SPECIFICATIONS.md`
+  - `patterns/CONFIGURATION_BOUNDARIES.md`
+  - `patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md`
+  - `templates/AGENTS.template.md`
+  - `templates/AGENT_WORKING_AGREEMENTS.template.md`
+  - `templates/instruction-kit.template.json`
+  - `templates/rag-system.template.json`
+  - `templates/TECHNOLOGY_STACK.template.md`
+  - `templates/project-memory-README.template.md`
+  - `tools/project-memory/instruction-kit.json`
+- Compatibility notes: behavior remains project-local and implementation contracts
+  stay in `tools/project-memory/` and existing README/runbook files.
+- Verification performed: copied modules and template files were synchronized from the
+  shared instruction source; updated `tools/project-memory/instruction-kit.json`;
+  then planned migration IDs were recorded with
+  `check-instruction-kit-updates.ps1 -RecordApplied`.
+- Rollback or follow-up notes: no functional application behavior changed; any
+  reversion should restore the monolithic `AGENTS.md` layout and copied file
+  metadata if needed.
