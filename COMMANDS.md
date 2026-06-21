@@ -18,6 +18,8 @@
   GI/project-memory/RAG system after explicit confirmation.
 - `gi tools rebuild sql|chunks|vector|manifest|evals` / `gi rag rebuild
   sql|chunks|vector|manifest|evals`: rebuild only that configured GI/RAG node.
+- `gi refactor` / `gi рефактор` / `ги рефактор`: refactor the entire current
+  project according to all applicable GI rules, in verified batches.
 - `gi reboot` / `gi restart`: start or restart all documented project apps and
   report per-app verification evidence beyond PID creation.
 
