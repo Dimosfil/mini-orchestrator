@@ -131,6 +131,21 @@ external doc services unless the project has explicit private-source
 configuration and the user approves that scope. Pin exact library IDs and
 versions when known, and verify current local source files before editing.
 
+Keep query interpretation, translation, prompt expansion, and model-facing
+query construction behind a dedicated capability rather than scattered through
+UI, request handlers, command handlers, or one-off feature code. Do not hard-code
+translation maps, synonym dictionaries, stemming rules, prompt expansions,
+intent heuristics, scoring thresholds, ranking weights, provider-specific LLM
+calls, model names, budgets, timeouts, fallbacks, or compatibility hacks in
+application glue. Preserve the original user query for display, audit, and
+debugging, and derive interpreted intent or model-facing text through a named
+normalization/adaptation pipeline. The implementation may use deterministic
+rules, curated resources, local algorithms, retrieval, a local or remote
+service, or a provider-swappable LLM adapter; provider changes must be adapter
+or configuration changes, not product/UI rewrites. Tests should show that new
+vocabulary, languages, prompt templates, or model adapters can change without
+rewriting core product logic.
+
 Treat `tools/summary/` as compact handoff state for the current or recent chat.
 Handoff summaries should preserve the essence of the thread as a thematic
 handoff, not as a short chronological retelling. Break the thread into
@@ -358,6 +373,36 @@ Inspect logs:
   and validate them as absolute paths at startup or I/O boundaries. When
   applying this rule to existing projects, audit and refactor relevant
   hard-coded values instead of only adding the rule text.
+- Keep developer tools, orchestrators, task managers, agent harnesses, workflow
+  UIs, scaffolding systems, and code generators separate from the products they
+  build. Do not hard-code one demo, customer, project type, selected run,
+  product name, UI label, folder slug, stack, or task contract as a runtime
+  concept. Treat generated applications, sites, bots, dashboards, libraries,
+  and other artifacts as task data or output, not as the tool's identity. Store
+  product-specific choices in task payloads, manifests, fixtures, plugins,
+  adapters, project-local configuration, service discovery, or user-selected
+  state. Workflow/progress logs belong to the selected or active run; detailed
+  logs for completed runs should collapse by default or render as compact final
+  status unless the user is debugging them.
+- Build applications with clear architecture and code-quality boundaries.
+  Understand and apply OOP, SOLID, DRY, clean-code, maintainability, and
+  extensibility principles where they fit the stack. Prefer cohesive domain
+  models, explicit interfaces at integration boundaries, dependency inversion
+  for infrastructure, small composable modules, typed or validated contracts,
+  low duplication, clear names, focused functions/classes, and established
+  framework patterns. Keep domain/product logic, orchestration, UI,
+  persistence, filesystem, external services, and configuration in separate
+  layers with explicit contracts. In non-OOP stacks, apply the same separation
+  through modules, functions, services, protocols, and data contracts. Apply DRY
+  to repeated knowledge and behavior, but do not create premature abstractions
+  before the duplication has a clear shared meaning.
+- When explaining, documenting, or adding a shared GI rule, keep the explanation
+  project-agnostic. Do not anchor reusable rules in the current project, a
+  recent bug, one demo, one product name, or one repository unless the user
+  explicitly asks for that concrete comparison. Use neutral terms such as
+  "a development tool", "a generated product", "a selected run", "a service",
+  "a task manager", or "a workflow UI"; if an example is necessary, mark it as
+  illustrative and keep it replaceable.
 - Preserve text encodings when editing files. On Windows, do not rewrite source
   files with PowerShell pipelines such as `Get-Content ... | Set-Content ...`
   unless both read and write encodings are explicit and known correct. Prefer

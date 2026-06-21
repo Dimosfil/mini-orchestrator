@@ -1,5 +1,5 @@
 ﻿{
-    "instruction_kit_version":  "2026.06.21.1",
+    "instruction_kit_version":  "2026.06.21.6",
     "source":  "https://github.com/Dimosfil/general-instructions.git",
     "installed_at":  "2026-06-16",
     "update_check":  {
@@ -132,7 +132,12 @@
                                "2026.06.19.1__restart_all_project_apps",
                                "2026.06.19.2__prioritize_gi_start_sprint_manager_workflow",
                                "2026.06.19.3__require_gi_reboot_per_app_accounting",
-                               "2026.06.21.1__add_gi_default_command"
+                               "2026.06.21.1__add_gi_default_command",
+                               "2026.06.21.2__add_development_tool_product_boundaries",
+                               "2026.06.21.3__keep_shared_rule_explanations_project_agnostic",
+                               "2026.06.21.4__add_query_prompt_normalization_boundaries",
+                               "2026.06.21.5__clarify_interpretation_translation_modules",
+                               "2026.06.21.6__add_code_quality_baseline"
                            ],
-    "last_update_check_at":  "2026-06-21T02:58:34+03:00"
+    "last_update_check_at":  "2026-06-21T11:30:28+03:00"
 }

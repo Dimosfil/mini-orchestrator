@@ -383,6 +383,42 @@ or:
   submodule, symlink, or runtime reference unless the user explicitly asks for
   that.
 
+## Architecture Boundaries
+
+- Keep developer tools, orchestrators, task managers, agent harnesses, workflow
+  UIs, scaffolding systems, and code generators separate from the products they
+  build. Generated applications, demos, dashboards, bots, libraries, and sites
+  are task data or outputs, not the tool's identity.
+- Do not hard-code one demo, customer, project type, selected run, product name,
+  UI label, folder slug, stack, or task contract as a runtime concept. Store
+  product-specific choices in task payloads, manifests, fixtures, plugins,
+  adapters, project-local configuration, service discovery, or user-selected
+  state.
+- Workflow/progress logs belong to the selected or active run. Detailed logs for
+  completed runs should collapse by default or render as compact final status
+  unless the user is debugging them.
+- Keep query interpretation, translation, prompt expansion, and model-facing
+  query creation in a dedicated capability. Preserve the original user query
+  separately from interpreted intent and model-facing text.
+- Keep provider-specific LLM calls, prompts, model names, budgets, fallbacks,
+  timeouts, privacy policy, ranking weights, score thresholds, and compatibility
+  hacks behind adapters, resources, configuration, services, or pipeline
+  components with tests. Do not embed them in UI, request, command, or one-off
+  feature logic.
+- Build with clear code-quality boundaries: use OOP, SOLID, DRY, clean-code,
+  maintainability, and extensibility principles where they fit the stack. In
+  non-OOP stacks, apply the same separation through modules, functions,
+  services, protocols, and data contracts.
+- Prefer cohesive domain models, explicit interfaces at integration boundaries,
+  dependency inversion for infrastructure, small composable modules, typed or
+  validated contracts, low duplication, clear names, focused functions/classes,
+  and established framework patterns. Avoid premature abstractions until
+  duplication has a clear shared meaning.
+- When documenting reusable GI rules, keep explanations project-agnostic. Use
+  neutral terms and mark any concrete example as illustrative so the rule can be
+  copied into an unrelated project without importing this project's incident or
+  domain.
+
 ## Task Managers
 
 - Treat task-manager configuration as project-local state.
