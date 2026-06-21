@@ -1,5 +1,5 @@
 ﻿{
-    "instruction_kit_version":  "2026.06.21.7",
+    "instruction_kit_version":  "2026.06.21.8",
     "source":  "https://github.com/Dimosfil/general-instructions.git",
     "installed_at":  "2026-06-16",
     "update_check":  {
@@ -28,6 +28,7 @@
                          "tools/select-git-commit-languages.ps1",
                          "tools/select-system-language.ps1",
                          "tools/check-instruction-kit-updates.ps1",
+                         "patterns/ARCHITECTURE_AND_CODE_QUALITY.md",
                          ".gitignore"
                      ],
     "applied_migrations":  [
@@ -138,7 +139,8 @@
                                "2026.06.21.4__add_query_prompt_normalization_boundaries",
                                "2026.06.21.5__clarify_interpretation_translation_modules",
                                "2026.06.21.6__add_code_quality_baseline",
-                               "2026.06.21.7__add_gi_refactor_command"
+                               "2026.06.21.7__add_gi_refactor_command",
+                               "2026.06.21.8__extract_architecture_code_quality_pattern"
                            ],
-    "last_update_check_at":  "2026-06-21T11:54:28+03:00"
+    "last_update_check_at":  "2026-06-21T11:55:48+03:00"
 }

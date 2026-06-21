@@ -384,18 +384,12 @@ Inspect logs:
   state. Workflow/progress logs belong to the selected or active run; detailed
   logs for completed runs should collapse by default or render as compact final
   status unless the user is debugging them.
-- Build applications with clear architecture and code-quality boundaries.
-  Understand and apply OOP, SOLID, DRY, clean-code, maintainability, and
-  extensibility principles where they fit the stack. Prefer cohesive domain
-  models, explicit interfaces at integration boundaries, dependency inversion
-  for infrastructure, small composable modules, typed or validated contracts,
-  low duplication, clear names, focused functions/classes, and established
-  framework patterns. Keep domain/product logic, orchestration, UI,
+- Build applications with clear architecture and code-quality boundaries. Apply
+  OOP, SOLID, DRY, clean-code, maintainability, and extensibility principles
+  where they fit the stack. Keep domain/product logic, orchestration, UI,
   persistence, filesystem, external services, and configuration in separate
-  layers with explicit contracts. In non-OOP stacks, apply the same separation
-  through modules, functions, services, protocols, and data contracts. Apply DRY
-  to repeated knowledge and behavior, but do not create premature abstractions
-  before the duplication has a clear shared meaning.
+  layers with explicit contracts. Follow
+  `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`.
 - When explaining, documenting, or adding a shared GI rule, keep the explanation
   project-agnostic. Do not anchor reusable rules in the current project, a
   recent bug, one demo, one product name, or one repository unless the user
