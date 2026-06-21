@@ -29,9 +29,9 @@ from .agent_flows import (
 from .agent_api import AgentApiError, VisualAgentApi
 from .agent_profiles import (
     AgentProfileError,
-    DEFAULT_DENTAL_CRM_TASK,
+    DEFAULT_PROJECT_BUILDER_TASK,
     compile_worker_profile,
-    default_dental_crm_agent_card,
+    default_project_builder_agent_card,
     load_or_create_default_agent_card,
     persist_agent_card,
     visual_agent_task_prompt,
@@ -1043,7 +1043,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if isinstance(card_value, dict):
                     result = persist_agent_card(card_value, ROOT)
                 else:
-                    result = persist_agent_card(default_dental_crm_agent_card(ROOT), ROOT)
+                    result = persist_agent_card(default_project_builder_agent_card(ROOT), ROOT)
                 self._json_response(200, result)
             except AgentProfileError as exc:
                 self._http_error(400, str(exc))
@@ -1055,7 +1055,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             try:
                 card_value = payload.get("agent")
                 card = card_value if isinstance(card_value, dict) else load_or_create_default_agent_card(ROOT)
-                task = str(payload.get("task") or DEFAULT_DENTAL_CRM_TASK).strip()
+                task = str(payload.get("task") or DEFAULT_PROJECT_BUILDER_TASK).strip()
                 persist_agent_card(card, ROOT)
                 profile = compile_worker_profile(card, task, ROOT)
                 self._json_response(200, {"profile": profile})
@@ -1072,7 +1072,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     return
                 card_value = payload.get("agent")
                 card = card_value if isinstance(card_value, dict) else load_or_create_default_agent_card(ROOT)
-                task = str(payload.get("task") or DEFAULT_DENTAL_CRM_TASK).strip()
+                task = str(payload.get("task") or DEFAULT_PROJECT_BUILDER_TASK).strip()
                 persist_agent_card(card, ROOT)
                 profile = compile_worker_profile(card, task, ROOT)
                 result = self.dispatcher_service.run_visual_agent_task(

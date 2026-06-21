@@ -301,7 +301,7 @@
 
     .runs-board {
       display: grid;
-      grid-template-rows: minmax(0, 1fr) 12px;
+      grid-template-rows: auto minmax(0, 1fr) 12px;
       height: min(520px, calc(100vh - 190px));
       min-height: 220px;
       max-height: calc(100vh - 140px);
@@ -313,18 +313,19 @@
     }
 
     .daemon-board {
-      min-height: 280px;
+      min-height: 92px;
       border: 1px dashed var(--line-strong);
       border-radius: 8px;
       background: #fbfcfd;
       overflow: auto;
-      padding: 14px;
+      padding: 10px;
+      margin-top: 10px;
     }
 
     .daemon-card-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 360px));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
       align-content: start;
     }
 
@@ -338,6 +339,7 @@
       overflow-y: hidden;
       padding: 0;
       padding-bottom: 2px;
+      scrollbar-gutter: stable;
     }
 
     .runs-board-resize-handle {
@@ -371,7 +373,7 @@
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       min-width: 260px;
-      min-height: 0;
+      min-height: 168px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fbfcfd;
@@ -415,7 +417,6 @@
       min-width: 0;
       min-height: 0;
       overflow: visible;
-      animation: card-lift 220ms ease-out;
     }
 
     .kanban-card-frame {
@@ -943,6 +944,141 @@
 
     .run-error {
       color: var(--danger);
+    }
+
+    .workflow-log-panel {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .workflow-log-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 42px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    .workflow-log-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .workflow-log-meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .workflow-log-list {
+      display: grid;
+      gap: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .workflow-log-row {
+      display: grid;
+      grid-template-columns: 110px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .workflow-log-row:last-child {
+      border-bottom: 0;
+    }
+
+    .workflow-log-stage {
+      color: var(--ink);
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-log-event {
+      color: var(--muted);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-log-status {
+      justify-self: end;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .workflow-log-empty {
+      padding: 18px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .daemon-health-card {
+      display: grid;
+      gap: 8px;
+      min-height: 74px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .daemon-health-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .daemon-health-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .daemon-health-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .daemon-health-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .daemon-health-counts span {
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
     }
 
     .runs-empty {
@@ -1514,6 +1650,15 @@
         <div id="live-runs-list" class="kanban-board" aria-label="Live run Kanban"></div>
         <button id="runs-board-resize-handle" class="runs-board-resize-handle" type="button" aria-label="Resize Kanban window"></button>
       </div>
+      <section id="workflow-log-panel" class="workflow-log-panel" aria-labelledby="workflow-log-title">
+        <div class="workflow-log-head">
+          <h3 id="workflow-log-title" class="workflow-log-title">Workflow log</h3>
+          <div id="workflow-log-meta" class="workflow-log-meta">Waiting for a run</div>
+        </div>
+        <div id="workflow-log-list" class="workflow-log-list">
+          <div class="workflow-log-empty">Запуск и стадии появятся здесь.</div>
+        </div>
+      </section>
       <div id="symphony-daemon-board" class="daemon-board" aria-label="Symphony daemon state">
         <div id="symphony-daemon-list" class="daemon-card-list"></div>
         <div id="live-runs-empty" class="empty runs-empty">No daemon runs yet.</div>
@@ -1632,6 +1777,9 @@
     const liveRunsList = document.querySelector("#live-runs-list");
     const symphonyDaemonList = document.querySelector("#symphony-daemon-list");
     const liveRunsEmpty = document.querySelector("#live-runs-empty");
+    const workflowLogTitle = document.querySelector("#workflow-log-title");
+    const workflowLogMeta = document.querySelector("#workflow-log-meta");
+    const workflowLogList = document.querySelector("#workflow-log-list");
     const taskInput = document.querySelector("#task");
     const planMode = document.querySelector("#plan-mode");
     const runChainPreset = document.querySelector("#run-chain-preset");
@@ -1661,6 +1809,8 @@
     const runDetailsSubtitle = document.querySelector("#run-details-subtitle");
     const runDetailsBody = document.querySelector("#run-details-body");
     const runDetailsClose = document.querySelector("#run-details-close");
+    let lastLiveRunsRenderKey = "";
+    let liveRunsRefreshInFlight = false;
     let lastPlanTask = "";
     let busy = false;
     let runReviewDecisions = loadRunReviewDecisions();
@@ -2103,6 +2253,137 @@
     function isSymphonyDaemonRun(run) {
       return run.sourceKey === "symphony"
         && (String(run.mode || "").startsWith("symphony-daemon") || Boolean(run.daemonSnapshot));
+    }
+
+    function isActiveRunStatus(status) {
+      return ["queued", "planning", "running", "waiting_approval", "retrying"].includes(runStatusClass(status));
+    }
+
+    function primaryWorkflowRun(taskRuns) {
+      if (!Array.isArray(taskRuns) || !taskRuns.length) {
+        return null;
+      }
+      return taskRuns.find((run) => isActiveRunStatus(run.status))
+        || taskRuns.find((run) => runStatusClass(run.status) === "review")
+        || taskRuns[0];
+    }
+
+    function workflowLogRow(stage, event, status) {
+      const row = document.createElement("div");
+      row.className = "workflow-log-row";
+      const stageNode = document.createElement("div");
+      stageNode.className = "workflow-log-stage";
+      stageNode.textContent = stage || "-";
+      const eventNode = document.createElement("div");
+      eventNode.className = "workflow-log-event";
+      eventNode.textContent = event || "-";
+      const statusNode = document.createElement("div");
+      statusNode.className = "workflow-log-status";
+      statusNode.textContent = status || "-";
+      row.append(stageNode, eventNode, statusNode);
+      return row;
+    }
+
+    function renderWorkflowLog(run, profile) {
+      workflowLogList.replaceChildren();
+      if (!run) {
+        workflowLogTitle.textContent = "Workflow log";
+        workflowLogMeta.textContent = "Waiting for a run";
+        const empty = document.createElement("div");
+        empty.className = "workflow-log-empty";
+        empty.textContent = "Запуск и стадии появятся здесь.";
+        workflowLogList.append(empty);
+        return;
+      }
+
+      const stages = configuredChainStagesForRun(run, profile);
+      workflowLogTitle.textContent = runDisplayTitle(run, profile);
+      workflowLogTitle.title = runDisplayTitle(run, profile);
+      workflowLogMeta.textContent = `${runSourceLabel(run)} · ${run.status || "unknown"} · ${run.artifacts?.eventLogPath || run.runId || "-"}`;
+
+      if (!stages.length) {
+        workflowLogList.append(workflowLogRow(
+          currentAgentLabel(run, profile) || run.profileSnapshotId || "workflow",
+          run.lastError || run.lastEvent || "No events yet",
+          run.status || "unknown",
+        ));
+      } else {
+        for (const stage of stages) {
+          workflowLogList.append(workflowLogRow(
+            stage.label || stage.agent || "worker",
+            stage.lastEvent || stage.statusLabel || stageStatusLabel(stage.status),
+            stage.status || "pending",
+          ));
+        }
+      }
+
+      workflowLogList.append(workflowLogRow(
+        "last event",
+        run.lastError || run.lastEvent || run.artifacts?.eventLogPath || "-",
+        run.status || "unknown",
+      ));
+    }
+
+    function renderDaemonHealthCard(run, profile) {
+      const card = document.createElement("article");
+      card.className = "daemon-health-card";
+      const head = document.createElement("div");
+      head.className = "daemon-health-head";
+      const title = document.createElement("h3");
+      title.className = "daemon-health-title";
+      title.textContent = run.currentAgent || runDisplayTitle(run, profile) || "Symphony health";
+      const badge = document.createElement("span");
+      badge.className = `run-status ${runStatusClass(run.status)}`;
+      badge.textContent = run.status || "unknown";
+      head.append(title, badge);
+
+      const counts = document.createElement("div");
+      counts.className = "daemon-health-counts";
+      const snapshotCounts = run.daemonSnapshot?.counts || {};
+      for (const [label, value] of [
+        ["running", snapshotCounts.running ?? 0],
+        ["retrying", snapshotCounts.retrying ?? 0],
+        ["blocked", snapshotCounts.blocked ?? 0],
+        ["tokens", run.tokens?.total ?? 0],
+      ]) {
+        const item = document.createElement("span");
+        item.textContent = `${label}=${value}`;
+        counts.append(item);
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "daemon-health-meta";
+      meta.textContent = run.lastEvent || run.task?.summary || "Daemon observability status only.";
+      card.append(head, counts, meta);
+      return card;
+    }
+
+    function liveRunsRenderKey(payload) {
+      const runs = Array.isArray(payload.runs) ? payload.runs : [];
+      return JSON.stringify({
+        sourceMode: payload.sourceMode || payload.source || "",
+        daemonError: payload.daemonError || "",
+        summary: payload.summary || {},
+        runs: runs.map((run) => ({
+          id: run.runId || run.task?.taskId || "",
+          source: run.sourceKey || run.sourceLabel || "",
+          mode: run.mode || "",
+          status: run.status || "",
+          currentAgent: run.currentAgent || "",
+          lastEvent: run.lastEvent || "",
+          lastError: run.lastError || "",
+          updatedAt: isSymphonyDaemonRun(run) ? "" : (run.updatedAt || ""),
+          log: run.artifacts?.eventLogPath || "",
+          stages: (run.stages || []).map((stage) => ({
+            agent: stage.agent || "",
+            label: stage.label || "",
+            status: stage.status || "",
+            lastEvent: stage.lastEvent || "",
+            tokens: stage.tokens || 0,
+          })),
+          daemonSnapshot: run.daemonSnapshot?.counts || null,
+        })),
+      });
     }
 
     function stageStatusLabel(status) {
@@ -2763,15 +3044,23 @@
 
     function liveRunsSourceText(payload) {
       const label = payload.sourceLabel || payload.sourceMode || payload.source || "unknown";
-      const generated = payload.generatedAt ? ` - ${payload.generatedAt}` : "";
       const symphonyError = payload.sources?.symphony?.error || payload.daemonError || "";
       if (symphonyError && payload.sourceMode === "combined") {
-        return `${label}${generated} / Symphony unavailable: ${symphonyError}`;
+        return `${label} / Symphony unavailable: ${symphonyError}`;
       }
       if (symphonyError) {
-        return `${label}${generated} / ${symphonyError}`;
+        return `${label} / ${symphonyError}`;
       }
-      return `${label}${generated}`;
+      if (payload.sourceMode === "combined") {
+        return "Combined / Dispatcher tasks plus Symphony observability";
+      }
+      if (payload.sourceMode === "symphony") {
+        return "Symphony / task intake and daemon observability";
+      }
+      if (payload.sourceMode === "dispatcher") {
+        return "Dispatcher / local JSONL workflow runs";
+      }
+      return String(label);
     }
 
     function renderLiveRuns(payload) {
@@ -2781,6 +3070,8 @@
       const taskRuns = runs.filter((run) => !isSymphonyDaemonRun(run));
       const daemonRuns = runs.filter(isSymphonyDaemonRun);
       const profiles = payload.profiles || {};
+      const primaryRun = primaryWorkflowRun(taskRuns);
+      const primaryProfile = primaryRun ? (profiles[primaryRun.profileSnapshotId] || {}) : {};
       runsActive.textContent = textOf(summary.active);
       runsBlocked.textContent = textOf(summary.blocked);
       runsDone.textContent = textOf(summary.done);
@@ -2830,8 +3121,9 @@
 
       for (const run of daemonRuns) {
         const profile = profiles[run.profileSnapshotId] || {};
-        symphonyDaemonList.append(renderDaemonRunCard(run, profile));
+        symphonyDaemonList.append(renderDaemonHealthCard(run, profile));
       }
+      renderWorkflowLog(primaryRun, primaryProfile);
 
       liveRunsList.hidden = false;
       symphonyDaemonList.hidden = daemonRuns.length === 0;
@@ -2843,9 +3135,16 @@
       window.requestAnimationFrame(() => restoreKanbanScrollState(kanbanScrollState));
     }
 
-    async function loadLiveRuns() {
-      liveRunsDot.className = "dot busy";
-      liveRunsStatus.textContent = "Loading";
+    async function loadLiveRuns(options = {}) {
+      if (liveRunsRefreshInFlight) {
+        return;
+      }
+      liveRunsRefreshInFlight = true;
+      const showLoading = Boolean(options.showLoading) || !lastLiveRunsRenderKey;
+      if (showLoading) {
+        liveRunsDot.className = "dot busy";
+        liveRunsStatus.textContent = "Loading";
+      }
       const sourceMode = setLiveRunsSourceMode(liveRunsSourceMode?.value || loadLiveRunsSourceMode());
       try {
         const response = await fetch(`/api/daemon/runs?source=${encodeURIComponent(sourceMode)}`, {
@@ -2855,11 +3154,23 @@
         if (!response.ok) {
           throw new Error(payload.error || response.statusText);
         }
-        renderLiveRuns(payload);
+        const nextRenderKey = liveRunsRenderKey(payload);
+        if (nextRenderKey !== lastLiveRunsRenderKey) {
+          lastLiveRunsRenderKey = nextRenderKey;
+          renderLiveRuns(payload);
+        } else {
+          const sameSummary = payload.summary || {};
+          const sameRuns = Array.isArray(payload.runs) ? payload.runs : [];
+          const symphonyModeError = payload.daemonError && payload.sourceMode === "symphony";
+          liveRunsDot.className = `dot ${symphonyModeError ? "error" : (sameSummary.blocked || sameSummary.failed ? "busy" : "ok")}`;
+          liveRunsStatus.textContent = symphonyModeError ? "Error" : (sameRuns.length ? "Ready" : "Empty");
+        }
       } catch (error) {
         liveRunsDot.className = "dot error";
         liveRunsStatus.textContent = "Error";
         liveRunsSource.textContent = error.message;
+      } finally {
+        liveRunsRefreshInFlight = false;
       }
     }
 
@@ -2965,7 +3276,7 @@
         });
         renderPayload(payload);
         activeTab("tech");
-        await loadLiveRuns();
+        await loadLiveRuns({ showLoading: true });
         setMessage("Workflow accepted. Watch Live Runs for agent progress, Symphony state, or intake status.", "ok");
       } catch (error) {
         statusDot.className = "dot error";
@@ -2976,10 +3287,11 @@
     }
 
     form.addEventListener("submit", createPlan);
-    refreshRunsButton.addEventListener("click", loadLiveRuns);
+    refreshRunsButton.addEventListener("click", () => loadLiveRuns({ showLoading: true }));
     liveRunsSourceMode.addEventListener("change", () => {
       setLiveRunsSourceMode(liveRunsSourceMode.value);
-      loadLiveRuns();
+      lastLiveRunsRenderKey = "";
+      loadLiveRuns({ showLoading: true });
     });
     agentsBuilderButton.addEventListener("click", () => {
       window.open("/agents-builder", "mini-orchestrator-agents-builder");

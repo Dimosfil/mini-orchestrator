@@ -14,6 +14,27 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Symphony Workflow Visibility And Stable Refresh
+
+Goal: make any generated-project task useful for debugging the orchestrator by
+showing the actual Symphony/Dispatcher sequence clearly, while moving daemon
+diagnostics out of the main task mental model and preventing full-board refresh
+jitter.
+
+Planned changes:
+
+- [x] Explain and reduce the visible weight of `Symphony daemon snapshot`.
+- [x] Add a sequential run log/timeline surface for the selected workflow.
+- [x] Preserve DOM and scroll state during live refreshes so the UI does not
+  jump every polling cycle.
+- [x] Verify focused UI/API tests.
+
+Risks or dependencies:
+
+- The UI must keep dispatcher and Symphony observability truthful; it must not
+  invent hidden progress or claim Symphony accepted work without an intake
+  record.
+
 ### Generated Project Artifact Isolation
 
 Goal: make repeated orchestrator test runs create isolated, project-named

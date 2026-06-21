@@ -307,7 +307,7 @@ def test_symphony_intake_payload_expands_preset_agents():
         {
             "approved": True,
             "project": "mini-orchestrator",
-            "task": "Build release CRM",
+            "task": "Build the requested release web app",
             "chainPreset": {
                 "id": "chain-eight",
                 "name": "Eight agent preset",
@@ -344,7 +344,7 @@ def test_symphony_intake_payload_expands_preset_agents():
     assert [item["agent"]["id"] for item in payload["agentTasks"]] == ["planner", "executor"]
     assert payload["agentTasks"][0]["codex"]["model"] == "gpt-5.5"
     assert payload["agentTasks"][1]["codex"]["accessMode"] == "danger-full-access"
-    assert payload["agentTasks"][1]["task"]["global"]["title"] == "Build release CRM"
+    assert payload["agentTasks"][1]["task"]["global"]["title"] == "Build the requested release web app"
 
 
 def test_symphony_gateway_run_submits_when_intake_contract_exists(tmp_path, monkeypatch):

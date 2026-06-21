@@ -245,12 +245,28 @@ def test_dashboard_splits_task_cards_from_symphony_daemon_cards() -> None:
 
     assert 'id="symphony-daemon-board"' in html
     assert 'id="symphony-daemon-list"' in html
+    assert 'id="workflow-log-panel"' in html
+    assert "function renderWorkflowLog(run, profile)" in html
+    assert "function renderDaemonHealthCard(run, profile)" in html
     assert "function isSymphonyDaemonRun(run)" in html
     assert "const taskRuns = runs.filter((run) => !isSymphonyDaemonRun(run));" in html
     assert "const daemonRuns = runs.filter(isSymphonyDaemonRun);" in html
     assert "for (const run of taskRuns)" in html
     assert "for (const run of daemonRuns)" in html
-    assert "symphonyDaemonList.append(renderDaemonRunCard(run, profile));" in html
+    assert "symphonyDaemonList.append(renderDaemonHealthCard(run, profile));" in html
+    assert "symphonyDaemonList.append(renderDaemonRunCard(run, profile));" not in html
+
+
+def test_dashboard_live_runs_skips_unchanged_refresh_rerenders() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "let lastLiveRunsRenderKey = \"\";" in html
+    assert "let liveRunsRefreshInFlight = false;" in html
+    assert "function liveRunsRenderKey(payload)" in html
+    assert "if (nextRenderKey !== lastLiveRunsRenderKey)" in html
+    assert "lastLiveRunsRenderKey = nextRenderKey;" in html
+    assert 'refreshRunsButton.addEventListener("click", () => loadLiveRuns({ showLoading: true }));' in html
 
 
 def test_dashboard_chain_picker_is_in_topbar_without_plan_or_core_buttons() -> None:

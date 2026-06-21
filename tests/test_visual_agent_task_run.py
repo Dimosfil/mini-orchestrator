@@ -52,22 +52,22 @@ def test_visual_agent_task_uses_selected_card_name_as_worker(tmp_path) -> None:
 
     result = service.run_visual_agent_task(
         {
-            "id": "dental-crm-builder",
-            "name": "Dental CRM Builder",
+            "id": "selected-project-builder",
+            "name": "Selected Project Builder",
             "role": "Executor",
             "llm": "gpt-5.4",
             "reasoning": "medium",
             "accessMode": "workspace-write",
-            "workPackage": {"currentObjective": "Build dental CRM demo."},
+            "workPackage": {"currentObjective": "Build the requested project artifact."},
         },
-        "Build dental CRM demo.",
-        "worker-profile-dental-crm-builder-test",
+        "Build the requested project artifact.",
+        "worker-profile-selected-project-builder-test",
     )
 
     assert result["mode"] == "visual-agent-task"
-    assert fake_server.started_workers[0]["name"] == "Dental CRM Builder"
-    assert fake_server.turns[0]["workerName"] == "Dental CRM Builder"
-    assert result["agents"]["Dental CRM Builder"] == "visual agent task done"
+    assert fake_server.started_workers[0]["name"] == "Selected Project Builder"
+    assert fake_server.turns[0]["workerName"] == "Selected Project Builder"
+    assert result["agents"]["Selected Project Builder"] == "visual agent task done"
 
 
 def test_visual_agent_task_requires_card_model(tmp_path) -> None:

@@ -13,12 +13,12 @@ from . import runtime_store
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_CARDS_DIR = ROOT / ".mini_orchestrator" / "agent-cards"
 WORKER_PROFILES_DIR = ROOT / ".mini_orchestrator" / "worker-profiles"
-DEFAULT_DENTAL_CRM_CARD_ID = "dental-crm-builder"
-DEFAULT_DENTAL_CRM_TASK = (
-    "Create or improve a runnable dental CRM demo for a dentistry clinic. "
-    "The demo should be directly openable as an HTML file and show patient cards, "
-    "appointments, treatment statuses, and admin tasks on a Kanban board. "
-    "Keep the work scoped to .mini_orchestrator/test-runs/dental-crm-demo/."
+DEFAULT_PROJECT_BUILDER_CARD_ID = "project-builder"
+DEFAULT_PROJECT_BUILDER_TASK = (
+    "Create or improve the runnable project artifact requested by the user. "
+    "Choose the artifact name and folder from the task itself, keep repeat runs "
+    "versioned under .mini_orchestrator/test-runs/, and include a README with "
+    "the original task, entry point, run commands, and verification notes."
 )
 
 WORK_PACKAGE_KEYS = (
@@ -40,11 +40,11 @@ class AgentProfileError(ValueError):
     pass
 
 
-def default_dental_crm_agent_card(root: Path = ROOT) -> dict[str, Any]:
-    demo_dir = root / ".mini_orchestrator" / "test-runs" / "dental-crm-demo"
+def default_project_builder_agent_card(root: Path = ROOT) -> dict[str, Any]:
+    artifacts_dir = root / ".mini_orchestrator" / "test-runs"
     return {
-        "id": DEFAULT_DENTAL_CRM_CARD_ID,
-        "name": "Dental CRM Builder",
+        "id": DEFAULT_PROJECT_BUILDER_CARD_ID,
+        "name": "Project Builder",
         "preset": "executor",
         "role": "Executor",
         "llm": "gpt-5.4",
@@ -54,29 +54,27 @@ def default_dental_crm_agent_card(root: Path = ROOT) -> dict[str, Any]:
         "workPackage": {
             "instructions": (
                 "You are the selected visual agent responsible for building and refining "
-                "the standalone dental clinic CRM demo."
+                "the project artifact requested by the user."
             ),
-            "currentObjective": DEFAULT_DENTAL_CRM_TASK,
+            "currentObjective": DEFAULT_PROJECT_BUILDER_TASK,
             "inputsArtifacts": (
-                f"{_project_path(demo_dir / 'index.html', root)}\n"
-                f"{_project_path(demo_dir / 'README.md', root)}"
+                f"{_project_path(artifacts_dir, root)}"
             ),
             "constraints": (
-                "Keep edits scoped to .mini_orchestrator/test-runs/dental-crm-demo/. "
-                "Do not edit unrelated project files. The demo must work by opening "
-                "index.html directly in a browser, without a server."
+                "Do not assume a fixed product domain or artifact type. Derive the domain, "
+                "stack, artifact slug, and version folder from the current task. Keep generated "
+                "outputs under .mini_orchestrator/test-runs/ unless the user explicitly names "
+                "another target."
             ),
-            "previousOutputs": (
-                "A first dental CRM demo already exists with patient cards, appointments, "
-                "treatment progress, and an admin-task Kanban."
-            ),
+            "previousOutputs": "No task-specific artifact is assumed by the default card.",
             "allowedTools": (
-                "Read and edit files under the dental CRM demo folder. Run focused syntax "
-                "or smoke checks for the demo. Summarize any changes."
+                "Read and edit only the selected artifact folder and supporting project-local "
+                "docs needed for the task. Run focused syntax, build, or smoke checks when "
+                "the artifact defines them."
             ),
             "expectedOutput": (
                 "Return a concise report describing what was verified or changed, plus "
-                "the runnable demo path and any remaining product gaps."
+                "the artifact path, entry point, and any remaining product gaps."
             ),
         },
     }
@@ -96,12 +94,12 @@ def persist_agent_card(card: dict[str, Any], root: Path = ROOT) -> dict[str, Any
 
 
 def load_or_create_default_agent_card(root: Path = ROOT) -> dict[str, Any]:
-    stored = runtime_store.get_json_document(root, "agent_cards", DEFAULT_DENTAL_CRM_CARD_ID)
+    stored = runtime_store.get_json_document(root, "agent_cards", DEFAULT_PROJECT_BUILDER_CARD_ID)
     if stored is not None:
         card = stored.get("card") if isinstance(stored, dict) else None
         if isinstance(card, dict):
             return validate_agent_card(card)
-    path = root / ".mini_orchestrator" / "agent-cards" / f"{DEFAULT_DENTAL_CRM_CARD_ID}.json"
+    path = root / ".mini_orchestrator" / "agent-cards" / f"{DEFAULT_PROJECT_BUILDER_CARD_ID}.json"
     if path.exists():
         try:
             payload = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -110,14 +108,14 @@ def load_or_create_default_agent_card(root: Path = ROOT) -> dict[str, Any]:
         card = payload.get("card") if isinstance(payload, dict) else None
         if isinstance(card, dict):
             return validate_agent_card(card)
-    return persist_agent_card(default_dental_crm_agent_card(root), root)["card"]
+    return persist_agent_card(default_project_builder_agent_card(root), root)["card"]
 
 
 def validate_agent_card(card: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(card, dict):
         raise AgentProfileError("Agent card must be an object.")
 
-    card_id = _slug(str(card.get("id") or DEFAULT_DENTAL_CRM_CARD_ID))
+    card_id = _slug(str(card.get("id") or DEFAULT_PROJECT_BUILDER_CARD_ID))
     name = _required_text(card, "name", limit=80)
     role = _required_text(card, "role", limit=80)
     model = _required_text(card, "llm", limit=80)
@@ -165,7 +163,7 @@ def validate_agent_card(card: dict[str, Any]) -> dict[str, Any]:
 
 def compile_worker_profile(
     card: dict[str, Any],
-    task: str = DEFAULT_DENTAL_CRM_TASK,
+    task: str = DEFAULT_PROJECT_BUILDER_TASK,
     root: Path = ROOT,
 ) -> dict[str, Any]:
     normalized = validate_agent_card(card)
@@ -244,7 +242,7 @@ def _required_text(card: dict[str, Any], key: str, limit: int) -> str:
 
 def _slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().casefold()).strip("-")
-    return slug[:80] or DEFAULT_DENTAL_CRM_CARD_ID
+    return slug[:80] or DEFAULT_PROJECT_BUILDER_CARD_ID
 
 
 def _utc_now() -> str:

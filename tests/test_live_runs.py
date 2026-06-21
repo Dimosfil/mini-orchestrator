@@ -196,10 +196,10 @@ def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
         {
             "time": "2026-06-18T00:00:00Z",
             "type": "task_created",
-            "task": "Create or improve a runnable dental CRM demo",
+            "task": "Create or improve a runnable generated project artifact",
             "mode": "visual-agent-task",
-            "profileSnapshotId": "worker-profile-dental-crm-builder-abc123",
-            "visualAgentName": "Dental CRM Builder",
+            "profileSnapshotId": "worker-profile-project-builder-abc123",
+            "visualAgentName": "Project Builder",
         },
     )
     write_event(
@@ -207,10 +207,10 @@ def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
         {
             "time": "2026-06-18T00:00:01Z",
             "type": "agent_thread_started",
-            "agent": "Dental CRM Builder",
+            "agent": "Project Builder",
             "model": "gpt-5.4",
-            "threadId": "thread-dental",
-            "profileSnapshotId": "worker-profile-dental-crm-builder-abc123",
+            "threadId": "thread-project-builder",
+            "profileSnapshotId": "worker-profile-project-builder-abc123",
         },
     )
     write_event(
@@ -218,8 +218,8 @@ def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
         {
             "time": "2026-06-18T00:00:02Z",
             "type": "agent_result",
-            "agent": "Dental CRM Builder",
-            "output": "Dental CRM demo verified.",
+            "agent": "Project Builder",
+            "output": "Generated project artifact verified.",
         },
     )
     write_event(log_path, {"time": "2026-06-18T00:00:03Z", "type": "final"})
@@ -229,8 +229,8 @@ def test_dispatcher_live_runs_surface_visual_agent_profile(tmp_path):
     run = payload["runs"][0]
     assert run["status"] == "done"
     assert run["mode"] == "visual-agent-task"
-    assert run["currentAgent"] == "Dental CRM Builder"
-    assert run["profileSnapshotId"] == "worker-profile-dental-crm-builder-abc123"
-    assert run["stages"][0]["agent"] == "Dental CRM Builder"
+    assert run["currentAgent"] == "Project Builder"
+    assert run["profileSnapshotId"] == "worker-profile-project-builder-abc123"
+    assert run["stages"][0]["agent"] == "Project Builder"
     assert run["stages"][0]["status"] == "done"
-    assert run["outputs"]["Dental CRM Builder"] == "Dental CRM demo verified."
+    assert run["outputs"]["Project Builder"] == "Generated project artifact verified."
