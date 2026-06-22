@@ -8,11 +8,14 @@ This document records the accepted runtime workflow for the WorkNest sprint
 `2026-06-19_17-01-10_symphony-bridge-adapter-sprint`.
 
 Mini Orchestrator can read and display Symphony daemon state. It can also build
-a documented intake payload from the selected Mini Orchestrator chain preset.
-Submission is allowed only when the `symphony` config-service record and its
-contract expose a task-intake endpoint. If the endpoint is missing, Mini
-Orchestrator records a visible blocked gateway run instead of pretending
-Symphony accepted the task.
+documented intake payloads from the selected Mini Orchestrator chain preset.
+The accepted production ownership model is Mini-owned chain execution: Mini
+submits one next-agent handoff at a time, waits for Symphony's retained result,
+stores that result on the task card, then submits the next agent with previous
+outputs as context. Submission is allowed only when the `symphony`
+config-service record and its contract expose a task-intake endpoint. If the
+endpoint is missing, Mini Orchestrator records a visible blocked gateway run
+instead of pretending Symphony accepted the task.
 
 As of 2026-06-20, the connected local Symphony workspace exposes the required
 contract and intake endpoint:
@@ -82,16 +85,32 @@ card.
 
 ## Symphony Gateway And Task Intake
 
-`POST /api/symphony/runs` validates approved task-run payloads, requires live
-Symphony observability, converts the selected chain preset into
-`agentTasks[]`, reads the config-service-resolved Symphony contract, and posts
-to a documented intake endpoint when available:
+`POST /api/symphony/runs` validates approved task-run payloads and requires live
+Symphony observability. In `orchestrationMode=mini-owned-chain` or
+`waitForCompletion=true`, Mini converts the selected chain preset into a series
+of one-agent handoffs, reads the config-service-resolved Symphony contract, and
+posts each handoff to a documented intake endpoint when available:
 
 - `endpoints.taskIntake`
 - `endpoints.agentIntake`
 - `endpoints.intake`
 
-The outbound payload schema is:
+The Mini-owned handoff payload schema is:
+
+- `schemaVersion: mini-orchestrator.symphony-intake.v1`
+- `dispatchStrategy: mini-owned-single-agent-handoff`
+- `task`: one shared task card for the whole user-visible work item
+- `taskCard`: Mini-owned checklist/current item state
+- `chainPreset`: selected preset id/name/raw payload
+- `chainControl`: handoff index, total agents, current agent id, previous
+  output count, and the policy that Symphony may start a new worker or reuse
+  an IDLE one
+- `agentTasks[]`: exactly one item for the current preset agent, carrying that
+  agent's id/name/role/preset, Codex model/speed/reasoning/access mode, work
+  package, translations, current checklist item, and previous outputs
+
+The older compatibility payload schema is still supported for adapter
+compatibility:
 
 - `schemaVersion: mini-orchestrator.symphony-intake.v1`
 - `dispatchStrategy: one-symphony-agent-per-preset-stage`
@@ -124,7 +143,11 @@ Current local Symphony behavior:
 - `POST /api/v1/intake` validates `approved=true`,
   `schemaVersion=mini-orchestrator.symphony-intake.v1`, a shared `task`, and a
   non-empty `agentTasks[]` array.
-- Symphony creates one synthetic issue per `agentTasks[]` item.
+- For Mini-owned handoffs, Mini sends one `agentTasks[]` item and therefore
+  Symphony creates one synthetic issue for the current agent step. Mini polls
+  that issue/result before sending the next agent.
+- For compatibility preset payloads, Symphony creates one synthetic issue per
+  `agentTasks[]` item.
 - Each synthetic issue carries the Mini task card, the preset agent settings,
   Codex model/reasoning/access mode, and work package in issue metadata.
 - Mini-origin synthetic issues skip the Linear `after_create` bootstrap hook so
@@ -144,6 +167,17 @@ Verified smoke on 2026-06-20:
   `MO-sym-intake-smoke-20260620-h-1-smoke-reviewer`.
 - Symphony log recorded `Codex session completed` and
   `External intake agent completed` for that synthetic issue.
+
+Implemented on 2026-06-22:
+
+- Added Mini-side `mini-owned-single-agent-handoff` payload construction.
+- Added `SymphonyGateway.run_mini_owned_chain`, which submits a single current
+  agent, waits for the retained Symphony result, stores the output, and then
+  submits the next preset agent with previous outputs as context.
+- Added `/api/symphony/runs` support for
+  `orchestrationMode=mini-owned-chain` / `waitForCompletion=true`.
+- Focused Mini tests cover handoff payload shape, sequential handoff order, and
+  existing Symphony daemon/gateway compatibility behavior.
 
 Supported Symphony bridge operations without task intake:
 

@@ -6,7 +6,9 @@ from typing import Any, Callable
 
 from .symphony_daemon import (
     SymphonyDaemonError,
+    build_symphony_handoff_payload,
     build_symphony_intake_payload,
+    build_task_checklist,
     fetch_symphony_issue,
     fetch_symphony_state,
     submit_symphony_intake,
@@ -30,6 +32,16 @@ class SymphonyWaitResult:
     request_id: str
     issues: list[dict[str, Any]]
     state: dict[str, Any]
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class SymphonyChainResult:
+    status: str
+    request_id: str
+    checklist: list[dict[str, Any]]
+    outputs: list[dict[str, Any]]
+    steps: list[dict[str, Any]]
     message: str = ""
 
 
@@ -161,6 +173,81 @@ class SymphonyGateway:
             poll_interval_seconds=poll_interval_seconds,
         )
 
+    def run_mini_owned_chain(
+        self,
+        payload: dict[str, Any],
+        *,
+        state_url: str,
+        timeout_per_step_seconds: float = 300.0,
+        poll_interval_seconds: float = 5.0,
+    ) -> SymphonyChainResult:
+        checklist = build_task_checklist(payload)
+        previous_outputs: list[dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
+        request_ids: list[str] = []
+        agent_index = 0
+        while True:
+            try:
+                handoff_payload = build_symphony_handoff_payload(
+                    payload,
+                    agent_index=agent_index,
+                    checklist_item=checklist[0],
+                    previous_outputs=previous_outputs,
+                )
+            except IndexError:
+                break
+
+            agent_task = handoff_payload["agentTasks"][0]
+            agent = agent_task.get("agent") if isinstance(agent_task.get("agent"), dict) else {}
+            submit_result = self.submit(handoff_payload)
+            request_ids.append(submit_result.request_id)
+            wait_result = self.wait_for_result(
+                submit_result,
+                state_url=state_url,
+                timeout_seconds=timeout_per_step_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+            )
+            output = {
+                "agentIndex": agent_index,
+                "agentId": str(agent.get("id") or ""),
+                "agentName": str(agent.get("name") or agent.get("role") or ""),
+                "status": wait_result.status,
+                "summary": _issues_summary(wait_result.issues),
+                "issues": wait_result.issues,
+                "requestId": submit_result.request_id,
+            }
+            previous_outputs.append(output)
+            steps.append(
+                {
+                    "agentIndex": agent_index,
+                    "agent": agent,
+                    "requestId": submit_result.request_id,
+                    "status": wait_result.status,
+                    "message": wait_result.message,
+                }
+            )
+            if wait_result.status not in {"done", "completed"}:
+                checklist[0]["status"] = "blocked" if wait_result.status == "blocked" else "failed"
+                return SymphonyChainResult(
+                    status=wait_result.status,
+                    request_id=",".join([item for item in request_ids if item]),
+                    checklist=checklist,
+                    outputs=previous_outputs,
+                    steps=steps,
+                    message=wait_result.message,
+                )
+            agent_index += 1
+
+        checklist[0]["status"] = "done"
+        return SymphonyChainResult(
+            status="done",
+            request_id=",".join([item for item in request_ids if item]),
+            checklist=checklist,
+            outputs=previous_outputs,
+            steps=steps,
+            message="Mini Orchestrator completed the selected preset chain through sequential Symphony handoffs.",
+        )
+
 
 def _accepted_issue_refs(accepted: list[dict[str, Any]]) -> list[dict[str, str]]:
     refs: list[dict[str, str]] = []
@@ -222,9 +309,21 @@ def _issue_failed(issue: dict[str, Any]) -> bool:
     return any(marker in text for marker in ("failed", "error", "cancelled", "canceled"))
 
 
+def _issues_summary(issues: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for issue in issues:
+        for key in ("final_message", "last_message", "summary", "last_event", "state", "status"):
+            value = issue.get(key)
+            if value:
+                parts.append(str(value))
+                break
+    return "\n".join(parts)
+
+
 __all__ = [
     "SymphonyDaemonError",
     "SymphonyGateway",
+    "SymphonyChainResult",
     "SymphonySubmitResult",
     "SymphonyWaitResult",
 ]

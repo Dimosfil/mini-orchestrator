@@ -205,7 +205,14 @@ def _flow_agents(chain_preset: Dict[str, Any]) -> list[Dict[str, Any]]:
     ]
 
 
-def _agent_task_from_preset_agent(index: int, agent: Dict[str, Any], global_task: Dict[str, Any]) -> Dict[str, Any]:
+def _agent_task_from_preset_agent(
+    index: int,
+    agent: Dict[str, Any],
+    global_task: Dict[str, Any],
+    *,
+    checklist_item: Dict[str, Any] | None = None,
+    previous_outputs: list[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
     work_package = agent.get("workPackage") if isinstance(agent.get("workPackage"), dict) else {}
     translations = (
         agent.get("workPackageTranslations")
@@ -215,6 +222,18 @@ def _agent_task_from_preset_agent(index: int, agent: Dict[str, Any], global_task
     agent_id = _text(agent.get("id") or agent.get("name") or agent.get("role") or f"agent-{index + 1}")
     role = _text(agent.get("role") or agent.get("preset") or agent.get("name") or "agent")
     name = _text(agent.get("name") or role or agent_id)
+    previous_output_text = json.dumps(previous_outputs or [], ensure_ascii=False)
+    task = {
+        "global": global_task,
+        "currentObjective": _text(work_package.get("currentObjective") or global_task.get("title")),
+        "instructions": _text(work_package.get("instructions")),
+        "constraints": _text(work_package.get("constraints")),
+        "expectedOutput": _text(work_package.get("expectedOutput")),
+        "inputsArtifacts": _text(work_package.get("inputsArtifacts")),
+        "previousOutputs": _text(work_package.get("previousOutputs") or previous_output_text),
+    }
+    if checklist_item:
+        task["checklistItem"] = checklist_item
     return {
         "index": index,
         "stageId": agent_id,
@@ -233,19 +252,11 @@ def _agent_task_from_preset_agent(index: int, agent: Dict[str, Any], global_task
         },
         "workPackage": work_package,
         "workPackageTranslations": translations,
-        "task": {
-            "global": global_task,
-            "currentObjective": _text(work_package.get("currentObjective") or global_task.get("title")),
-            "instructions": _text(work_package.get("instructions")),
-            "constraints": _text(work_package.get("constraints")),
-            "expectedOutput": _text(work_package.get("expectedOutput")),
-            "inputsArtifacts": _text(work_package.get("inputsArtifacts")),
-            "previousOutputs": _text(work_package.get("previousOutputs")),
-        },
+        "task": task,
     }
 
 
-def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _task_parts(payload: Dict[str, Any]) -> tuple[str, str, str, str]:
     if payload.get("approved") is not True:
         raise ValueError("Field 'approved' must be true before creating a Symphony run.")
     task_value = payload.get("task")
@@ -261,22 +272,83 @@ def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         raw_task = task_title
     if not task_title:
         raise ValueError("Field 'task' is required.")
+    return task_title, task_id, sprint_id, raw_task
 
-    chain_preset = payload.get("chainPreset") if isinstance(payload.get("chainPreset"), dict) else {}
-    agents = _flow_agents(chain_preset)
-    if not agents:
-        agents = [
-            {"id": "default-planner", "name": "Planner", "role": "planner", "preset": "planner"},
-            {"id": "default-executor", "name": "Executor", "role": "executor", "preset": "executor"},
-            {"id": "default-reviewer", "name": "Reviewer", "role": "reviewer", "preset": "reviewer"},
-        ]
-    global_task = {
+
+def _global_task(payload: Dict[str, Any]) -> Dict[str, Any]:
+    task_title, task_id, sprint_id, raw_task = _task_parts(payload)
+    return {
         "taskId": task_id,
         "sprintId": sprint_id,
         "project": str(payload.get("project") or "mini-orchestrator").strip(),
         "title": task_title,
         "raw": raw_task,
     }
+
+
+def build_task_checklist(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
+    task_title, task_id, _sprint_id, _raw_task = _task_parts(payload)
+    raw_items: Any = payload.get("checklist")
+    task_value = payload.get("task")
+    if raw_items is None and isinstance(task_value, dict):
+        raw_items = task_value.get("checklist")
+    items: list[Dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for index, item in enumerate(raw_items):
+            if isinstance(item, dict):
+                title = _text(item.get("title") or item.get("text") or item.get("summary")).strip()
+                item_id = _text(item.get("id") or item.get("itemId")).strip()
+            else:
+                title = _text(item).strip()
+                item_id = ""
+            if title:
+                items.append(
+                    {
+                        "id": item_id or f"item-{index + 1}",
+                        "index": index,
+                        "title": title,
+                        "status": "pending",
+                    }
+                )
+    if items:
+        return items
+    return [{"id": task_id or "item-1", "index": 0, "title": task_title, "status": "pending"}]
+
+
+def _chain_preset(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return payload.get("chainPreset") if isinstance(payload.get("chainPreset"), dict) else {}
+
+
+def _chain_summary(chain_preset: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": _text(chain_preset.get("id") or chain_preset.get("chainPresetId")),
+        "name": _text(
+            chain_preset.get("name")
+            or (
+                chain_preset.get("flow", {}).get("name")
+                if isinstance(chain_preset.get("flow"), dict)
+                else ""
+            )
+        ),
+        "raw": chain_preset,
+    }
+
+
+def _default_agents() -> list[Dict[str, Any]]:
+    return [
+        {"id": "default-planner", "name": "Planner", "role": "planner", "preset": "planner"},
+        {"id": "default-executor", "name": "Executor", "role": "executor", "preset": "executor"},
+        {"id": "default-reviewer", "name": "Reviewer", "role": "reviewer", "preset": "reviewer"},
+    ]
+
+
+def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    global_task = _global_task(payload)
+
+    chain_preset = _chain_preset(payload)
+    agents = _flow_agents(chain_preset)
+    if not agents:
+        agents = _default_agents()
     return {
         "schemaVersion": "mini-orchestrator.symphony-intake.v1",
         "approved": True,
@@ -285,23 +357,70 @@ def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "executionMode": "symphony",
         "dispatchStrategy": "one-symphony-agent-per-preset-stage",
         "task": global_task,
-        "chainPreset": {
-            "id": _text(chain_preset.get("id") or chain_preset.get("chainPresetId")),
-            "name": _text(
-                chain_preset.get("name")
-                or (
-                    chain_preset.get("flow", {}).get("name")
-                    if isinstance(chain_preset.get("flow"), dict)
-                    else ""
-                )
-            ),
-            "raw": chain_preset,
-        },
+        "chainPreset": _chain_summary(chain_preset),
         "agentTasks": [_agent_task_from_preset_agent(index, agent, global_task) for index, agent in enumerate(agents)],
         "handoffPolicy": {
             "taskCardIsSingleUserVisibleUnit": True,
             "eachPresetAgentReceivesOwnSettingsAndStageTask": True,
             "previousStageOutputsBecomeNextStageContext": True,
+            "chainOwner": "symphony-or-parallel-intake",
+        },
+    }
+
+
+def build_symphony_handoff_payload(
+    payload: Dict[str, Any],
+    *,
+    agent_index: int,
+    checklist_item: Dict[str, Any] | None = None,
+    previous_outputs: list[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    global_task = _global_task(payload)
+    chain_preset = _chain_preset(payload)
+    agents = _flow_agents(chain_preset) or _default_agents()
+    if agent_index < 0 or agent_index >= len(agents):
+        raise IndexError(f"Agent index is outside the selected chain: {agent_index}")
+    agent = agents[agent_index]
+    checklist = build_task_checklist(payload)
+    current_item = checklist_item or checklist[0]
+    return {
+        "schemaVersion": "mini-orchestrator.symphony-intake.v1",
+        "approved": True,
+        "requestedAt": _utc_now(),
+        "requestedBy": "mini-orchestrator",
+        "executionMode": "symphony",
+        "dispatchStrategy": "mini-owned-single-agent-handoff",
+        "task": global_task,
+        "taskCard": {
+            "owner": "mini-orchestrator",
+            "status": "running",
+            "checklist": checklist,
+            "activeChecklistItem": current_item,
+        },
+        "chainPreset": _chain_summary(chain_preset),
+        "chainControl": {
+            "owner": "mini-orchestrator",
+            "handoffIndex": agent_index,
+            "totalAgents": len(agents),
+            "currentAgentId": _text(agent.get("id") or agent.get("name") or f"agent-{agent_index + 1}"),
+            "previousOutputsCount": len(previous_outputs or []),
+            "symphonyWorkerPolicy": "start-new-or-reuse-idle",
+        },
+        "agentTasks": [
+            _agent_task_from_preset_agent(
+                agent_index,
+                agent,
+                global_task,
+                checklist_item=current_item,
+                previous_outputs=previous_outputs or [],
+            )
+        ],
+        "handoffPolicy": {
+            "taskCardIsSingleUserVisibleUnit": True,
+            "miniOrchestratorOwnsChecklistAndChain": True,
+            "symphonyExecutesOnlyThisAgentStep": True,
+            "previousStageOutputsBecomeNextStageContext": True,
+            "workerSelectionOwnedBySymphony": True,
         },
     }
 
@@ -311,7 +430,13 @@ def submit_symphony_intake(payload: Dict[str, Any], timeout: float = 10.0) -> Di
     contract_url = _configured_contract_url(runtime)
     contract = _request_json(contract_url, timeout=5.0)
     intake_url = _configured_intake_url(runtime, contract)
-    intake_payload = build_symphony_intake_payload(payload)
+    if (
+        payload.get("schemaVersion") == "mini-orchestrator.symphony-intake.v1"
+        and isinstance(payload.get("agentTasks"), list)
+    ):
+        intake_payload = payload
+    else:
+        intake_payload = build_symphony_intake_payload(payload)
     response = _request_json(intake_url, method="POST", timeout=timeout, payload=intake_payload)
     return {
         "serviceId": runtime.service_id,

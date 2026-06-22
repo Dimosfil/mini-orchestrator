@@ -49,6 +49,7 @@ from .symphony_daemon import (
     fetch_symphony_issue,
     refresh_symphony_state,
 )
+from .symphony_gateway import SymphonyGateway
 from .worknest_bridge import WorkNestBridgeError, WorkNestLifecycleBridge
 
 
@@ -79,6 +80,97 @@ def _stamp_run_source(payload: Dict[str, Any], source_key: str, source_label: st
             run["sourceKey"] = source_key
             run["sourceLabel"] = source_label
     return payload
+
+
+def _string_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _symphony_agent_models_from_gateway_run(run: Dict[str, Any]) -> Dict[str, str]:
+    symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
+    submission = symphony.get("submission") if isinstance(symphony.get("submission"), dict) else {}
+    intake = symphony.get("intakePayload") if isinstance(symphony.get("intakePayload"), dict) else submission.get("request")
+    agent_tasks = intake.get("agentTasks") if isinstance(intake, dict) and isinstance(intake.get("agentTasks"), list) else []
+    models: Dict[str, str] = {}
+    for index, agent_task in enumerate(agent_tasks):
+        if not isinstance(agent_task, dict):
+            continue
+        agent = agent_task.get("agent") if isinstance(agent_task.get("agent"), dict) else {}
+        codex = agent_task.get("codex") if isinstance(agent_task.get("codex"), dict) else {}
+        agent_id = _string_value(agent.get("id") or agent_task.get("agentId") or agent_task.get("stageId"))
+        model = _string_value(codex.get("model") or agent_task.get("model"))
+        if model:
+            if agent_id:
+                models[agent_id] = model
+            models[str(index)] = model
+    return models
+
+
+def _symphony_model_index_from_gateway_payload(gateway_payload: Dict[str, Any]) -> Dict[str, str]:
+    index: Dict[str, str] = {}
+    runs = gateway_payload.get("runs") if isinstance(gateway_payload.get("runs"), list) else []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        agent_models = _symphony_agent_models_from_gateway_run(run)
+        symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
+        chain = symphony.get("miniOwnedChain") if isinstance(symphony.get("miniOwnedChain"), dict) else {}
+        outputs = chain.get("outputs") if isinstance(chain.get("outputs"), list) else []
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            agent_id = _string_value(output.get("agentId"))
+            model = agent_models.get(agent_id) or agent_models.get(_string_value(output.get("agentIndex")))
+            if not model:
+                continue
+            issues = output.get("issues") if isinstance(output.get("issues"), list) else []
+            for issue in issues:
+                if isinstance(issue, dict):
+                    for key in (issue.get("issue_identifier"), issue.get("identifier"), issue.get("issue_id")):
+                        key_text = _string_value(key)
+                        if key_text:
+                            index[key_text] = model
+
+        submission = symphony.get("submission") if isinstance(symphony.get("submission"), dict) else {}
+        response = submission.get("response") if isinstance(submission.get("response"), dict) else {}
+        accepted = response.get("accepted") if isinstance(response.get("accepted"), list) else []
+        for position, issue in enumerate(accepted):
+            if not isinstance(issue, dict):
+                continue
+            model = agent_models.get(str(position))
+            if not model:
+                continue
+            for key in (issue.get("issue_identifier"), issue.get("identifier"), issue.get("issue_id")):
+                key_text = _string_value(key)
+                if key_text:
+                    index[key_text] = model
+    return index
+
+
+def _enrich_symphony_daemon_models(daemon_payload: Dict[str, Any], gateway_payload: Dict[str, Any]) -> Dict[str, Any]:
+    model_index = _symphony_model_index_from_gateway_payload(gateway_payload)
+    if not model_index:
+        return daemon_payload
+    runs = daemon_payload.get("runs") if isinstance(daemon_payload.get("runs"), list) else []
+    for run in runs:
+        if not isinstance(run, dict) or run.get("mode") == "symphony-daemon-summary":
+            continue
+        task = run.get("task") if isinstance(run.get("task"), dict) else {}
+        keys = [
+            _string_value(run.get("runId")),
+            _string_value(task.get("taskId")),
+            _string_value(task.get("raw")),
+        ]
+        model = next((model_index[key] for key in keys if key in model_index), "")
+        if not model:
+            continue
+        run["model"] = model
+        for stage in run.get("stages") if isinstance(run.get("stages"), list) else []:
+            if isinstance(stage, dict) and not stage.get("model"):
+                stage["model"] = model
+    return daemon_payload
 
 
 def _build_dispatcher_source_payload(root: Path) -> Dict[str, Any]:
@@ -123,6 +215,7 @@ def _build_dispatcher_source_payload(root: Path) -> Dict[str, Any]:
 def _build_symphony_source_payload(root: Path = ROOT) -> Dict[str, Any]:
     daemon_payload = build_symphony_live_runs_from_url()
     gateway_payload = build_local_symphony_gateway_runs(root)
+    _enrich_symphony_daemon_models(daemon_payload, gateway_payload)
     _stamp_run_source(daemon_payload, "symphony", "Symphony")
     _stamp_run_source(gateway_payload, "symphony", "Symphony")
 
@@ -812,6 +905,54 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if path == "/api/symphony/runs":
             try:
                 state_payload = build_symphony_live_runs_from_url()
+                orchestration_mode = str(payload.get("orchestrationMode") or "").strip()
+                wait_for_completion = payload.get("waitForCompletion") is True
+                if orchestration_mode == "mini-owned-chain" or wait_for_completion:
+                    state_url = str(state_payload.get("stateUrl") or "").strip()
+                    if not state_url:
+                        self._http_error(502, "Symphony state URL is required for Mini-owned chain execution.")
+                        return
+                    chain_result = SymphonyGateway().run_mini_owned_chain(
+                        payload,
+                        state_url=state_url,
+                        timeout_per_step_seconds=float(payload.get("timeoutPerStepSeconds") or 300),
+                        poll_interval_seconds=float(payload.get("pollIntervalSeconds") or 5),
+                    )
+                    run = create_symphony_gateway_run(ROOT, payload, state_payload, submit=False)
+                    now = datetime.now(timezone.utc).isoformat()
+                    run["status"] = "done" if chain_result.status == "done" else chain_result.status
+                    run["currentAgent"] = "Mini Orchestrator chain"
+                    run["lastEvent"] = chain_result.message
+                    run["lastError"] = "" if chain_result.status == "done" else chain_result.message
+                    run["updatedAt"] = now
+                    run["approval"] = {"required": chain_result.status not in {"done"}, "count": 0}
+                    run["outputs"] = {
+                        str(item.get("agentId") or item.get("agentName") or item.get("agentIndex")): item.get("summary")
+                        for item in chain_result.outputs
+                    }
+                    for step in chain_result.steps:
+                        index = int(step.get("agentIndex") or 0)
+                        if index < len(run.get("stages") or []):
+                            stage = run["stages"][index]
+                            stage["status"] = "done" if step.get("status") in {"done", "completed"} else step.get("status")
+                            stage["statusLabel"] = str(stage["status"]).replace("_", " ").title()
+                            stage["lastEvent"] = step.get("message") or str(step.get("status") or "")
+                            stage["completedAt"] = now if stage["status"] == "done" else None
+                    run["taskCard"] = {
+                        "owner": "mini-orchestrator",
+                        "status": run["status"],
+                        "checklist": chain_result.checklist,
+                        "chainOwner": "mini-orchestrator",
+                    }
+                    run["symphony"]["miniOwnedChain"] = {
+                        "status": chain_result.status,
+                        "requestId": chain_result.request_id,
+                        "steps": chain_result.steps,
+                        "outputs": chain_result.outputs,
+                    }
+                    runtime_store.upsert_json_document(ROOT, "symphony_runs", str(run["runId"]), run)
+                    self._json_response(201, run)
+                    return
                 self._json_response(202, create_symphony_gateway_run(ROOT, payload, state_payload, submit=True))
             except SymphonyDaemonError as exc:
                 self._http_error(502, str(exc))
@@ -1267,6 +1408,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Refresh Symphony daemon observability through /api/symphony/refresh.",
                         "Read Symphony issue debug records through /api/symphony/issues/{issueIdentifier}.",
                         "Submit approved preset-based Symphony intake requests through /api/symphony/runs when the Symphony service record documents task intake.",
+                        "Run Mini-owned sequential Symphony chains by posting orchestrationMode=mini-owned-chain or waitForCompletion=true to /api/symphony/runs.",
                         "Record a visible blocked Symphony gateway run when intake is not documented.",
                     ],
                     "forbiddenActions": [
@@ -1377,13 +1519,26 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "POST",
                             "path": "/api/symphony/runs",
                             "required": ["task", "approved"],
-                            "optional": ["chainPreset", "mode", "project", "executionMode", "submitToSymphony"],
+                            "optional": [
+                                "chainPreset",
+                                "mode",
+                                "project",
+                                "executionMode",
+                                "submitToSymphony",
+                                "orchestrationMode",
+                                "waitForCompletion",
+                                "timeoutPerStepSeconds",
+                                "pollIntervalSeconds",
+                            ],
                             "mode": "contract-gated-intake",
-                            "policy": "requires live Symphony observability, builds one agentTasks[] item per selected preset agent, reads endpoints.contract, and posts to endpoints.taskIntake/agentIntake/intake when documented; otherwise records a visible blocked gateway run",
+                            "policy": "requires live Symphony observability and documented task intake; default compatibility mode can submit the selected preset, while orchestrationMode=mini-owned-chain keeps Mini as task-card/checklist/chain owner and posts one next-agent handoff at a time; otherwise records a visible blocked gateway run",
                             "intakePayload": {
                                 "schemaVersion": "mini-orchestrator.symphony-intake.v1",
-                                "dispatchStrategy": "one-symphony-agent-per-preset-stage",
-                                "agentTasks": "array of preset agent settings plus stage task/workPackage/codex model/reasoning/accessMode",
+                                "dispatchStrategies": [
+                                    "one-symphony-agent-per-preset-stage",
+                                    "mini-owned-single-agent-handoff",
+                                ],
+                                "agentTasks": "array containing either all compatibility preset stages or exactly one Mini-owned handoff agent with settings plus stage task/workPackage/codex model/reasoning/accessMode",
                             },
                         },
                         "symphonyRefresh": {

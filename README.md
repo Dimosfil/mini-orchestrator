@@ -16,10 +16,13 @@ The dashboard has two confirmed execution modes:
 
 - **Dispatcher** runs the selected preset through Mini Orchestrator's Codex
   dispatcher.
-- **Symphony** builds a contract-gated `mini-orchestrator.symphony-intake.v1`
-  payload with one `agentTasks[]` item per configured preset agent, including
-  model/reasoning/access/work-package settings, then posts it to the
-  config-service-resolved Symphony intake endpoint when documented.
+- **Symphony** can run the selected preset through contract-gated
+  `mini-orchestrator.symphony-intake.v1` payloads. The production business flow
+  keeps Mini Orchestrator as the task-card/checklist/chain owner: Mini sends
+  one next-agent handoff at a time, waits for Symphony's retained result, then
+  sends the following agent with previous outputs as context. The compatibility
+  payload can still describe one `agentTasks[]` item per configured preset
+  agent.
 
 The older Campaign Concept Studio page has been replaced by the orchestrator
 dashboard.
@@ -225,13 +228,15 @@ gone or the log has not updated past
 runs leave the active count and appear in Human Review with the stale reason.
 
 `POST /api/symphony/runs` is a local Symphony gateway endpoint. It requires
-approved task-run payloads, checks that Symphony observability is live, converts
-the selected chain preset into `agentTasks[]`, reads the config-service-resolved
-Symphony contract, and posts to `endpoints.taskIntake`, `endpoints.agentIntake`,
-or `endpoints.intake` when documented. If the service record/contract does not
-expose intake, it records a visible blocked gateway run with the normalized
-payload and the concrete blocker. The supported upstream Symphony operations
-without intake remain observability/control only:
+approved task-run payloads and checks that Symphony observability is live. In
+`orchestrationMode=mini-owned-chain` / `waitForCompletion=true`, Mini keeps
+ownership of the task card, checklist, and preset handoff order, then posts one
+next-agent `agentTasks[]` item at a time to `endpoints.taskIntake`,
+`endpoints.agentIntake`, or `endpoints.intake` when documented. Compatibility
+mode can still describe the full selected preset in one payload. If the service
+record/contract does not expose intake, Mini records a visible blocked gateway
+run with the normalized payload and the concrete blocker. The supported
+upstream Symphony operations without intake remain observability/control only:
 `GET /api/daemon/runs?source=symphony`, `POST /api/symphony/refresh`, and
 `GET /api/symphony/issues/{issueIdentifier}`.
 
@@ -288,7 +293,7 @@ reserved for unrecoverable blocked results.
 - `POST /api/daemon/run` - create a single-card daemon dry-run from an approved manifest
 - `POST /api/daemon/review` - record a local daemon Human Review decision (`done` or `rework`)
 - `GET /api/daemon/runs?source=combined|dispatcher|symphony` - normalized read-only Live Runs state
-- `POST /api/symphony/runs` - validates approved Symphony run intake, expands the selected preset into `agentTasks[]`, submits to documented Symphony intake, or records a blocked gateway run
+- `POST /api/symphony/runs` - validates approved Symphony run intake, can run a Mini-owned sequential handoff chain one agent at a time, submits to documented Symphony intake, or records a blocked gateway run
 - `POST /api/symphony/refresh` - config-service-resolved Symphony observability refresh
 - `GET /api/symphony/issues/{issueIdentifier}` - config-service-resolved Symphony issue runtime/debug details
 - `POST /api/worknest/claim` - contract-gated WorkNest `next-task` claim

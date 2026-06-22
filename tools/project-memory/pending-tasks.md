@@ -14,6 +14,104 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Mini-Owned Symphony Chain Execution
+
+Goal: implement the accepted business workflow from the current thread:
+Mini Orchestrator owns the task card, checklist, selected preset chain,
+handoffs, final status, and artifacts; Symphony owns execution of one requested
+agent step at a time and may start a new worker entity or reuse an IDLE worker.
+
+Planned changes:
+
+- [x] Record the business contract and canonical test task in project memory.
+- [x] Add Mini-side sequential Symphony execution semantics so a preset is not
+  submitted as parallel `agentTasks[]` by default.
+- [x] Preserve previous agent outputs and pass them into the next Symphony
+  request as structured context.
+- [x] Store visible task-card/checklist state for the user-facing Kanban while
+  keeping Symphony worker records as monitor/observability cards.
+- [x] Update service contract text and tests for the one-agent-per-handoff
+  runtime model.
+- [x] Verify with focused tests, then run Mini and Symphony against the real
+  local services using the CRM dentistry release-project test task.
+
+Implementation status, 2026-06-22:
+
+- Added `mini-owned-single-agent-handoff` payload construction.
+- Added Mini-side sequential Symphony gateway execution that submits one agent,
+  waits for a retained Symphony result, then submits the next agent with
+  previous outputs.
+- Added `/api/symphony/runs` support for `orchestrationMode=mini-owned-chain`
+  and `waitForCompletion=true`.
+- Updated README, task-processing flow, sprint7 bridge notes, UI contract text,
+  and tests.
+- Verification passed: `python -m pytest` (`122 passed`) and
+  `python -m compileall mini_orchestrator tools\codex-dispatcher
+  tools\migrate_runtime_to_sqlite.py`.
+- Real-system verification passed after the user started GI config-service:
+  Mini resolved `mini-orchestrator` at `http://127.0.0.1:8000` and Symphony at
+  `http://127.0.0.1:4000`.
+- Started Mini and Symphony from config-service startup records, verified Mini
+  `/health`, Mini `/agent/contract`, Symphony `/api/v1/state`, and Symphony
+  `/agent/contract`.
+- Live CRM two-agent Mini-owned chain completed:
+  `symphony-gateway-1ec9866cd465`, status `done`, task id
+  `mini-orchestrator-crm-dentistry-release-smoke`; Planner and Reviewer stages
+  both reached `done`. Symphony retained completed issue results for
+  `MO-mini-orchestrator-crm-dentistry-release-smoke-1-crm-smoke-planner` and
+  `MO-mini-orchestrator-crm-dentistry-release-smoke-1-crm-smoke-reviewer`.
+- A follow-up Unicode smoke completed:
+  `symphony-gateway-1fc7e8af1fa6`, status `done`, and Mini/Symphony preserved
+  the Russian CRM task text in the task card/checklist. The earlier `????`
+  output came from the PowerShell stdin-to-Python invocation, not from the
+  Mini/Symphony UTF-8 HTTP path.
+- Final Symphony state showed `running=0`, `retrying=0`, `blocked=0`,
+  `completed=3`, and token total `115642` after the smoke runs.
+- Follow-up UI monitor fix, 2026-06-22: Symphony daemon `/state` does not expose
+  the Codex model per worker entry, so Mini now enriches Symphony monitor cards
+  from the matching local gateway handoff/output records by `issue_identifier`
+  or `issue_id`. Focused verification passed:
+  `python -m pytest tests\test_symphony_daemon.py tests\test_symphony_gateway.py`
+  (`23 passed`).
+- Follow-up Windows background launch fix, 2026-06-22: the visible Codex vendor
+  console window comes from already-running Symphony app-server worker
+  processes. The connected Symphony local launch path was updated so future
+  direct Windows Codex node launches use the Erlang/OTP `:hide` port option;
+  `bin/symphony` was rebuilt. Existing visible workers require restart.
+- Post-restart real CRM test, 2026-06-22: after restarting Symphony hidden in
+  the background, ran the canonical CRM dentistry task through Mini-owned
+  Planner -> Reviewer handoffs. Gateway run `symphony-gateway-90c620535309`
+  completed `done`, checklist item `done`, two outputs/two steps recorded, and
+  both Symphony monitor cards
+  `MO-mini-orchestrator-crm-dentistry-release-realtest-1-crm-release-planner`
+  and
+  `MO-mini-orchestrator-crm-dentistry-release-realtest-1-crm-release-reviewer`
+  show `model=gpt-5.5`, `stageModel=gpt-5.5`, `lastEvent=turn_completed`.
+  Symphony state after the test: `running=0`, `retrying=0`, `blocked=0`,
+  `completed=3`; the only active Mini summary row was the idle
+  `symphony-daemon-summary`.
+
+Canonical test task:
+
+```text
+Полный релизный проект веб приложение с БД контроллерами очередями UI авторизацией и тд проект CRM стоматология.
+```
+
+Legacy corrupted PowerShell stdin capture, kept only as historical evidence:
+
+```text
+Полный релизный проект веб приложение с БД контроллерами очередями UI авторизацией и тд проект CRM стоматология.
+```
+
+Risks or dependencies:
+
+- The current `mini-orchestrator.symphony-intake.v1` payload can still describe
+  a full preset, but the production business flow must keep Mini as the chain
+  owner and submit one next-agent work item at a time.
+- Live CRM execution may be long-running or blocked by local model/tool/service
+  availability; record concrete runtime evidence instead of claiming success
+  from task acceptance alone.
+
 ### Mini Orchestrator Release Runtime Cleanup
 
 Goal: reset the runtime surface for Mini Orchestrator release work by stopping

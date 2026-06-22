@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import urllib.request
+from types import SimpleNamespace
 
 import pytest
 
@@ -479,6 +480,148 @@ def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_p
         assert body["lastError"]
         assert body["task"]["taskId"] == "task-1"
         assert body["symphony"]["intakePayload"]["schemaVersion"] == "mini-orchestrator.symphony-intake.v1"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_symphony_daemon_runs_inherit_models_from_gateway_outputs():
+    daemon_payload = build_symphony_live_runs(
+        {
+            "generated_at": "2026-06-18T00:00:02Z",
+            "running": [],
+            "retrying": [],
+            "blocked": [],
+            "completed": [
+                {
+                    "issue_id": "mini-orchestrator:crm-smoke-planner",
+                    "issue_identifier": "MO-crm-smoke-planner",
+                    "last_event": "turn_completed",
+                    "tokens": {"total_tokens": 42},
+                }
+            ],
+        },
+        "http://daemon/state",
+    )
+    gateway_payload = {
+        "runs": [
+            {
+                "symphony": {
+                    "intakePayload": {
+                        "agentTasks": [
+                            {
+                                "agent": {"id": "crm-smoke-planner", "name": "Planner"},
+                                "codex": {"model": "gpt-5.5"},
+                            }
+                        ]
+                    },
+                    "miniOwnedChain": {
+                        "outputs": [
+                            {
+                                "agentId": "crm-smoke-planner",
+                                "issues": [
+                                    {
+                                        "issue_id": "mini-orchestrator:crm-smoke-planner",
+                                        "issue_identifier": "MO-crm-smoke-planner",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            }
+        ]
+    }
+
+    ui._enrich_symphony_daemon_models(daemon_payload, gateway_payload)
+
+    run = next(item for item in daemon_payload["runs"] if item["runId"] == "MO-crm-smoke-planner")
+    assert run["model"] == "gpt-5.5"
+    assert run["stages"][0]["model"] == "gpt-5.5"
+
+
+def test_symphony_run_http_endpoint_can_run_mini_owned_chain(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        ui,
+        "build_symphony_live_runs_from_url",
+        lambda: build_symphony_live_runs(
+            {"generated_at": "2026-06-18T00:00:02Z", "running": [], "retrying": [], "blocked": []},
+            "http://daemon/state",
+        ),
+    )
+
+    class FakeGateway:
+        def run_mini_owned_chain(self, payload, *, state_url, timeout_per_step_seconds, poll_interval_seconds):
+            assert payload["task"] == "Bridge task"
+            assert state_url == "http://daemon/state"
+            return SimpleNamespace(
+                status="done",
+                request_id="request-planner,request-executor",
+                checklist=[{"id": "item-1", "index": 0, "title": "Bridge task", "status": "done"}],
+                outputs=[
+                    {"agentId": "planner", "agentName": "Planner", "summary": "Plan ready"},
+                    {"agentId": "executor", "agentName": "Executor", "summary": "Build ready"},
+                ],
+                steps=[
+                    {
+                        "agentIndex": 0,
+                        "agent": {"id": "planner", "name": "Planner"},
+                        "requestId": "request-planner",
+                        "status": "done",
+                        "message": "planner done",
+                    },
+                    {
+                        "agentIndex": 1,
+                        "agent": {"id": "executor", "name": "Executor"},
+                        "requestId": "request-executor",
+                        "status": "done",
+                        "message": "executor done",
+                    },
+                ],
+                message="Mini chain done",
+            )
+
+    monkeypatch.setattr(ui, "SymphonyGateway", FakeGateway)
+
+    handler = ui._OrchestratorUIHandler
+    handler.orchestrator = None
+    handler.dispatcher_service = None
+    handler.web_root = tmp_path
+    handler.service_id = "mini-orchestrator"
+    server = ui._ThreadedHttpServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        payload = {
+            "approved": True,
+            "task": "Bridge task",
+            "waitForCompletion": True,
+            "chainPreset": {
+                "flow": {
+                    "agents": [
+                        {"id": "planner", "name": "Planner", "role": "planner"},
+                        {"id": "executor", "name": "Executor", "role": "executor"},
+                    ]
+                }
+            },
+        }
+        request = urllib.request.Request(
+            f"{base_url}/api/symphony/runs",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 201
+        assert body["status"] == "done"
+        assert body["taskCard"]["chainOwner"] == "mini-orchestrator"
+        assert body["taskCard"]["checklist"][0]["status"] == "done"
+        assert body["symphony"]["miniOwnedChain"]["outputs"][1]["summary"] == "Build ready"
     finally:
         server.shutdown()
         server.server_close()

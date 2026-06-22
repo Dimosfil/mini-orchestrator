@@ -30,3 +30,32 @@ Verification:
 Test caveat: focused Symphony tests were attempted, but the current Windows test
 environment still fails existing path/symlink/`sh` cases unrelated to this
 launch hardening.
+
+Update, 2026-06-22:
+
+- User observed a visible Codex vendor console window even after the direct
+  `node.exe ...\@openai\codex\bin\codex.js` launch path.
+- Added the Windows `:hide` port option only to the direct local Codex node
+  launch path in `D:\AI\symphony\elixir\lib\symphony_elixir\codex\app_server.ex`.
+  Shell fallback commands and remote SSH worker launches remain unchanged.
+- Rebuilt `D:\AI\symphony\elixir\bin\symphony` with
+  `mise exec -- mix escript.build`.
+- Verified `Port.open({:spawn_executable, node}, [:hide, ...])` with a real
+  `node` process returns `ok` and `exit=0`.
+- Existing visible windows belong to already-running app-server processes and
+  require a Symphony/Codex worker restart to disappear.
+
+Restart verification, 2026-06-22:
+
+- Stopped the Symphony daemon listener on port 4000 and cleaned 530 old
+  `node.exe/codex.exe app-server --stdio` worker processes from the development
+  machine.
+- Restarted Symphony with `Start-Process ... -WindowStyle Hidden` using the
+  rebuilt `bin/symphony`.
+- Verified `GET http://127.0.0.1:4000/api/v1/state` returned a fresh state:
+  `running=0`, `retrying=0`, `blocked=0`, `completed=0`, tokens `0`.
+- Ran a real Mini-owned smoke through Mini -> Symphony:
+  `symphony-gateway-ce240599c29f`, status `done`.
+- Verified Symphony retained the completed issue
+  `MO-mini-orchestrator-hidden-window-smoke-1-hidden-window-smoke-agent` and
+  Mini's Symphony monitor card shows `model=gpt-5.5`, `stageModel=gpt-5.5`.
