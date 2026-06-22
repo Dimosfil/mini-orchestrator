@@ -134,18 +134,18 @@
       "last_full_rebuild_at": "",
       "last_node_rebuilds": {
         "sqlite": {
-          "migration": "2026.06.18.6__add_connected_projects_register",
-          "rebuilt_at": "2026-06-18T16:25:08Z",
-          "status": "Files: 107; Chunks: 487; FTS5 enabled"
+          "migration": "2026.06.21.13__modularize_agents_runtime_entrypoint",
+          "rebuilt_at": "2026-06-22T18:10:19+03:00",
+          "status": "Files: 198; Chunks: 1012; FTS5 enabled"
         },
         "chunks": {
-          "migration": "2026.06.18.6__add_connected_projects_register",
-          "rebuilt_at": "2026-06-18T16:25:08Z",
-          "status": "Exported chunks: 487"
+          "migration": "2026.06.21.13__modularize_agents_runtime_entrypoint",
+          "rebuilt_at": "2026-06-22T18:10:19+03:00",
+          "status": "Exported chunks: 1012"
         },
         "evals": {
-          "migration": "2026.06.18.6__add_connected_projects_register",
-          "rebuilt_at": "2026-06-18T16:25:08Z",
+          "migration": "2026.06.21.13__modularize_agents_runtime_entrypoint",
+          "rebuilt_at": "2026-06-22T18:10:19+03:00",
           "status": "RAG health and 4 retrieval eval cases passed"
         }
       }

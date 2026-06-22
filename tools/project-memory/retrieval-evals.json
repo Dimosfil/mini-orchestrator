@@ -10,11 +10,12 @@
       "query": "оркестратор план executor reviewer dispatcher dry-run",
       "mode": "keyword",
       "expected_paths_any": [
-        "AGENTS.md",
+        "tools/codex-dispatcher/README.md",
+        "patterns/AGENTS_RUNTIME/09-project-operation-commands.md",
         "tools/project-memory/orchestrator-chat-command-contract.md"
       ],
       "min_any_hits": 1,
-      "why": "Exact mini-orchestrator chat-command routing rules should be retrievable."
+      "why": "Exact mini-orchestrator chat-command routing rules should be retrievable from the dispatcher contract or modular GI command guidance."
     },
     {
       "id": "rag_eval_node_command",
@@ -44,11 +45,12 @@
       "query": "config service runtime service URL resolve discovery record health endpoint",
       "mode": "hybrid",
       "expected_paths_any": [
-        "AGENTS.md",
+        "patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md",
+        "README.md",
         "tools/project-memory/service-runtime.json"
       ],
       "min_any_hits": 1,
-      "why": "Service lookup rules are exact enough for keyword retrieval and central to local runtime safety."
+      "why": "Service lookup rules are exact enough for keyword retrieval and central to local runtime safety after modular GI routing."
     }
   ]
 }
