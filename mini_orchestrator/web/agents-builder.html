@@ -3749,6 +3749,24 @@
           end,
         ];
       }
+      if (to.x >= from.x) {
+        const midX = from.x + (to.x - from.x) / 2;
+        return [
+          start,
+          { x: midX, y: from.y },
+          { x: midX, y: to.y },
+          end,
+        ];
+      }
+      if (Math.abs(to.y - from.y) >= CONNECTION_CLEARANCE) {
+        return [
+          start,
+          { x: exitX, y: from.y },
+          { x: exitX, y: to.y },
+          { x: entryX, y: to.y },
+          end,
+        ];
+      }
       const routeBounds = [from.bounds, to.bounds].filter(Boolean);
       const topLane = Math.min(...routeBounds.map((bounds) => bounds.top)) - CONNECTION_CLEARANCE;
       const bottomLane = Math.max(...routeBounds.map((bounds) => bounds.bottom)) + CONNECTION_CLEARANCE;
