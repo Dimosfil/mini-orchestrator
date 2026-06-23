@@ -1621,6 +1621,30 @@ Release criteria:
 Notes:
 - Keep the focus on Mini Orchestrator as the product, not generated demos/artifacts.
 - Any generated test outputs should stay isolated in versioned folders under `.mini_orchestrator/test-runs/`.
+### Agent Builder Figma-Style Canvas Controls
+
+Goal: make the visual agent-card workspace behave like a canvas editor with
+pan and zoom controls while preserving the saved flow coordinate model.
+
+Planned changes:
+- [x] Add a dedicated canvas stage inside the builder viewport.
+- [x] Add wheel zoom, pan/hand-drag navigation, reset view, and scale display.
+- [x] Update card dragging, link previews, connection geometry, and save
+  snapshot math to use unscaled world coordinates.
+- [x] Add focused HTML regression coverage and run the affected UI tests.
+
+Risks and dependencies:
+- Keep cards, ports, arrows, mini-chat, and saved localStorage/backend flow
+  payloads compatible.
+- Do not touch legacy `launch-desk/` or dashboard execution behavior.
+
+Follow-up fix, 2026-06-23:
+
+- [x] Add edge auto-pan while dragging cards or link previews so connected
+  cards can be moved away from each other without the visible viewport feeling
+  like a hard boundary; keep panning continuously while the pointer is held at
+  the edge.
+- [x] Remove the old positive-only drag clamp and persist the canvas viewport
 
 Validation update, 2026-06-21:
 

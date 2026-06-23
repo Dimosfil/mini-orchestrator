@@ -25,8 +25,32 @@ def test_agent_builder_agent_cards_are_vertically_bounded_and_resizable() -> Non
     assert "overflow-y: auto;" in html
     assert "scrollbar-gutter: stable;" in html
     assert "const cardResizeObserver" in html
-    assert "const cardHeight = cardRect?.height || 260;" in html
-    assert "rect.height - cardHeight - 12" in html
+    assert "const WORLD_LIMIT = 12000;" in html
+    assert "agent.x = clamp(point.x - dragState.offsetX, -WORLD_LIMIT, WORLD_LIMIT);" in html
+    assert "agent.y = clamp(point.y - dragState.offsetY, -WORLD_LIMIT, WORLD_LIMIT);" in html
+
+
+def test_agent_builder_canvas_supports_figma_style_pan_and_zoom() -> None:
+    html_path = Path("mini_orchestrator/web/agents-builder.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert 'id="zoom-level"' in html
+    assert 'id="zoom-out"' in html
+    assert 'id="zoom-in"' in html
+    assert 'id="zoom-reset"' in html
+    assert 'const VIEWPORT_STORAGE_KEY = "mini-orchestrator-agent-builder-viewport-v1";' in html
+    assert "const viewport = loadViewport();" in html
+    assert "function saveViewport()" in html
+    assert "function screenToWorld(clientX, clientY)" in html
+    assert "function zoomAt(clientX, clientY, scale)" in html
+    assert "function handleCanvasWheel(event)" in html
+    assert "function autoPanViewport(event)" in html
+    assert "function startEdgeAutoPan()" in html
+    assert "requestAnimationFrame(step)" in html
+    assert "positionDraggedAgent(clientX, clientY)" in html
+    assert "card-drag-handle" in html
+    assert 'canvasWrap.addEventListener("pointerdown", startPan);' in html
+    assert 'canvasWrap.addEventListener("wheel", handleCanvasWheel, { passive: false });' in html
 
 
 def test_agent_builder_connection_ports_are_compact_and_modern() -> None:

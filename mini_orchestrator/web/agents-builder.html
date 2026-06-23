@@ -316,6 +316,9 @@
     }
 
     .canvas-wrap {
+      --canvas-grid-size: 28px;
+      --canvas-grid-x: 0px;
+      --canvas-grid-y: 0px;
       position: relative;
       min-width: 0;
       min-height: 0;
@@ -323,14 +326,68 @@
       background:
         linear-gradient(#e7edf2 1px, transparent 1px),
         linear-gradient(90deg, #e7edf2 1px, transparent 1px);
-      background-size: 28px 28px;
+      background-position: var(--canvas-grid-x) var(--canvas-grid-y);
+      background-size: var(--canvas-grid-size) var(--canvas-grid-size);
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .canvas-wrap.is-panning,
+    .canvas-wrap.is-space-pan {
+      cursor: grabbing;
+    }
+
+    .canvas-controls {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 10px 24px rgba(26, 39, 52, 0.14);
+      backdrop-filter: blur(6px);
+    }
+
+    .canvas-tool {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      min-width: 34px;
+      min-height: 34px;
+      padding: 0;
+      border-color: var(--line);
+      background: #ffffff;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .canvas-tool:hover {
+      border-color: var(--line-strong);
+      background: #eef3f6;
+    }
+
+    .zoom-level {
+      min-width: 54px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
     }
 
     .canvas {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      min-height: calc(100vh - 58px);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4200px;
+      height: 2600px;
+      transform-origin: 0 0;
+      will-change: transform;
     }
 
     .connections {
@@ -338,14 +395,15 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      pointer-events: auto;
+      pointer-events: none;
       overflow: visible;
-      z-index: 1;
+      z-index: 3;
     }
 
     .connection {
       pointer-events: stroke;
       cursor: pointer;
+      vector-effect: non-scaling-stroke;
     }
 
     .connection.selected {
@@ -370,6 +428,7 @@
 
     .preview {
       pointer-events: none;
+      vector-effect: non-scaling-stroke;
     }
 
     .agent-card {
@@ -396,7 +455,7 @@
 
     .card-head {
       display: grid;
-      grid-template-columns: minmax(120px, 1fr) auto auto;
+      grid-template-columns: 18px minmax(120px, 1fr) auto auto;
       align-items: center;
       gap: 10px;
       min-height: 44px;
@@ -408,6 +467,19 @@
 
     .card-head:active {
       cursor: grabbing;
+    }
+
+    .card-drag-handle {
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 26px;
+      color: var(--muted);
+      cursor: grab;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1;
+      user-select: none;
     }
 
     .card-delete {
@@ -1129,6 +1201,10 @@
       }
 
       .canvas {
+        height: 2200px;
+      }
+
+      .canvas-wrap {
         min-height: 680px;
       }
 
@@ -1238,11 +1314,26 @@
       </aside>
 
       <section class="canvas-wrap" aria-label="Рабочее поле флоу">
+        <div class="canvas-controls" aria-label="Управление масштабом">
+          <button id="zoom-out" class="canvas-tool" type="button" title="Уменьшить" aria-label="Уменьшить">-</button>
+          <span id="zoom-level" class="zoom-level" aria-live="polite">100%</span>
+          <button id="zoom-in" class="canvas-tool" type="button" title="Увеличить" aria-label="Увеличить">+</button>
+          <button id="zoom-reset" class="canvas-tool" type="button" title="Сбросить вид" aria-label="Сбросить вид">100</button>
+        </div>
         <div id="canvas" class="canvas">
           <svg id="connections" class="connections" aria-hidden="true">
             <defs>
               <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L0,6 L9,3 z" fill="#256f6c"></path>
+              </marker>
+              <marker id="arrow-head-failure" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#b13b3b"></path>
+              </marker>
+              <marker id="arrow-head-selected" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#184f4d"></path>
+              </marker>
+              <marker id="arrow-head-preview" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#617183"></path>
               </marker>
             </defs>
           </svg>
@@ -1275,6 +1366,7 @@
   <script>
     const STORAGE_KEY = "mini-orchestrator-agent-flow-v1";
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
+    const VIEWPORT_STORAGE_KEY = "mini-orchestrator-agent-builder-viewport-v1";
     const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const TRANSLATION_LANGUAGE_STORAGE_KEY = "mini-orchestrator-agent-translation-language";
     const DEFAULT_LLM = "gpt-5.5";
@@ -1449,7 +1541,12 @@
     };
     const AGENT_PRESET_OPTIONS = Object.entries(AGENT_PRESETS).map(([value, preset]) => [value, preset.label]);
     const canvas = document.querySelector("#canvas");
+    const canvasWrap = canvas.parentElement;
     const svg = document.querySelector("#connections");
+    const zoomLevel = document.querySelector("#zoom-level");
+    const zoomOutButton = document.querySelector("#zoom-out");
+    const zoomInButton = document.querySelector("#zoom-in");
+    const zoomResetButton = document.querySelector("#zoom-reset");
     const emptyState = document.querySelector("#empty-state");
     const flowJson = document.querySelector("#flow-json");
     const flowSummary = document.querySelector("#flow-summary");
@@ -1481,8 +1578,19 @@
     let settingsPresetKey = "";
     let settingsDraft = null;
     let selectedTranslationLanguage = loadTranslationLanguage();
+    const MIN_ZOOM = 0.35;
+    const MAX_ZOOM = 1.8;
+    const ZOOM_STEP = 0.15;
+    const WORLD_LIMIT = 12000;
+    const CONNECTION_STUB = 36;
+    const CONNECTION_CLEARANCE = 46;
+    const CONNECTION_CORNER_RADIUS = 14;
     let dragState = null;
     let linkState = null;
+    let panState = null;
+    let autoPanFrame = 0;
+    let isSpacePanActive = false;
+    const viewport = loadViewport();
     const chatHistories = new Map();
     const chatBusyAgents = new Set();
     let translationRequestSerial = 0;
@@ -2054,11 +2162,209 @@
       return payload.flow;
     }
 
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function loadViewport() {
+      try {
+        const raw = localStorage.getItem(VIEWPORT_STORAGE_KEY);
+        if (!raw) {
+          return { x: 0, y: 0, scale: 1 };
+        }
+        const stored = JSON.parse(raw);
+        return {
+          x: Number(stored.x) || 0,
+          y: Number(stored.y) || 0,
+          scale: clamp(Number(stored.scale) || 1, MIN_ZOOM, MAX_ZOOM),
+        };
+      } catch {
+        return { x: 0, y: 0, scale: 1 };
+      }
+    }
+
+    function saveViewport() {
+      localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify({
+        x: Math.round(viewport.x),
+        y: Math.round(viewport.y),
+        scale: Number(viewport.scale.toFixed(3)),
+      }));
+    }
+
+    function updateViewport() {
+      canvas.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
+      canvasWrap.style.setProperty("--canvas-grid-size", `${28 * viewport.scale}px`);
+      canvasWrap.style.setProperty("--canvas-grid-x", `${viewport.x}px`);
+      canvasWrap.style.setProperty("--canvas-grid-y", `${viewport.y}px`);
+      zoomLevel.textContent = `${Math.round(viewport.scale * 100)}%`;
+      saveViewport();
+    }
+
+    function viewportRect() {
+      return canvasWrap.getBoundingClientRect();
+    }
+
+    function screenToWorld(clientX, clientY) {
+      const rect = viewportRect();
+      return {
+        x: (clientX - rect.left - viewport.x) / viewport.scale,
+        y: (clientY - rect.top - viewport.y) / viewport.scale,
+      };
+    }
+
+    function zoomAt(clientX, clientY, scale) {
+      const nextScale = clamp(scale, MIN_ZOOM, MAX_ZOOM);
+      const rect = viewportRect();
+      const before = screenToWorld(clientX, clientY);
+      viewport.scale = nextScale;
+      viewport.x = clientX - rect.left - before.x * nextScale;
+      viewport.y = clientY - rect.top - before.y * nextScale;
+      updateViewport();
+      renderConnections();
+    }
+
+    function zoomBy(delta) {
+      const rect = viewportRect();
+      zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport.scale + delta);
+    }
+
+    function resetViewport() {
+      viewport.x = 0;
+      viewport.y = 0;
+      viewport.scale = 1;
+      updateViewport();
+      renderConnections();
+    }
+
+    function startPan(event) {
+      if (dragState || linkState || event.target.closest(".canvas-controls")) {
+        return;
+      }
+      if (event.button !== 1 && event.target.closest("input, select, textarea, button")) {
+        return;
+      }
+      const isCanvasSurface = event.target === canvasWrap || event.target === canvas || event.target === svg || event.target === emptyState;
+      const isCardSurface = Boolean(event.target.closest(".agent-card"));
+      if ((!isCanvasSurface && !isCardSurface) || (!isCanvasSurface && event.button !== 1 && !isSpacePanActive)) {
+        return;
+      }
+      if (isCardSurface && event.button !== 1 && !isSpacePanActive) {
+        return;
+      }
+      event.preventDefault();
+      panState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        viewportX: viewport.x,
+        viewportY: viewport.y,
+      };
+      canvasWrap.classList.add("is-panning");
+      canvasWrap.setPointerCapture(event.pointerId);
+    }
+
+    function movePan(event) {
+      if (!panState) {
+        return;
+      }
+      viewport.x = panState.viewportX + event.clientX - panState.startX;
+      viewport.y = panState.viewportY + event.clientY - panState.startY;
+      updateViewport();
+    }
+
+    function endPan() {
+      if (!panState) {
+        return;
+      }
+      panState = null;
+      canvasWrap.classList.remove("is-panning");
+    }
+
+    function handleCanvasWheel(event) {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        const nextScale = viewport.scale * (event.deltaY > 0 ? 0.9 : 1.1);
+        zoomAt(event.clientX, event.clientY, nextScale);
+        return;
+      }
+      viewport.x -= event.shiftKey ? event.deltaY : event.deltaX;
+      viewport.y -= event.shiftKey ? 0 : event.deltaY;
+      updateViewport();
+    }
+
+    function autoPanVector(clientX, clientY) {
+      const rect = viewportRect();
+      const margin = 72;
+      const speed = 18;
+      let dx = 0;
+      let dy = 0;
+      if (clientX < rect.left + margin) {
+        dx = speed;
+      } else if (clientX > rect.right - margin) {
+        dx = -speed;
+      }
+      if (clientY < rect.top + margin) {
+        dy = speed;
+      } else if (clientY > rect.bottom - margin) {
+        dy = -speed;
+      }
+      return { dx, dy };
+    }
+
+    function startEdgeAutoPan() {
+      if (autoPanFrame) {
+        return;
+      }
+      const step = () => {
+        autoPanFrame = 0;
+        const clientX = dragState?.clientX ?? linkState?.clientX;
+        const clientY = dragState?.clientY ?? linkState?.clientY;
+        if ((!dragState && !linkState) || clientX === undefined || clientY === undefined) {
+          return;
+        }
+        const { dx, dy } = autoPanVector(clientX, clientY);
+        if (!dx && !dy) {
+          return;
+        }
+        viewport.x += dx;
+        viewport.y += dy;
+        updateViewport();
+        if (dragState) {
+          positionDraggedAgent(clientX, clientY);
+        }
+        if (linkState) {
+          linkState.pointer = screenToWorld(clientX, clientY);
+          renderConnections();
+        }
+        autoPanFrame = requestAnimationFrame(step);
+      };
+      autoPanFrame = requestAnimationFrame(step);
+    }
+
+    function stopEdgeAutoPan() {
+      if (!autoPanFrame) {
+        return;
+      }
+      cancelAnimationFrame(autoPanFrame);
+      autoPanFrame = 0;
+    }
+
+    function autoPanViewport(event) {
+      if (!dragState && !linkState) {
+        stopEdgeAutoPan();
+        return;
+      }
+      const { dx, dy } = autoPanVector(event.clientX, event.clientY);
+      if (!dx && !dy) {
+        stopEdgeAutoPan();
+        return;
+      }
+      startEdgeAutoPan();
+    }
+
     function buildFlowSnapshotFromCanvas() {
       const agents = [...canvas.querySelectorAll(".agent-card")].map((card) => {
         const agent = getAgent(card.dataset.agentId) || {};
-        const rect = card.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
         return {
           id: card.dataset.agentId,
           name: card.querySelector(".agent-name")?.value || agent.name || "Agent",
@@ -2070,8 +2376,8 @@
           accessMode: normalizeAccessMode(agent.accessMode),
           workPackage: normalizeWorkPackage(agent.workPackage, agent.preset || "agent"),
           workPackageTranslations: normalizeWorkPackageTranslations(agent.workPackageTranslations),
-          x: Math.round(rect.left - canvasRect.left),
-          y: Math.round(rect.top - canvasRect.top),
+          x: Math.round(Number(agent.x) || 0),
+          y: Math.round(Number(agent.y) || 0),
         };
       });
       const agentIds = new Set(agents.map((agent) => agent.id));
@@ -2387,6 +2693,13 @@
     function handleKeyboardShortcuts(event) {
       const target = event.target;
       const isEditingField = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea"));
+      const isInteractiveControl = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea, button"));
+      if (event.code === "Space" && !isInteractiveControl) {
+        event.preventDefault();
+        isSpacePanActive = true;
+        canvasWrap.classList.add("is-space-pan");
+        return;
+      }
       if (event.key === "Escape" && !settingsBackdrop.hidden) {
         event.preventDefault();
         closeAgentSettings();
@@ -2401,6 +2714,15 @@
         event.preventDefault();
         deleteAgent(selectedAgentId);
       }
+    }
+
+    function handleKeyboardRelease(event) {
+      if (event.code !== "Space") {
+        return;
+      }
+      isSpacePanActive = false;
+      canvasWrap.classList.remove("is-space-pan");
+      endPan();
     }
 
     function updateAgent(id, patch) {
@@ -2500,6 +2822,10 @@
 
       const head = document.createElement("header");
       head.className = "card-head";
+      const dragHandle = document.createElement("span");
+      dragHandle.className = "card-drag-handle";
+      dragHandle.title = "Перетащить карточку";
+      dragHandle.textContent = "::";
       const name = document.createElement("input");
       name.className = "agent-name";
       name.value = agent.name;
@@ -2545,7 +2871,7 @@
       const cardActions = document.createElement("div");
       cardActions.className = "agent-card-actions";
       cardActions.append(settingsButton, deleteButton);
-      head.append(name, role, cardActions);
+      head.append(dragHandle, name, role, cardActions);
 
       const body = document.createElement("div");
       body.className = "card-body";
@@ -3101,38 +3427,46 @@
         return;
       }
       event.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const point = screenToWorld(event.clientX, event.clientY);
       dragState = {
         agentId,
-        offsetX: event.clientX - rect.left - agent.x,
-        offsetY: event.clientY - rect.top - agent.y,
+        offsetX: point.x - agent.x,
+        offsetY: point.y - agent.y,
+        clientX: event.clientX,
+        clientY: event.clientY,
       };
-      canvas.setPointerCapture(event.pointerId);
+      canvasWrap.setPointerCapture(event.pointerId);
     }
 
-    function moveDrag(event) {
+    function positionDraggedAgent(clientX, clientY) {
       if (!dragState) {
-        return;
+        return false;
       }
       const agent = getAgent(dragState.agentId);
       if (!agent) {
-        return;
+        return false;
       }
-      const rect = canvas.getBoundingClientRect();
       const card = canvas.querySelector(`[data-agent-id="${agent.id}"]`);
-      const cardRect = card?.getBoundingClientRect();
-      const cardWidth = cardRect?.width || 320;
-      const cardHeight = cardRect?.height || 260;
-      const maxX = Math.max(12, rect.width - cardWidth - 20);
-      const maxY = Math.max(12, rect.height - cardHeight - 12);
-      agent.x = Math.max(12, Math.min(maxX, event.clientX - rect.left - dragState.offsetX));
-      agent.y = Math.max(12, Math.min(maxY, event.clientY - rect.top - dragState.offsetY));
+      const point = screenToWorld(clientX, clientY);
+      agent.x = clamp(point.x - dragState.offsetX, -WORLD_LIMIT, WORLD_LIMIT);
+      agent.y = clamp(point.y - dragState.offsetY, -WORLD_LIMIT, WORLD_LIMIT);
       if (card) {
         card.style.left = `${agent.x}px`;
         card.style.top = `${agent.y}px`;
       }
       renderConnections();
       updateFlowPreview();
+      return true;
+    }
+
+    function moveDrag(event) {
+      if (!dragState) {
+        return;
+      }
+      dragState.clientX = event.clientX;
+      dragState.clientY = event.clientY;
+      autoPanViewport(event);
+      positionDraggedAgent(event.clientX, event.clientY);
     }
 
     function endDrag() {
@@ -3140,6 +3474,7 @@
         return;
       }
       dragState = null;
+      stopEdgeAutoPan();
       updateFlowPreview("Позиция агента обновлена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
     }
 
@@ -3152,7 +3487,10 @@
         fromAgentId: agentId,
         fromPort,
         pointer: pointerPoint(event),
+        clientX: event.clientX,
+        clientY: event.clientY,
       };
+      canvasWrap.setPointerCapture(event.pointerId);
       document.querySelectorAll(".port").forEach((port) => port.classList.toggle("active", port.dataset.agentId === agentId && port.dataset.port === fromPort));
       renderConnections();
       window.addEventListener("pointerup", cancelLink, { once: true });
@@ -3183,6 +3521,7 @@
         }
       }
       linkState = null;
+      stopEdgeAutoPan();
       document.querySelectorAll(".port").forEach((port) => port.classList.remove("active"));
       renderConnections();
       updateFlowPreview("Связь добавлена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
@@ -3193,42 +3532,155 @@
         return;
       }
       linkState = null;
+      stopEdgeAutoPan();
       document.querySelectorAll(".port").forEach((port) => port.classList.remove("active"));
       renderConnections();
       updateFlowPreview("Соединение отменено.");
     }
 
     function pointerPoint(event) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
+      return screenToWorld(event.clientX, event.clientY);
     }
 
     function portPoint(agentId, port, offsetY = 0) {
       const card = canvas.querySelector(`.agent-card[data-agent-id="${agentId}"]`);
+      const agent = getAgent(agentId);
       if (!card) {
         return { x: 0, y: 0 };
       }
-      const cardRect = card.getBoundingClientRect();
-      const canvasRect = canvas.getBoundingClientRect();
       const isOutput = port === "success" || port === "failure";
-      const x = isOutput ? cardRect.right - canvasRect.left : cardRect.left - canvasRect.left;
-      let y = cardRect.top - canvasRect.top + cardRect.height / 2;
+      const cardX = Number(agent?.x) || 0;
+      const cardY = Number(agent?.y) || 0;
+      const cardWidth = card.offsetWidth || 340;
+      const cardHeight = card.offsetHeight || 260;
+      const x = isOutput ? cardX + cardWidth : cardX;
+      let y = cardY + cardHeight / 2;
       if (port === "success") {
-        y = cardRect.top - canvasRect.top + cardRect.height * 0.38;
+        y = cardY + cardHeight * 0.38;
       }
       if (port === "failure") {
-        y = cardRect.top - canvasRect.top + cardRect.height * 0.62;
+        y = cardY + cardHeight * 0.62;
       }
       y += offsetY;
-      return { x, y };
+      return {
+        x,
+        y,
+        side: isOutput ? "right" : "left",
+        bounds: {
+          left: cardX,
+          right: cardX + cardWidth,
+          top: cardY,
+          bottom: cardY + cardHeight,
+        },
+      };
     }
 
     function connectionPath(from, to) {
-      const distance = Math.max(70, Math.abs(to.x - from.x) * 0.5);
-      return `M ${from.x} ${from.y} C ${from.x + distance} ${from.y}, ${to.x - distance} ${to.y}, ${to.x} ${to.y}`;
+      return roundedOrthogonalPath(connectionRoutePoints(from, to));
+    }
+
+    function connectionRoutePoints(from, to) {
+      const start = { x: from.x, y: from.y };
+      const end = { x: to.x, y: to.y };
+      const exitX = from.x + CONNECTION_STUB;
+      const entryX = to.x - CONNECTION_STUB;
+      if (!to.bounds) {
+        const midX = Math.max(exitX, from.x + Math.abs(to.x - from.x) / 2);
+        return [start, { x: exitX, y: from.y }, { x: midX, y: from.y }, { x: midX, y: to.y }, end];
+      }
+      if (entryX - exitX >= CONNECTION_CLEARANCE) {
+        const midX = exitX + (entryX - exitX) / 2;
+        return [
+          start,
+          { x: exitX, y: from.y },
+          { x: midX, y: from.y },
+          { x: midX, y: to.y },
+          { x: entryX, y: to.y },
+          end,
+        ];
+      }
+      const routeBounds = [from.bounds, to.bounds].filter(Boolean);
+      const topLane = Math.min(...routeBounds.map((bounds) => bounds.top)) - CONNECTION_CLEARANCE;
+      const bottomLane = Math.max(...routeBounds.map((bounds) => bounds.bottom)) + CONNECTION_CLEARANCE;
+      const laneY = to.y < from.y ? topLane : bottomLane;
+      return [
+        start,
+        { x: exitX, y: from.y },
+        { x: exitX, y: laneY },
+        { x: entryX, y: laneY },
+        { x: entryX, y: to.y },
+        end,
+      ];
+    }
+
+    function roundedOrthogonalPath(points) {
+      const route = compactRoutePoints(points);
+      if (route.length < 2) {
+        return "";
+      }
+      let path = `M ${route[0].x} ${route[0].y}`;
+      for (let index = 1; index < route.length; index += 1) {
+        const current = route[index];
+        const previous = route[index - 1];
+        const next = route[index + 1];
+        if (!next || !isOrthogonalTurn(previous, current, next)) {
+          path += ` L ${current.x} ${current.y}`;
+          continue;
+        }
+        const radius = Math.min(
+          CONNECTION_CORNER_RADIUS,
+          segmentLength(previous, current) / 2,
+          segmentLength(current, next) / 2,
+        );
+        const before = pointToward(current, previous, radius);
+        const after = pointToward(current, next, radius);
+        path += ` L ${before.x} ${before.y} Q ${current.x} ${current.y} ${after.x} ${after.y}`;
+      }
+      return path;
+    }
+
+    function compactRoutePoints(points) {
+      const route = [];
+      for (const point of points) {
+        if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+          continue;
+        }
+        const rounded = { x: Math.round(point.x), y: Math.round(point.y) };
+        const previous = route.at(-1);
+        if (!previous || previous.x !== rounded.x || previous.y !== rounded.y) {
+          route.push(rounded);
+        }
+      }
+      for (let index = route.length - 2; index > 0; index -= 1) {
+        const previous = route[index - 1];
+        const current = route[index];
+        const next = route[index + 1];
+        if ((previous.x === current.x && current.x === next.x) || (previous.y === current.y && current.y === next.y)) {
+          route.splice(index, 1);
+        }
+      }
+      return route;
+    }
+
+    function isOrthogonalTurn(previous, current, next) {
+      const incomingHorizontal = previous.y === current.y;
+      const incomingVertical = previous.x === current.x;
+      const outgoingHorizontal = current.y === next.y;
+      const outgoingVertical = current.x === next.x;
+      return (incomingHorizontal && outgoingVertical) || (incomingVertical && outgoingHorizontal);
+    }
+
+    function segmentLength(first, second) {
+      return Math.abs(first.x - second.x) + Math.abs(first.y - second.y);
+    }
+
+    function pointToward(origin, target, distance) {
+      const dx = Math.sign(target.x - origin.x);
+      const dy = Math.sign(target.y - origin.y);
+      return {
+        x: origin.x + dx * distance,
+        y: origin.y + dy * distance,
+      };
     }
 
     function renderConnections() {
@@ -3257,7 +3709,12 @@
         path.setAttribute("stroke-width", selectedConnectionId === connection.id ? "4" : "2.5");
         path.setAttribute("stroke-linecap", "round");
         path.setAttribute("stroke-linejoin", "round");
-        path.setAttribute("marker-end", "url(#arrow-head)");
+        path.setAttribute(
+          "marker-end",
+          selectedConnectionId === connection.id
+            ? "url(#arrow-head-selected)"
+            : (normalized.fromPort === "failure" ? "url(#arrow-head-failure)" : "url(#arrow-head)"),
+        );
         path.dataset.connectionId = connection.id;
         path.addEventListener("pointerdown", (event) => {
           event.preventDefault();
@@ -3303,7 +3760,7 @@
         path.setAttribute("stroke", "#617183");
         path.setAttribute("stroke-width", "2");
         path.setAttribute("stroke-dasharray", "7 5");
-        path.setAttribute("marker-end", "url(#arrow-head)");
+        path.setAttribute("marker-end", "url(#arrow-head-preview)");
         svg.append(path);
       }
     }
@@ -3516,16 +3973,35 @@
     connectionPort.addEventListener("change", () => updateSelectedConnection({ fromPort: connectionPort.value }));
     connectionTo.addEventListener("change", () => updateSelectedConnection({ toAgentId: connectionTo.value }));
     document.querySelector("#delete-connection").addEventListener("click", deleteSelectedConnection);
-    canvas.addEventListener("pointermove", (event) => {
+    zoomOutButton.addEventListener("click", () => zoomBy(-ZOOM_STEP));
+    zoomInButton.addEventListener("click", () => zoomBy(ZOOM_STEP));
+    zoomResetButton.addEventListener("click", resetViewport);
+    canvasWrap.addEventListener("wheel", handleCanvasWheel, { passive: false });
+    canvasWrap.addEventListener("pointerdown", startPan);
+    canvasWrap.addEventListener("pointermove", (event) => {
+      movePan(event);
       moveDrag(event);
       if (linkState) {
+        linkState.clientX = event.clientX;
+        linkState.clientY = event.clientY;
+        autoPanViewport(event);
         linkState.pointer = pointerPoint(event);
         renderConnections();
       }
     });
-    canvas.addEventListener("pointerup", endDrag);
+    canvasWrap.addEventListener("pointerup", () => {
+      endDrag();
+      endPan();
+    });
+    canvasWrap.addEventListener("pointercancel", () => {
+      endDrag();
+      endPan();
+      cancelLink();
+    });
     window.addEventListener("resize", renderConnections);
     window.addEventListener("keydown", handleKeyboardShortcuts);
+    window.addEventListener("keyup", handleKeyboardRelease);
+    updateViewport();
     renderChainPresetSelect();
     renderPresetPreview();
     render();
