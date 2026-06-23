@@ -64,18 +64,6 @@ entry point, run date, and verification notes.
 
 ## Usage
 
-Dry run, no Codex process:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "Plan a small refactor" --dry-run
-```
-
-Full chain dry run, no Codex process:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "оркестратор план Сделай калькулятор" --chain --dry-run
-```
-
 Real Codex app-server run:
 
 ```powershell
@@ -94,12 +82,6 @@ Real full chain run with a dashboard-selected preset:
 python tools\codex-dispatcher\dispatcher.py --task "Approved workflow task" --chain --chain-preset-id ui-abc123
 ```
 
-Chat-style command dry run:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "оркестратор план Сделай калькулятор" --dry-run
-```
-
 Chat approval plan, no file writes:
 
 ```powershell
@@ -107,8 +89,7 @@ python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Make a cal
 ```
 
 By default this starts only the planner worker through Codex app-server and
-returns its task-specific proposal. Add `--dry-run` to test parser/log behavior
-with the local fallback plan instead of launching Codex.
+returns its task-specific proposal.
 
 Approved release chain after the user accepts a plan:
 
@@ -117,8 +98,7 @@ python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Make a cal
 ```
 
 The release dispatcher no longer includes local calculator/CRM demo project
-generation or `--local-test-project`. Use `--dry-run` only for parser/log smoke
-checks.
+generation, `--local-test-project`, or dry-run verification.
 
 Supported chat command forms:
 

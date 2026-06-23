@@ -27,8 +27,8 @@ be treated as the project identity.
 ## Execution Rule
 
 Chat `orchestrator` / `оркестратор` requests are real orchestration requests by
-default. Do not use `--dry-run` unless the user explicitly asks for parser/log
-smoke testing. When the web UI or dashboard has a selected execution mode and
+default. Do not use `--dry-run` for chat, smoke, release, or `gi test`
+verification. When the web UI or dashboard has a selected execution mode and
 chain preset, the chat command must honor that product workflow instead of
 starting an unrelated low-level dispatcher run.
 
@@ -49,10 +49,8 @@ python tools\codex-dispatcher\dispatcher.py --task "<original command>" --plan-o
 ```
 
 `--plan-only` must not create files and must not be limited to supported local
-demo projects. Without `--dry-run`, it sends the request to the planner worker
-through Codex app-server and returns that task-specific planner proposal. With
-`--dry-run`, it may return a local fallback approval plan for parser and log
-contract smoke tests.
+demo projects. It sends the request to the planner worker through Codex
+app-server and returns that task-specific planner proposal.
 
 Wait for explicit user approval in chat. After approval, use the release
 dispatcher chain:
@@ -63,8 +61,8 @@ python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain
 
 The release dispatcher no longer supports local calculator/CRM demo generation
 or `--local-test-project`. Approved work is routed through the selected
-orchestrator workflow and selected chain preset. Use `--dry-run` only for
-parser/log smoke checks.
+orchestrator workflow and selected chain preset. Dry-run output is not valid
+release, chat, or system verification evidence.
 
 ## Implementation Map
 
@@ -83,4 +81,6 @@ parser/log smoke checks.
 - Unit tests must cover plan-only chat approval mode.
 - Release chain tests must show planner -> executor -> reviewer handoff order
   through an injectable Codex transport.
-- Dry-run smoke commands are only valid when explicitly requested by the user.
+- Release, chat, and `gi test` verification must use real dispatcher or
+  Mini-owned Symphony execution. Legacy dry-run transport is internal-only and
+  guarded by `MINI_ORCHESTRATOR_ENABLE_LEGACY_DRY_RUN=1`.

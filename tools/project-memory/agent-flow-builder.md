@@ -238,7 +238,9 @@ Validation should check:
 - each connection starts at a supported output port (`success` or `failure`)
   and ends at an input port;
 - at least one start agent is identifiable;
-- cycles are rejected unless the flow explicitly supports loop semantics;
+- the primary `success` path is acyclic unless a cycle includes a PM control
+  card, while `failure` edges may define bounded rework loops such as
+  QA -> executor;
 - every agent has a supported LLM, speed, and reasoning value.
 
 Execution should translate the visual graph into the configured agent chain

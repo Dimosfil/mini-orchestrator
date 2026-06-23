@@ -15,7 +15,9 @@ MANIFEST_DIR = ".mini_orchestrator/agent-flow-manifests"
 FLOW_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,79}$")
 SUPPORTED_ACCESS_MODES = {"danger-full-access", "workspace-write", "read-only"}
 SUPPORTED_REASONING = {"low", "medium", "high", "very_high"}
-SUPPORTED_ROLES = {"Agent", "Custom", "Executor", "Planner", "Reviewer"}
+SUPPORTED_ROLES = {"Agent", "Custom", "Executor", "Planner", "PM", "QA", "Reviewer"}
+DEFAULT_MAX_LOOP_ITERATIONS = 3
+DEFAULT_MAX_CHECKLIST_ATTEMPTS = 3
 WORK_PACKAGE_FIELDS = {
     "allowedTools",
     "constraints",
@@ -296,6 +298,8 @@ def _validate_graph(
 
     connection_keys: set[tuple[str, str, str]] = set()
     graph: dict[str, list[str]] = {agent_id: [] for agent_id in agent_ids}
+    success_graph: dict[str, list[str]] = {agent_id: [] for agent_id in agent_ids}
+    rework_loops: list[dict[str, Any]] = []
     incoming_counts: dict[str, int] = {agent_id: 0 for agent_id in agent_ids}
     for index, connection in enumerate(connections):
         from_agent = str(connection.get("fromAgentId") or "")
@@ -315,7 +319,19 @@ def _validate_graph(
         connection_keys.add(key)
         if from_agent in agent_ids and to_agent in agent_ids and from_agent != to_agent:
             graph[from_agent].append(to_agent)
-            incoming_counts[to_agent] += 1
+            if from_port == "success":
+                success_graph[from_agent].append(to_agent)
+            elif from_port == "failure":
+                rework_loops.append(
+                    {
+                        "fromAgentId": from_agent,
+                        "toAgentId": to_agent,
+                        "fromPort": "failure",
+                        "maxIterations": _loop_max_iterations(flow),
+                    }
+                )
+            if from_port == "success":
+                incoming_counts[to_agent] += 1
 
     start_node_candidates = [
         {"agentId": agent_id, "name": _agent_name(agents, agent_id)}
@@ -335,12 +351,20 @@ def _validate_graph(
             )
         )
 
-    cycle = _find_cycle(graph)
-    if cycle:
-        errors.append(_issue("cycle_detected", f"Flow contains a cycle: {' -> '.join(cycle)}", "connections"))
+    success_cycle = _find_cycle(success_graph)
+    if success_cycle:
+        if not _cycle_has_role(success_cycle, agents, "PM"):
+            errors.append(_issue("cycle_detected", f"Flow contains a success-path cycle: {' -> '.join(success_cycle)}", "connections"))
 
     if not connections and len(agents) > 1:
         warnings.append(_issue("no_connections", "Multi-agent flow has no connections.", "connections"))
+
+    control_policy = _control_policy(flow, agents, success_cycle)
+    loop_policy = {
+        "mode": "pm-checklist" if control_policy["mode"] == "pm-checklist" else "bounded-rework" if rework_loops else "none",
+        "maxIterations": _loop_max_iterations(flow) if rework_loops else 0,
+        "loops": rework_loops,
+    }
 
     return {
         "valid": not errors,
@@ -350,12 +374,41 @@ def _validate_graph(
         "issues": errors,
         "startNodeCandidates": start_node_candidates,
         "selectedStartAgentId": selected or (start_node_candidates[0]["agentId"] if len(start_node_candidates) == 1 else ""),
+        "loopPolicy": loop_policy,
+        "controlPolicy": control_policy,
         "checkedAt": flow["updatedAt"],
     }
 
 
 def _issue(code: str, message: str, path: str) -> dict[str, str]:
     return {"code": code, "message": message, "path": path}
+
+
+def _loop_max_iterations(flow: dict[str, Any]) -> int:
+    settings = flow.get("presetSettings") if isinstance(flow.get("presetSettings"), dict) else {}
+    return _positive_int(flow.get("maxLoopIterations") or settings.get("maxLoopIterations"), DEFAULT_MAX_LOOP_ITERATIONS)
+
+
+def _control_policy(flow: dict[str, Any], agents: list[dict[str, Any]], success_cycle: list[str]) -> dict[str, Any]:
+    pm_agents = [agent for agent in agents if str(agent.get("role") or "").strip() == "PM"]
+    if not pm_agents:
+        return {"mode": "none"}
+    settings = flow.get("presetSettings") if isinstance(flow.get("presetSettings"), dict) else {}
+    return {
+        "mode": "pm-checklist",
+        "pmAgentId": str(pm_agents[0].get("id") or ""),
+        "checklistSource": "planner-output",
+        "maxAttemptsPerItem": _positive_int(
+            flow.get("maxChecklistAttempts") or settings.get("maxChecklistAttempts"),
+            DEFAULT_MAX_CHECKLIST_ATTEMPTS,
+        ),
+        "successCycleAllowed": bool(success_cycle),
+    }
+
+
+def _cycle_has_role(cycle: list[str], agents: list[dict[str, Any]], role: str) -> bool:
+    roles_by_id = {str(agent.get("id") or ""): str(agent.get("role") or "").strip() for agent in agents}
+    return any(roles_by_id.get(agent_id) == role for agent_id in cycle)
 
 
 def _agent_name(agents: list[dict[str, Any]], agent_id: str) -> str:
@@ -495,7 +548,9 @@ def _compile_graph(flow: dict[str, Any], validation: dict[str, Any]) -> dict[str
         "startAgentId": validation.get("selectedStartAgentId") or "",
         "nodes": nodes,
         "edges": edges,
-        "executionOrder": _topological_order(nodes, edges),
+        "executionOrder": _execution_order(nodes, edges, str(validation.get("selectedStartAgentId") or "")),
+        "loopPolicy": validation.get("loopPolicy") or {"mode": "none", "maxIterations": 0, "loops": []},
+        "controlPolicy": validation.get("controlPolicy") or {"mode": "none"},
     }
 
 
@@ -507,11 +562,49 @@ def _compile_run_context(value: Any) -> dict[str, str]:
     }
 
 
+def _execution_order(nodes: list[dict[str, str]], edges: list[dict[str, str]], start_agent_id: str) -> list[str]:
+    if start_agent_id:
+        return _success_reachable_order(nodes, edges, start_agent_id)
+    return _topological_order(nodes, edges)
+
+
+def _success_reachable_order(nodes: list[dict[str, str]], edges: list[dict[str, str]], start_agent_id: str) -> list[str]:
+    node_ids = [node["agentId"] for node in nodes]
+    node_set = set(node_ids)
+    outgoing = {node_id: [] for node_id in node_ids}
+    for edge in edges:
+        if edge.get("fromPort") != "success":
+            continue
+        source = edge["fromAgentId"]
+        target = edge["toAgentId"]
+        if source in outgoing and target in node_set:
+            outgoing[source].append(target)
+    order: list[str] = []
+    visited: set[str] = set()
+
+    def visit(node_id: str) -> None:
+        if node_id in visited or node_id not in node_set:
+            return
+        visited.add(node_id)
+        order.append(node_id)
+        for target in outgoing.get(node_id, []):
+            visit(target)
+
+    visit(start_agent_id)
+    for node_id in _topological_order(nodes, edges):
+        if node_id not in visited:
+            order.append(node_id)
+            visited.add(node_id)
+    return order
+
+
 def _topological_order(nodes: list[dict[str, str]], edges: list[dict[str, str]]) -> list[str]:
     node_ids = [node["agentId"] for node in nodes]
     incoming = {node_id: 0 for node_id in node_ids}
     outgoing = {node_id: [] for node_id in node_ids}
     for edge in edges:
+        if edge.get("fromPort") == "failure":
+            continue
         source = edge["fromAgentId"]
         target = edge["toAgentId"]
         if source in outgoing and target in incoming:
@@ -526,6 +619,9 @@ def _topological_order(nodes: list[dict[str, str]], edges: list[dict[str, str]])
             incoming[target] -= 1
             if incoming[target] == 0:
                 ready.append(target)
+    for node_id in node_ids:
+        if node_id not in order:
+            order.append(node_id)
     return order
 
 

@@ -9,6 +9,14 @@
 - `gi help` / `ги команды`: show this local command list.
 - `gi summary` / `gi саммари`: write a thematic thesis-based handoff summary
   under `tools/summary/`.
+- `gi stack` / `ги стек`: find or build the current project's verified
+  technology stack inventory.
+- `gi test plan` / `gi тест-план`: inspect current local test contracts and
+  produce a compact verification plan without running checks by default.
+- `gi test task` / `ги тест таск`: set the active release/full-system
+  verification workload for the next `gi test`.
+- `gi test` / `ги тест`: run the current project's documented verification flow
+  against the active test task.
 - `gi default` / `gi defaults` / `ги дефолт`: reset the current project to its
   documented first-run/default state using only documented reset targets, then
   start and verify the default-state signals.
@@ -35,5 +43,5 @@
   reviewer-directed task, then continue through the full chain.
 
 Chat `orchestrator` / `оркестратор` requests are real orchestration requests by
-default. Use `--dry-run` only when the user explicitly asks for parser/log smoke
-testing.
+default. Do not use `--dry-run` for chat, smoke, release, or `gi test`
+verification.

@@ -56,6 +56,33 @@
   question instead of guessing. After reset, start the app, run the documented
   first-launch smoke/onboarding checks, and report what was cleared, what
   passed, and what was intentionally left untouched.
+- Treat `gi test task`, `gi testing task`, `gi тест таск`, `ги тест таск`,
+  `gi задача теста`, and equivalent wording as requests to set the active
+  release/full-system verification workload for the current project. The
+  supplied task text is the user-selected scenario for the next `gi test`; it is
+  not evidence that the scenario already passed. Record it in the
+  project-local test task location when local instructions define one,
+  otherwise keep it as current chat context and report where it is tracked.
+  Do not replace this with a generic `gi test plan`, old task status, demo
+  artifact, or stale handoff summary.
+- Treat `gi test`, `ги тест`, `gi full test`, `gi release test`,
+  `gi system test`, and equivalent full-project test wording as requests to
+  run the current project's documented full verification flow against the
+  active test task. Do not confuse this with `gi test plan`, which remains a
+  plan-only command by default. First load the active test task from the current
+  message or project-local memory; if none exists, ask one short question for
+  the test task before running. Then read project-local instructions, README,
+  manifests, runbooks, test configs, and source entry points needed to identify
+  exact current commands, services, app set, ports, routes, payloads,
+  environment variables, storage, auth, queues, workers, and health checks.
+  Start or restart documented apps when needed, run the verification ladder
+  through the broadest documented suite justified by the command, and report
+  the task used, commands run, results, blockers, and unverified areas. Old
+  summaries, screenshots, completed demo artifacts, previous task statuses, and
+  old chat snippets are evidence only; they do not satisfy a fresh `gi test`
+  request. Rerun the current documented checks or report the exact blocker that
+  prevents a rerun. Dry-run dispatcher or daemon output is not valid evidence
+  for `gi test`, release, or full-system verification.
 - Treat `gi default`, `gi defaults`, and `ги дефолт` as requests to restore the
   current project to its documented first-run/default state. Read project-local
   reset, cleanup, first-run, run, backup, and test instructions first. Use only

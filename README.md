@@ -95,13 +95,6 @@ the real planner worker:
 python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only
 ```
 
-Selecting **Dry-run smoke** uses the local parser/log fallback without starting
-Codex app-server:
-
-```powershell
-python tools\codex-dispatcher\dispatcher.py --task "<command>" --plan-only --dry-run
-```
-
 Real planner preview returns structured API errors when Codex app-server or the
 selected model is unavailable.
 
@@ -240,6 +233,11 @@ upstream Symphony operations without intake remain observability/control only:
 `GET /api/daemon/runs?source=symphony`, `POST /api/symphony/refresh`, and
 `GET /api/symphony/issues/{issueIdentifier}`.
 
+Mini sends `symphonyWorkerMode` with Symphony runs. The dashboard default is
+`debug-new-worker`, which asks Symphony to create a fresh inspectable
+worker/agent monitor for each Mini-owned handoff. `optimal-reuse-idle` permits
+compatible IDLE worker reuse for normal efficient operation.
+
 Mini chat requests call the application backend, which routes the message
 through `tools\codex-dispatcher\dispatcher.py` in real Codex app-server mode
 with the card's selected model. Cards set to `rules` do not call a live LLM.
@@ -322,6 +320,6 @@ Approved run request:
 ```powershell
 python -m compileall mini_orchestrator tools\codex-dispatcher
 python -m pytest tests
-python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain --dry-run
+python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain
 python -m mini_orchestrator "search AGENTS" --no-log
 ```

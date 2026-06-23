@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 import time
@@ -39,7 +40,7 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
     parser.add_argument("--task", help="Task to classify and route to one dispatcher worker.")
     parser.add_argument("--task-file", help="UTF-8 text file containing the task to classify and route.")
     parser.add_argument("--run-id", help="Stable run id used for the generated JSONL log filename.")
-    parser.add_argument("--dry-run", action="store_true", help="Write dispatcher events without starting Codex.")
+    parser.add_argument("--dry-run", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--chain", action="store_true", help="Run planner -> executor -> reviewer instead of one selected worker.")
     parser.add_argument("--chain-preset-file", help="JSON file containing the selected dashboard agent chain preset.")
     parser.add_argument("--chain-preset-id", help="Run id whose selected dashboard chain preset is stored in runtime SQLite.")
@@ -65,6 +66,8 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
     parser.add_argument("--request-timeout-seconds", type=float, default=30, help="Timeout for app-server request responses.")
     parser.add_argument("--turn-timeout-seconds", type=float, default=90, help="Timeout for each agent turn.")
     args = parser.parse_args()
+    if args.dry_run and os.environ.get("MINI_ORCHESTRATOR_ENABLE_LEGACY_DRY_RUN") != "1":
+        parser.error("--dry-run is retired for dispatcher CLI. Use real Codex/Symphony execution.")
 
     started = time.time()
     task_text = args.task

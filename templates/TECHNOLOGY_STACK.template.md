@@ -2,6 +2,9 @@
 
 Last reviewed: TODO
 
+Canonical source: this file
+Linked from: TODO
+
 This is project documentation. Keep business rules, feature algorithms, workflow
 contracts, state machines, and verification guarantees in project memory; keep
 stack facts, commands, runtime assumptions, and operational notes here.

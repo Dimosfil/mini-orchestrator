@@ -235,9 +235,9 @@ or:
   startup restore, resume old tasks, call services, or execute the listed
   commands.
 - Treat `оркестратор <task>` and `orchestrator <task>` as project-local
-  mini-orchestrator dispatch commands. For early tests from chat, run
-  `python tools\codex-dispatcher\dispatcher.py --task "<original command>" --chain --dry-run`
-  unless the user explicitly asks to launch a real Codex worker. `оркестратор
+  mini-orchestrator dispatch commands. These are real orchestration requests by
+  default; do not use `--dry-run` for chat, smoke, release, or `gi test`
+  verification. `оркестратор
   план <task>` / `orchestrator plan <task>` starts from a planner-directed
   task, `оркестратор исполнитель <task>` / `orchestrator executor <task>` starts
   from an executor-directed task, and `оркестратор ревью <task>` /
@@ -311,7 +311,9 @@ or:
 - For verification plans and smoke checks, confirm exact CLI flags, ports,
   routes, methods, JSON payload fields, and required environment variables from
   current local instructions, manifests, config, or source code. Summaries and
-  old chat snippets are evidence, not authoritative command contracts.
+  old chat snippets are evidence, not authoritative command contracts. Dry-run
+  dispatcher or daemon output is not valid evidence for `gi test`, release, or
+  full-system verification.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and clear typo variants as
   build-and-installer requests. The task is complete only after the packaging
   command runs and a current installer artifact is produced or explicitly

@@ -291,6 +291,17 @@ or:
   test commands and produce a compact verification plan for the current feature,
   bug fix, or release check. Plan first; run checks only when the user asks or
   when the current task already requires verification.
+- Treat `gi test task`, `gi testing task`, `gi тест таск`, `ги тест таск`, and
+  equivalent wording as requests to set the active release/full-system
+  verification workload for the current project. The supplied task text is the
+  scenario for the next `gi test`, not evidence that the scenario already
+  passed.
+- Treat `gi test`, `ги тест`, `gi full test`, `gi release test`, and equivalent
+  full-project test wording as requests to run the documented verification flow
+  against the active test task. Do not confuse this with `gi test plan`, which
+  remains plan-only by default. Old summaries, screenshots, completed demos,
+  previous task statuses, and old chat snippets are evidence only; rerun the
+  current documented checks or report the exact blocker.
 - For verification plans and smoke checks, confirm exact CLI flags, ports,
   routes, methods, JSON payload fields, and required environment variables from
   current local instructions, manifests, config, or source code. Summaries and

@@ -103,8 +103,11 @@ The Mini-owned handoff payload schema is:
 - `taskCard`: Mini-owned checklist/current item state
 - `chainPreset`: selected preset id/name/raw payload
 - `chainControl`: handoff index, total agents, current agent id, previous
-  output count, and the policy that Symphony may start a new worker or reuse
-  an IDLE one
+  output count, `symphonyWorkerMode`, and `symphonyWorkerPolicy`
+- `symphonyWorkerMode=debug-new-worker`: debug/inspection mode; each
+  Mini-owned handoff asks Symphony for a fresh worker/agent monitor
+- `symphonyWorkerMode=optimal-reuse-idle`: production efficiency mode; Symphony
+  may reuse a compatible IDLE worker when available
 - `agentTasks[]`: exactly one item for the current preset agent, carrying that
   agent's id/name/role/preset, Codex model/speed/reasoning/access mode, work
   package, translations, current checklist item, and previous outputs
@@ -208,7 +211,7 @@ Rules:
 ```powershell
 python -m compileall mini_orchestrator tools\codex-dispatcher
 python -m pytest tests
-python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain --dry-run
+python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain
 ```
 
 Optional live checks when services are running:

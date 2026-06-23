@@ -14,6 +14,28 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### Retire Dispatcher Dry-Run From Product Verification
+
+Status, 2026-06-23:
+
+- [x] Removed active dry-run dispatcher logs from `tools/codex-dispatcher/runs/`
+  so Live Runs no longer shows fake worker cards with missing thread/model/token
+  data.
+- [x] Retired the dashboard dry-run option and made dispatcher plan/run APIs
+  reject `mode=dry-run`.
+- [x] Retired the manifest daemon dry-run write endpoint from the agent-facing
+  Mini contract; Live Runs remains read-only through `/api/daemon/runs`.
+- [x] Hid and blocked the dispatcher CLI `--dry-run` flag unless
+  `MINI_ORCHESTRATOR_ENABLE_LEGACY_DRY_RUN=1` is deliberately set for legacy
+  internal repair.
+- [x] Updated current command, testing, README, dispatcher, and project-memory
+  contracts: dry-run output is not valid evidence for chat, smoke, release, or
+  `gi test` verification.
+- [x] Verified the real Mini-owned Symphony path after starting config-service:
+  `symphony-gateway-19bc2afb21e8` completed `done` with Planner and Reviewer
+  handoffs, real Symphony session ids, turn counts, tokens, and
+  `last_event=turn_completed`.
+
 ### Mini-Owned Symphony Chain Execution
 
 Goal: implement the accepted business workflow from the current thread:
@@ -90,6 +112,21 @@ Implementation status, 2026-06-22:
   Symphony state after the test: `running=0`, `retrying=0`, `blocked=0`,
   `completed=3`; the only active Mini summary row was the idle
   `symphony-daemon-summary`.
+
+Active test task for next `gi test`, set 2026-06-23:
+
+```text
+Полный релизный проект веб приложение с БД контроллерами очередями UI авторизацией и тд проект CRM стоматология.
+```
+
+Normalized release scope:
+
+- Full release/full-system verification workload for a dental CRM web
+  application.
+- Expected workload surface includes database, controllers/API, queues/workers,
+  UI, authentication, and related release-readiness checks.
+- This entry records the active scenario only; it does not mean the scenario
+  has passed.
 
 Canonical test task:
 
@@ -453,10 +490,20 @@ Planned changes:
 
 - [x] Add precise validation errors/warnings with field paths.
 - [x] Validate ids, required agent fields, supported runtime settings, graph
-  references, one start node, and no cycles.
+  references, one start node, and safe loop policy.
 - [x] Expose `POST /api/agent-flows/{id}/validate`.
 - [x] Add focused tests for valid default chain, broken links, and cycles.
 - [x] Complete the WorkNest sprint task.
+
+Update, 2026-06-23:
+
+- [x] Treat `failure` edges as explicit bounded rework branches so QA can route
+  back to an executor without invalidating the saved chain.
+- [x] Keep `success`-path cycles invalid and compile rework loops into
+  `graph.loopPolicy`.
+- [x] Add `PM` as a checklist-control agent preset and backend role.
+- [x] Allow success cycles only when they include PM, compiling them into
+  `graph.controlPolicy.mode=pm-checklist`.
 
 Risks or dependencies:
 
@@ -1621,6 +1668,24 @@ Release criteria:
 Notes:
 - Keep the focus on Mini Orchestrator as the product, not generated demos/artifacts.
 - Any generated test outputs should stay isolated in versioned folders under `.mini_orchestrator/test-runs/`.
+
+### Symphony Gateway Queued Reconciliation
+
+Goal: prevent stale submitted Symphony gateway runs from staying active in the
+Mini dashboard after Symphony no longer reports their accepted issues.
+
+Planned changes:
+- [x] Reconcile saved `symphony_runs` against the live Symphony state during
+  Live Runs payload construction.
+- [x] Mark missing old `queued` gateway runs as `stale` with clear evidence
+  instead of counting them as active.
+- [x] Add focused regression coverage and run the affected tests.
+
+Risks and dependencies:
+- Do not delete historical gateway run records.
+- Keep completed and blocked runs unchanged.
+- Avoid mutating real Symphony; this is Mini-side readback cleanup only.
+
 ### Agent Builder Figma-Style Canvas Controls
 
 Goal: make the visual agent-card workspace behave like a canvas editor with
@@ -1645,6 +1710,7 @@ Follow-up fix, 2026-06-23:
   like a hard boundary; keep panning continuously while the pointer is held at
   the edge.
 - [x] Remove the old positive-only drag clamp and persist the canvas viewport
+  so zoomed-out layouts survive page refresh.
 
 Validation update, 2026-06-21:
 

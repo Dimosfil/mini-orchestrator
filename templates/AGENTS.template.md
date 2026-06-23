@@ -76,8 +76,8 @@ Use the RAG startup flow and retrieve only task-relevant context.
 - Config-service, service guide/contract lookup, task manager commands, sprint
   commands, and web-service port registration:
   `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- FTP deploy, restart/reboot, first test, default reset, installer packaging,
-  SQL/vector inspection, and project/RAG rebuild commands:
+- FTP deploy, restart/reboot, first test, full test, default reset, installer
+  packaging, SQL/vector inspection, and project/RAG rebuild commands:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
 - Nested repositories, private local app data, product-plan intent signals, and
   missing required entities:

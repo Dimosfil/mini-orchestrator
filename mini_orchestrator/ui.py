@@ -21,7 +21,6 @@ from .agent_flows import (
     compile_saved_agent_flow,
     create_agent_flow,
     list_agent_flows,
-    read_compiled_manifest,
     read_agent_flow,
     update_agent_flow,
     validate_saved_agent_flow,
@@ -37,7 +36,7 @@ from .agent_profiles import (
     visual_agent_task_prompt,
 )
 from .codex_dispatcher_service import PersistentCodexDispatcher
-from .daemon_runs import build_local_daemon_runs, run_manifest_dry_run, run_single_card_dry_run, set_run_review_decision
+from .daemon_runs import build_local_daemon_runs, set_run_review_decision
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
 from . import runtime_store
@@ -88,12 +87,12 @@ def _string_value(value: Any) -> str:
     return str(value).strip()
 
 
-def _symphony_agent_models_from_gateway_run(run: Dict[str, Any]) -> Dict[str, str]:
+def _symphony_agent_metadata_from_gateway_run(run: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
     symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
     submission = symphony.get("submission") if isinstance(symphony.get("submission"), dict) else {}
     intake = symphony.get("intakePayload") if isinstance(symphony.get("intakePayload"), dict) else submission.get("request")
     agent_tasks = intake.get("agentTasks") if isinstance(intake, dict) and isinstance(intake.get("agentTasks"), list) else []
-    models: Dict[str, str] = {}
+    metadata: Dict[str, Dict[str, str]] = {}
     for index, agent_task in enumerate(agent_tasks):
         if not isinstance(agent_task, dict):
             continue
@@ -101,20 +100,30 @@ def _symphony_agent_models_from_gateway_run(run: Dict[str, Any]) -> Dict[str, st
         codex = agent_task.get("codex") if isinstance(agent_task.get("codex"), dict) else {}
         agent_id = _string_value(agent.get("id") or agent_task.get("agentId") or agent_task.get("stageId"))
         model = _string_value(codex.get("model") or agent_task.get("model"))
-        if model:
+        label = _string_value(agent.get("label") or agent.get("name") or agent.get("role") or agent_id)
+        if model or label:
+            item = {"model": model, "label": label}
             if agent_id:
-                models[agent_id] = model
-            models[str(index)] = model
-    return models
+                metadata[agent_id] = item
+            metadata[str(index)] = item
+    return metadata
 
 
-def _symphony_model_index_from_gateway_payload(gateway_payload: Dict[str, Any]) -> Dict[str, str]:
-    index: Dict[str, str] = {}
+def _symphony_agent_models_from_gateway_run(run: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        key: value["model"]
+        for key, value in _symphony_agent_metadata_from_gateway_run(run).items()
+        if value.get("model")
+    }
+
+
+def _symphony_metadata_index_from_gateway_payload(gateway_payload: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    index: Dict[str, Dict[str, str]] = {}
     runs = gateway_payload.get("runs") if isinstance(gateway_payload.get("runs"), list) else []
     for run in runs:
         if not isinstance(run, dict):
             continue
-        agent_models = _symphony_agent_models_from_gateway_run(run)
+        agent_metadata = _symphony_agent_metadata_from_gateway_run(run)
         symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
         chain = symphony.get("miniOwnedChain") if isinstance(symphony.get("miniOwnedChain"), dict) else {}
         outputs = chain.get("outputs") if isinstance(chain.get("outputs"), list) else []
@@ -122,16 +131,19 @@ def _symphony_model_index_from_gateway_payload(gateway_payload: Dict[str, Any]) 
             if not isinstance(output, dict):
                 continue
             agent_id = _string_value(output.get("agentId"))
-            model = agent_models.get(agent_id) or agent_models.get(_string_value(output.get("agentIndex")))
-            if not model:
+            metadata = agent_metadata.get(agent_id) or agent_metadata.get(_string_value(output.get("agentIndex")))
+            if not metadata:
                 continue
+            label = _string_value(output.get("agentName"))
+            if label:
+                metadata = {**metadata, "label": label}
             issues = output.get("issues") if isinstance(output.get("issues"), list) else []
             for issue in issues:
                 if isinstance(issue, dict):
                     for key in (issue.get("issue_identifier"), issue.get("identifier"), issue.get("issue_id")):
                         key_text = _string_value(key)
                         if key_text:
-                            index[key_text] = model
+                            index[key_text] = metadata
 
         submission = symphony.get("submission") if isinstance(symphony.get("submission"), dict) else {}
         response = submission.get("response") if isinstance(submission.get("response"), dict) else {}
@@ -139,19 +151,27 @@ def _symphony_model_index_from_gateway_payload(gateway_payload: Dict[str, Any]) 
         for position, issue in enumerate(accepted):
             if not isinstance(issue, dict):
                 continue
-            model = agent_models.get(str(position))
-            if not model:
+            metadata = agent_metadata.get(str(position))
+            if not metadata:
                 continue
             for key in (issue.get("issue_identifier"), issue.get("identifier"), issue.get("issue_id")):
                 key_text = _string_value(key)
                 if key_text:
-                    index[key_text] = model
+                    index[key_text] = metadata
     return index
 
 
+def _symphony_model_index_from_gateway_payload(gateway_payload: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        key: value["model"]
+        for key, value in _symphony_metadata_index_from_gateway_payload(gateway_payload).items()
+        if value.get("model")
+    }
+
+
 def _enrich_symphony_daemon_models(daemon_payload: Dict[str, Any], gateway_payload: Dict[str, Any]) -> Dict[str, Any]:
-    model_index = _symphony_model_index_from_gateway_payload(gateway_payload)
-    if not model_index:
+    metadata_index = _symphony_metadata_index_from_gateway_payload(gateway_payload)
+    if not metadata_index:
         return daemon_payload
     runs = daemon_payload.get("runs") if isinstance(daemon_payload.get("runs"), list) else []
     for run in runs:
@@ -163,12 +183,23 @@ def _enrich_symphony_daemon_models(daemon_payload: Dict[str, Any], gateway_paylo
             _string_value(task.get("taskId")),
             _string_value(task.get("raw")),
         ]
-        model = next((model_index[key] for key in keys if key in model_index), "")
+        metadata = next((metadata_index[key] for key in keys if key in metadata_index), {})
+        model = _string_value(metadata.get("model"))
+        label = _string_value(metadata.get("label"))
+        if label:
+            run["currentAgent"] = label
+            task["title"] = task.get("title") or label
         if not model:
-            continue
-        run["model"] = model
+            model = _string_value(run.get("model"))
+        if model:
+            run["model"] = model
         for stage in run.get("stages") if isinstance(run.get("stages"), list) else []:
-            if isinstance(stage, dict) and not stage.get("model"):
+            if not isinstance(stage, dict):
+                continue
+            if label:
+                stage["agent"] = label
+                stage["label"] = label
+            if model and not stage.get("model"):
                 stage["model"] = model
     return daemon_payload
 
@@ -214,7 +245,7 @@ def _build_dispatcher_source_payload(root: Path) -> Dict[str, Any]:
 
 def _build_symphony_source_payload(root: Path = ROOT) -> Dict[str, Any]:
     daemon_payload = build_symphony_live_runs_from_url()
-    gateway_payload = build_local_symphony_gateway_runs(root)
+    gateway_payload = build_local_symphony_gateway_runs(root, daemon_payload)
     _enrich_symphony_daemon_models(daemon_payload, gateway_payload)
     _stamp_run_source(daemon_payload, "symphony", "Symphony")
     _stamp_run_source(gateway_payload, "symphony", "Symphony")
@@ -858,33 +889,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/daemon/run":
-            try:
-                if payload.get("dryRun") is not True:
-                    self._http_error(400, "Single-card daemon MVP currently requires dryRun=true.")
-                    return
-                manifest_id = str(payload.get("manifestId") or "").strip()
-                profile_snapshot_id = str(payload.get("profileSnapshotId") or "").strip()
-                if not manifest_id:
-                    self._http_error(400, "Field 'manifestId' is required.")
-                    return
-                manifest = read_compiled_manifest(manifest_id, ROOT)
-                task_value = payload.get("task")
-                task = task_value if isinstance(task_value, dict) else {}
-                if profile_snapshot_id:
-                    state = run_single_card_dry_run(manifest, profile_snapshot_id, ROOT, task=task)
-                else:
-                    state = run_manifest_dry_run(
-                        manifest,
-                        ROOT,
-                        task=task,
-                        reviewer_verdict=str(payload.get("reviewerVerdict") or "done"),
-                    )
-                self._json_response(201, {"run": state})
-            except (AgentFlowError, ValueError) as exc:
-                status = 404 if "not found" in str(exc).lower() else 400
-                self._http_error(status, str(exc))
-            except Exception as exc:
-                self._http_error(500, str(exc))
+            self._http_error(410, "Manifest daemon dry-run is retired. Use approved Dispatcher or Symphony execution.")
             return
 
         if path == "/api/daemon/review":
@@ -1063,16 +1068,17 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     or os.environ.get("MINI_ORCHESTRATOR_PLAN_PREVIEW_MODE")
                     or "real"
                 ).strip().casefold()
-                if mode not in {"dry-run", "real"}:
-                    self._http_error(400, "Field 'mode' must be 'dry-run' or 'real'.")
+                if mode == "dry-run":
+                    self._http_error(410, "Dry-run dispatcher mode is retired. Use real planner preview.")
+                    return
+                if mode != "real":
+                    self._http_error(400, "Field 'mode' must be 'real'.")
                     return
                 task_args, _ = self._write_task_file(task)
                 dispatcher_args = [*task_args, "--plan-only"]
-                if mode == "dry-run":
-                    dispatcher_args.append("--dry-run")
                 result = self._run_dispatcher(
                     dispatcher_args,
-                    timeout_seconds=120 if mode == "real" else 30,
+                    timeout_seconds=120,
                 )
                 result.setdefault("previewMode", mode)
                 result["tech"] = build_dispatcher_tech_summary(result, ROOT)
@@ -1105,7 +1111,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         str(APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS),
                     ]
                     if str(payload.get("mode") or "").strip().casefold() == "dry-run":
-                        dispatcher_args.append("--dry-run")
+                        self._http_error(410, "Dry-run dispatcher mode is retired. Run the real workflow.")
+                        return
                     result = self._start_dispatcher_background(dispatcher_args, run_id)
                     if isinstance(chain_preset, dict):
                         self._write_run_metadata_event(run_id, "chain_selected", chainPreset=chain_preset)
@@ -1504,9 +1511,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "daemonRun": {
                             "method": "POST",
                             "path": "/api/daemon/run",
-                            "required": ["manifestId", "dryRun"],
-                            "optional": ["profileSnapshotId", "reviewerVerdict"],
-                            "mode": "manifest-dry-run",
+                            "status": "retired",
+                            "replacement": "/api/dispatcher/run or /api/symphony/runs",
                         },
                         "daemonReview": {
                             "method": "POST",
@@ -1529,9 +1535,11 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                                 "waitForCompletion",
                                 "timeoutPerStepSeconds",
                                 "pollIntervalSeconds",
+                                "symphonyWorkerMode",
                             ],
                             "mode": "contract-gated-intake",
-                            "policy": "requires live Symphony observability and documented task intake; default compatibility mode can submit the selected preset, while orchestrationMode=mini-owned-chain keeps Mini as task-card/checklist/chain owner and posts one next-agent handoff at a time; otherwise records a visible blocked gateway run",
+                            "policy": "requires live Symphony observability and documented task intake; default compatibility mode can submit the selected preset, while orchestrationMode=mini-owned-chain keeps Mini as task-card/checklist/chain owner and posts one next-agent handoff at a time; symphonyWorkerMode=debug-new-worker asks Symphony for a fresh inspectable worker/agent monitor per handoff, while optimal-reuse-idle permits compatible idle worker reuse; otherwise records a visible blocked gateway run",
+                            "symphonyWorkerModes": ["debug-new-worker", "optimal-reuse-idle"],
                             "intakePayload": {
                                 "schemaVersion": "mini-orchestrator.symphony-intake.v1",
                                 "dispatchStrategies": [
@@ -1594,7 +1602,6 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "agent-flow-persistence",
                         "agent-flow-validation",
                         "agent-flow-compile",
-                        "daemon-dry-run",
                         "worknest-lifecycle-bridge",
                         "agent-work-package-translation",
                         "symphony-daemon-dashboard",

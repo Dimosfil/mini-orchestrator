@@ -12,6 +12,7 @@ import uuid
 
 from . import service_discovery
 from . import runtime_store
+from .model_defaults import coordinator_model, executor_model, reviewer_model
 
 
 DEFAULT_STATE_URL = "http://127.0.0.1:4000/api/v1/state"
@@ -349,6 +350,8 @@ def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     agents = _flow_agents(chain_preset)
     if not agents:
         agents = _default_agents()
+    worker_mode = normalize_symphony_worker_mode(payload.get("symphonyWorkerMode"))
+    worker_policy = symphony_worker_policy(worker_mode)
     return {
         "schemaVersion": "mini-orchestrator.symphony-intake.v1",
         "approved": True,
@@ -358,6 +361,8 @@ def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "dispatchStrategy": "one-symphony-agent-per-preset-stage",
         "task": global_task,
         "chainPreset": _chain_summary(chain_preset),
+        "symphonyWorkerMode": worker_mode,
+        "symphonyWorkerPolicy": worker_policy,
         "agentTasks": [_agent_task_from_preset_agent(index, agent, global_task) for index, agent in enumerate(agents)],
         "handoffPolicy": {
             "taskCardIsSingleUserVisibleUnit": True,
@@ -383,6 +388,8 @@ def build_symphony_handoff_payload(
     agent = agents[agent_index]
     checklist = build_task_checklist(payload)
     current_item = checklist_item or checklist[0]
+    worker_mode = normalize_symphony_worker_mode(payload.get("symphonyWorkerMode"))
+    worker_policy = symphony_worker_policy(worker_mode)
     return {
         "schemaVersion": "mini-orchestrator.symphony-intake.v1",
         "approved": True,
@@ -404,7 +411,8 @@ def build_symphony_handoff_payload(
             "totalAgents": len(agents),
             "currentAgentId": _text(agent.get("id") or agent.get("name") or f"agent-{agent_index + 1}"),
             "previousOutputsCount": len(previous_outputs or []),
-            "symphonyWorkerPolicy": "start-new-or-reuse-idle",
+            "symphonyWorkerMode": worker_mode,
+            "symphonyWorkerPolicy": worker_policy,
         },
         "agentTasks": [
             _agent_task_from_preset_agent(
@@ -422,6 +430,40 @@ def build_symphony_handoff_payload(
             "previousStageOutputsBecomeNextStageContext": True,
             "workerSelectionOwnedBySymphony": True,
         },
+    }
+
+
+def normalize_symphony_worker_mode(value: Any) -> str:
+    text = _text(value).lower().replace("_", "-")
+    aliases = {
+        "debug": "debug-new-worker",
+        "debug-symphony": "debug-new-worker",
+        "new": "debug-new-worker",
+        "new-worker": "debug-new-worker",
+        "force-new": "debug-new-worker",
+        "force-new-worker": "debug-new-worker",
+        "optimal": "optimal-reuse-idle",
+        "optimal-symphony": "optimal-reuse-idle",
+        "reuse": "optimal-reuse-idle",
+        "reuse-idle": "optimal-reuse-idle",
+    }
+    return aliases.get(text, text if text in {"debug-new-worker", "optimal-reuse-idle"} else "debug-new-worker")
+
+
+def symphony_worker_policy(mode: str) -> Dict[str, Any]:
+    normalized = normalize_symphony_worker_mode(mode)
+    if normalized == "optimal-reuse-idle":
+        return {
+            "mode": "optimal-reuse-idle",
+            "reuseIdle": True,
+            "newWorkerPerHandoff": False,
+            "description": "Symphony may reuse an idle worker when the worker is compatible with the next Mini-owned handoff.",
+        }
+    return {
+        "mode": "debug-new-worker",
+        "reuseIdle": False,
+        "newWorkerPerHandoff": True,
+        "description": "Symphony should create an isolated worker/agent monitor for each Mini-owned handoff so the execution can be inspected step by step.",
     }
 
 
@@ -455,6 +497,7 @@ def _summary_for_runs(runs: list[Dict[str, Any]]) -> Dict[str, int]:
         "blocked": sum(1 for run in runs if run.get("status") == "blocked"),
         "done": sum(1 for run in runs if run.get("status") == "done"),
         "failed": sum(1 for run in runs if run.get("status") == "failed"),
+        "stale": sum(1 for run in runs if run.get("status") == "stale" or run.get("stale", {}).get("isStale") is True),
     }
 
 
@@ -483,9 +526,41 @@ def _tokens(entry: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
+def _entry_agent_role(entry: Dict[str, Any]) -> str:
+    values = " ".join(
+        _text(entry.get(key)).casefold()
+        for key in ("worker_host", "issue_identifier", "issue_id", "issue_url", "workspace_path")
+    )
+    for role in ("planner", "executor", "reviewer"):
+        if role in values:
+            return role
+    return ""
+
+
+def _entry_agent_label(entry: Dict[str, Any]) -> str:
+    worker = _text(entry.get("worker_host"))
+    if worker:
+        return worker
+    role = _entry_agent_role(entry)
+    if role:
+        return role.title()
+    return "Symphony worker"
+
+
+def _entry_agent_model(entry: Dict[str, Any]) -> str | None:
+    role = _entry_agent_role(entry)
+    if role == "planner":
+        return coordinator_model()
+    if role == "executor":
+        return executor_model()
+    if role == "reviewer":
+        return reviewer_model()
+    return None
+
+
 def _stage(entry: Dict[str, Any], status: str) -> Dict[str, Any]:
     tokens = _tokens(entry)
-    label = _text(entry.get("worker_host")) or "Symphony worker"
+    label = _entry_agent_label(entry)
     last_event = _text(entry.get("last_event")) or _text(entry.get("last_message")) or _text(entry.get("error"))
     return {
         "agent": label,
@@ -496,7 +571,7 @@ def _stage(entry: Dict[str, Any], status: str) -> Dict[str, Any]:
         "completedAt": entry.get("completed_at") if status == "done" else None,
         "threadId": entry.get("session_id"),
         "turnCount": _int(entry.get("turn_count")),
-        "model": None,
+        "model": _entry_agent_model(entry),
         "tokens": tokens["total"],
         "lastEvent": last_event,
         "output": _text(entry.get("last_message")),
@@ -506,6 +581,8 @@ def _stage(entry: Dict[str, Any], status: str) -> Dict[str, Any]:
 def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Dict[str, Any]:
     run_id = _entry_id(entry, status)
     tokens = _tokens(entry)
+    agent_label = _entry_agent_label(entry)
+    agent_model = _entry_agent_model(entry)
     last_event = (
         _text(entry.get("last_event"))
         or _text(entry.get("last_message"))
@@ -527,7 +604,7 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
         "sourceLabel": "Symphony",
         "status": status,
         "mode": "symphony-daemon",
-        "currentAgent": _text(entry.get("worker_host")) or "Symphony worker",
+        "currentAgent": agent_label,
         "task": {
             "taskId": _text(entry.get("issue_id")) or run_id,
             "title": _entry_title(entry),
@@ -564,6 +641,7 @@ def _run_from_entry(entry: Dict[str, Any], status: str, generated_at: str) -> Di
             "thresholdSeconds": 0,
         },
         "outputs": {},
+        "model": agent_model,
     }
 
 
@@ -839,7 +917,120 @@ def create_symphony_gateway_run(
     return run
 
 
-def build_local_symphony_gateway_runs(root: Path) -> Dict[str, Any]:
+def _parse_timestamp(value: Any) -> datetime | None:
+    text = _text(value)
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _gateway_submission_identifiers(run: Dict[str, Any]) -> set[str]:
+    symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
+    submission = symphony.get("submission") if isinstance(symphony.get("submission"), dict) else {}
+    response = submission.get("response") if isinstance(submission.get("response"), dict) else {}
+    accepted = response.get("accepted") if isinstance(response.get("accepted"), list) else []
+    identifiers: set[str] = set()
+    for item in accepted:
+        if not isinstance(item, dict):
+            continue
+        for key in ("identifier", "issue_identifier", "issue_id"):
+            value = _text(item.get(key))
+            if value:
+                identifiers.add(value)
+    return identifiers
+
+
+def _daemon_payload_identifiers(daemon_payload: Dict[str, Any] | None) -> set[str]:
+    if not isinstance(daemon_payload, dict):
+        return set()
+    identifiers: set[str] = set()
+    runs = daemon_payload.get("runs") if isinstance(daemon_payload.get("runs"), list) else []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        for value in (run.get("runId"), run.get("issue_identifier"), run.get("issue_id")):
+            text = _text(value)
+            if text:
+                identifiers.add(text)
+        task = run.get("task") if isinstance(run.get("task"), dict) else {}
+        for value in (task.get("taskId"), task.get("raw"), task.get("title")):
+            text = _text(value)
+            if text:
+                identifiers.add(text)
+    return identifiers
+
+
+def _mark_gateway_run_stale(run: Dict[str, Any], *, reason: str, now: str) -> Dict[str, Any]:
+    run["status"] = "stale"
+    run["currentAgent"] = "Symphony intake"
+    run["lastEvent"] = "Symphony no longer reports this queued intake as active."
+    run["lastError"] = reason
+    run["updatedAt"] = now
+    run["approval"] = {"required": False, "count": 0}
+    event_types = run.get("eventTypes") if isinstance(run.get("eventTypes"), dict) else {}
+    event_types["symphony_intake_stale"] = int(event_types.get("symphony_intake_stale") or 0) + 1
+    run["eventTypes"] = event_types
+    run["stale"] = {
+        "isStale": True,
+        "reason": reason,
+        "lastEventAt": _text(run.get("updatedAt")) or now,
+        "thresholdSeconds": 300,
+    }
+    for stage in run.get("stages") if isinstance(run.get("stages"), list) else []:
+        if not isinstance(stage, dict):
+            continue
+        if _text(stage.get("status")) in {"queued", "running", "planning", "retrying", "waiting_approval", "pending"}:
+            stage["status"] = "stale"
+            stage["statusLabel"] = "Stale"
+            stage["lastEvent"] = "No matching Symphony issue is present in the live daemon state."
+    return run
+
+
+def _reconcile_gateway_runs_with_daemon(
+    root: Path,
+    runs: list[Dict[str, Any]],
+    daemon_payload: Dict[str, Any] | None,
+) -> list[Dict[str, Any]]:
+    daemon_identifiers = _daemon_payload_identifiers(daemon_payload)
+    if not daemon_identifiers and not isinstance(daemon_payload, dict):
+        return runs
+    now_dt = datetime.now(timezone.utc)
+    now_text = now_dt.isoformat()
+    reconciled: list[Dict[str, Any]] = []
+    for run in runs:
+        if _text(run.get("status")) != "queued":
+            reconciled.append(run)
+            continue
+        submission_ids = _gateway_submission_identifiers(run)
+        if not submission_ids:
+            reconciled.append(run)
+            continue
+        updated_at = _parse_timestamp(run.get("updatedAt") or run.get("createdAt"))
+        if updated_at is not None and (now_dt - updated_at).total_seconds() < 300:
+            reconciled.append(run)
+            continue
+        if submission_ids & daemon_identifiers:
+            reconciled.append(run)
+            continue
+        reason = (
+            "Queued Symphony intake is absent from the live daemon state; "
+            f"missing accepted issues: {', '.join(sorted(submission_ids))}."
+        )
+        updated = _mark_gateway_run_stale(run, reason=reason, now=now_text)
+        runtime_store.upsert_json_document(root, "symphony_runs", _text(updated.get("runId")), updated)
+        reconciled.append(updated)
+    return reconciled
+
+
+def build_local_symphony_gateway_runs(root: Path, daemon_payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     runs: list[Dict[str, Any]] = runtime_store.list_json_documents(root, "symphony_runs")
     seen = {str(run.get("runId") or "") for run in runs}
     run_dir = _local_symphony_run_dir(root)
@@ -851,6 +1042,7 @@ def build_local_symphony_gateway_runs(root: Path) -> Dict[str, Any]:
                 continue
             if isinstance(payload, dict) and str(payload.get("runId") or "") not in seen:
                 runs.append(payload)
+    runs = _reconcile_gateway_runs_with_daemon(root, runs, daemon_payload)
     return {
         "source": "symphony-gateway",
         "sourceLabel": "Symphony",

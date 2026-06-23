@@ -183,7 +183,11 @@ Implemented on 2026-06-19 for WorkNest sprint task
   values for UI highlighting.
 - Validation checks required agent fields, supported role/access/reasoning/model
   settings, required work-package fields, broken connection references,
-  duplicate branches, one start node or explicit selected start node, and cycles.
+  duplicate branches, one start node or explicit selected start node, and graph
+  loop safety. The primary `success` path must stay acyclic; `failure` edges may
+  route back to an earlier worker as a bounded rework loop. Success-path cycles
+  are allowed only when they include a `PM` card, which compiles as checklist
+  control rather than a plain topological sequence.
 - `POST /api/agent-flows/{id}/compile` was added in the compile slice. It
   requires `approval.approved=true`, revalidates the saved flow, does not start
   workers, and writes an immutable manifest under
@@ -309,7 +313,12 @@ Allowed `fromPort` values are `success` and `failure`. Allowed `toPort` value is
   drafts but rejected during compile for fields required by the selected role.
 - A compile request must identify a start node or validate exactly one start
   node from graph topology.
-- Cycles are invalid until an explicit loop policy exists.
+- The primary `success` path must be acyclic unless the cycle includes a `PM`
+  card. PM cycles compile as `graph.controlPolicy.mode=pm-checklist`, with the
+  PM owning checklist state, current item routing, attempts, evidence, and final
+  handoff to Reviewer.
+- `failure` edges are explicit bounded rework branches and compile into
+  `graph.loopPolicy` with a default `maxIterations` of 3.
 - Browser `localStorage` state must be imported as a draft, not trusted as an
   executable runtime contract.
 - Validation must return precise field paths so the UI can focus the broken

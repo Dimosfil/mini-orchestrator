@@ -1,6 +1,7 @@
 # Technology Stack Inventory
 
-Keep each GI-enabled project technology stack visible in durable project memory.
+Keep each GI-enabled project technology stack visible in durable project
+documentation.
 
 ## Purpose
 
@@ -9,19 +10,34 @@ build tools, test tools, external services, and deployment assumptions on every
 session. Maintain a concise stack inventory so refactors, dependency changes,
 verification plans, and migration work start from a shared source of truth.
 
+Treat `gi stack` and `ги стек` as requests to find or build this inventory for
+the current project.
+
+The technology stack is project documentation: it explains how to understand,
+run, test, build, and operate the project. It is not the source of business
+rules or feature algorithms.
+
 ## Required File
 
-Use this project-memory file unless local instructions define a more specific
-path:
+Use this compatibility path unless local instructions define a more specific
+documentation path:
 
 ```text
 tools/project-memory/specs/technology-stack.md
 ```
 
 Create it when a project adopts GI or when `gi обновить` introduces this rule.
-If the project already has an equivalent stack ADR or architecture note, keep
-that note and either link it from `technology-stack.md` or migrate its current
-facts into this file without losing decisions.
+If the project already has an equivalent `docs/technology-stack.md`, stack ADR,
+or architecture note, keep that note and either link it from
+`technology-stack.md` or migrate its current facts into one canonical file
+without losing decisions. Do not maintain two independent stack inventories.
+
+Keep a visible pointer to the canonical stack inventory near the beginning of
+the project-local instructions, README, docs index, or runbook that an external
+agent is expected to read first. If an external agent cannot find a stack link
+or inventory in the first relevant project docs, it should gather the stack from
+current project evidence and add or request the missing pointer according to
+local documentation policy.
 
 ## What To Record
 
@@ -36,8 +52,9 @@ Record verified current facts, not guesses:
 - local development entry points, ports, and health checks when stable;
 - generated artifacts and rebuildable indexes;
 - deprecated, legacy, or transitional stack components;
-- evidence paths such as manifests, config files, lockfiles, runbooks, and
-  project-memory specs;
+- evidence paths such as manifests, config files, lockfiles, runbooks,
+  documentation, and project-memory specs when they are evidence for
+  behavior-sensitive stack choices;
 - open verification gaps when the stack cannot be identified from current
   files.
 
@@ -46,6 +63,14 @@ locations only by documented environment variable or config key name.
 
 ## Update Rules
 
+- For `gi stack` / `ги стек`, first search project-local instructions, README,
+  docs indexes, runbooks, and the compatibility path for a canonical stack
+  link or inventory before scanning the repository broadly.
+- If a current inventory exists, verify its key facts against manifests,
+  lockfiles, config, run instructions, and source entry points before reporting
+  it as current.
+- If no inventory exists, create it from current evidence and mark unknowns as
+  gaps instead of guessing.
 - Update the inventory in the same scoped change that adds, removes, upgrades,
   replaces, or materially reconfigures a runtime, framework, package manager,
   storage engine, external service, build tool, test runner, or deployment
@@ -66,6 +91,9 @@ locations only by documented environment variable or config key name.
 # Technology Stack
 
 Last reviewed: YYYY-MM-DD
+
+Canonical source: this file
+Linked from: TODO
 
 ## Summary
 

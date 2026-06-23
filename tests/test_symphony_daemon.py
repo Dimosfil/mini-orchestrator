@@ -9,6 +9,7 @@ import pytest
 
 from mini_orchestrator import ui
 from mini_orchestrator import service_discovery
+from mini_orchestrator import runtime_store
 from mini_orchestrator.symphony_daemon import (
     SymphonyDaemonError,
     build_symphony_intake_payload,
@@ -102,7 +103,7 @@ def test_symphony_state_maps_runtime_entries_to_live_runs():
     )
 
     assert payload["source"] == "symphony-daemon"
-    assert payload["summary"] == {"total": 4, "active": 2, "blocked": 1, "done": 1, "failed": 0}
+    assert payload["summary"] == {"total": 4, "active": 2, "blocked": 1, "done": 1, "failed": 0, "stale": 0}
     assert [run["status"] for run in payload["runs"]] == ["running", "retrying", "blocked", "done", "running"]
     running = payload["runs"][0]
     assert running["schemaVersion"] == 1
@@ -431,6 +432,65 @@ def test_symphony_gateway_run_submits_when_intake_contract_exists(tmp_path, monk
     assert [item["agent"]["id"] for item in calls[1][3]["agentTasks"]] == ["planner", "executor"]
 
 
+def test_symphony_gateway_run_marks_missing_old_queued_intake_stale(tmp_path, monkeypatch):
+    def fake_resolve(service_id):
+        assert service_id == "symphony"
+        return service_discovery.ResolvedServiceRuntime(
+            service_id="symphony",
+            base_url="http://symphony.test",
+            config_service_url="http://config.test",
+            endpoints={
+                "availability": "/api/v1/state",
+                "api": "/api/v1",
+                "contract": "/agent/contract",
+                "taskIntake": "/agent-intake/tasks",
+            },
+            record={},
+        )
+
+    def fake_urlopen(request, timeout):
+        if request.full_url.endswith("/agent/contract"):
+            return FakeResponse({"capabilities": ["task-intake"]})
+        if request.full_url.endswith("/agent-intake/tasks"):
+            return FakeResponse(
+                {
+                    "status": "queued",
+                    "request_id": "request-old",
+                    "accepted": [
+                        {
+                            "identifier": "MO-request-old-1-planner",
+                            "issue_id": "mini-orchestrator:request-old:1:planner",
+                        }
+                    ],
+                }
+            )
+        raise AssertionError(request.full_url)
+
+    monkeypatch.setattr(service_discovery, "resolve_service_runtime", fake_resolve)
+    monkeypatch.setattr("mini_orchestrator.symphony_daemon.urlopen", fake_urlopen)
+
+    run = create_symphony_gateway_run(tmp_path, {"approved": True, "task": "Old queued task"}, submit=True)
+    run["createdAt"] = "2026-06-21T16:00:37+00:00"
+    run["updatedAt"] = "2026-06-21T16:00:37+00:00"
+    runtime_store.upsert_json_document(tmp_path, "symphony_runs", run["runId"], run)
+    daemon_payload = build_symphony_live_runs(
+        {"generated_at": "2026-06-22T20:44:43Z", "running": [], "retrying": [], "blocked": [], "completed": []},
+        "http://daemon/state",
+    )
+
+    payload = build_local_symphony_gateway_runs(tmp_path, daemon_payload)
+    stale_run = payload["runs"][0]
+    persisted = runtime_store.get_json_document(tmp_path, "symphony_runs", run["runId"])
+
+    assert payload["summary"]["active"] == 0
+    assert payload["summary"]["stale"] == 1
+    assert stale_run["status"] == "stale"
+    assert stale_run["stale"]["isStale"] is True
+    assert stale_run["stages"][0]["status"] == "stale"
+    assert persisted is not None
+    assert persisted["status"] == "stale"
+
+
 def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_path, monkeypatch):
     monkeypatch.setattr(ui, "ROOT", tmp_path)
     monkeypatch.setattr(
@@ -536,8 +596,37 @@ def test_symphony_daemon_runs_inherit_models_from_gateway_outputs():
     ui._enrich_symphony_daemon_models(daemon_payload, gateway_payload)
 
     run = next(item for item in daemon_payload["runs"] if item["runId"] == "MO-crm-smoke-planner")
+    assert run["currentAgent"] == "Planner"
     assert run["model"] == "gpt-5.5"
+    assert run["stages"][0]["agent"] == "Planner"
     assert run["stages"][0]["model"] == "gpt-5.5"
+
+
+def test_symphony_daemon_infers_agent_role_and_model_from_mini_issue_id():
+    payload = build_symphony_live_runs(
+        {
+            "generated_at": "2026-06-18T00:00:02Z",
+            "running": [],
+            "retrying": [],
+            "blocked": [],
+            "completed": [
+                {
+                    "issue_id": "mini-orchestrator:release-rerun:1:chain-default-executor",
+                    "issue_identifier": "MO-release-rerun-1-chain-default-executor",
+                    "issue_url": "mini-orchestrator://release-rerun/chain-default-executor",
+                    "last_event": "turn_completed",
+                    "tokens": {"total_tokens": 42},
+                }
+            ],
+        },
+        "http://daemon/state",
+    )
+
+    run = next(item for item in payload["runs"] if item["runId"] == "MO-release-rerun-1-chain-default-executor")
+    assert run["currentAgent"] == "Executor"
+    assert run["model"] == "gpt-5.3-codex-spark"
+    assert run["stages"][0]["agent"] == "Executor"
+    assert run["stages"][0]["model"] == "gpt-5.3-codex-spark"
 
 
 def test_symphony_run_http_endpoint_can_run_mini_owned_chain(tmp_path, monkeypatch):

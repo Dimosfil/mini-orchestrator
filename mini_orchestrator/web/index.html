@@ -1613,7 +1613,6 @@
             Режим
             <select id="plan-mode">
               <option value="real" selected>Основной</option>
-              <option value="dry-run">Dry-run smoke</option>
             </select>
           </label>
           <label class="topbar-field chain" for="run-chain-preset">
@@ -1631,6 +1630,13 @@
           </label>
           <button id="select-execution-button" class="btn-secondary mini-button" type="button">Confirm mode</button>
           <span id="current-execution-label" class="current-execution-label">Execution: Dispatcher</span>
+          <label class="topbar-field execution" for="symphony-worker-mode">
+            Symphony
+            <select id="symphony-worker-mode">
+              <option value="debug-new-worker" selected>Debug: new agent</option>
+              <option value="optimal-reuse-idle">Optimal: reuse idle</option>
+            </select>
+          </label>
         </div>
         <button id="agents-builder-button" class="btn-secondary" type="button">Настройка агентов</button>
         <div class="status-pill" aria-live="polite">
@@ -1799,10 +1805,12 @@
     const CHAIN_PRESETS_STORAGE_KEY = "mini-orchestrator-agent-chain-presets-v1";
     const RUN_CHAIN_SELECTION_STORAGE_KEY = "mini-orchestrator-run-chain-selection-v1";
     const EXECUTION_MODE_STORAGE_KEY = "mini-orchestrator-execution-mode-v1";
+    const SYMPHONY_WORKER_MODE_STORAGE_KEY = "mini-orchestrator-symphony-worker-mode-v1";
     const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
     const LIVE_RUNS_SOURCE_MODE_STORAGE_KEY = "mini-orchestrator-live-runs-source-mode-v1";
     const LIVE_RUNS_SOURCE_MODES = new Set(["dispatcher", "symphony", "combined"]);
     const EXECUTION_MODES = new Set(["dispatcher", "symphony"]);
+    const SYMPHONY_WORKER_MODES = new Set(["debug-new-worker", "optimal-reuse-idle"]);
     const DEFAULT_CHAIN_PRESET_ID = "default-planner-executor-reviewer";
     const form = document.querySelector("#task-form");
     const agentsBuilderButton = document.querySelector("#agents-builder-button");
@@ -1830,6 +1838,7 @@
     const selectChainButton = document.querySelector("#select-chain-button");
     const currentChainLabel = document.querySelector("#current-chain-label");
     const executionMode = document.querySelector("#execution-mode");
+    const symphonyWorkerMode = document.querySelector("#symphony-worker-mode");
     const selectExecutionButton = document.querySelector("#select-execution-button");
     const currentExecutionLabel = document.querySelector("#current-execution-label");
     const runButton = document.querySelector("#run-button");
@@ -1985,6 +1994,7 @@
       }
       runReviewDecisions = { ...runReviewDecisions, [key]: decision };
       saveRunReviewDecisions();
+      lastLiveRunsRenderKey = "";
       if (decision === "rework") {
         try {
           setBusy(true, "Starting rework");
@@ -2109,11 +2119,15 @@
     }
 
     function normalizePlanMode(value) {
-      return value === "dry-run" ? "dry-run" : "real";
+      return "real";
     }
 
     function normalizeExecutionMode(value) {
       return value === "symphony" ? "symphony" : "dispatcher";
+    }
+
+    function normalizeSymphonyWorkerMode(value) {
+      return SYMPHONY_WORKER_MODES.has(value) ? value : "debug-new-worker";
     }
 
     function loadExecutionMode() {
@@ -2133,6 +2147,22 @@
       }
     }
 
+    function loadSymphonyWorkerMode() {
+      try {
+        return normalizeSymphonyWorkerMode(localStorage.getItem(SYMPHONY_WORKER_MODE_STORAGE_KEY));
+      } catch (_error) {
+        return "debug-new-worker";
+      }
+    }
+
+    function saveSymphonyWorkerMode(mode) {
+      try {
+        localStorage.setItem(SYMPHONY_WORKER_MODE_STORAGE_KEY, normalizeSymphonyWorkerMode(mode));
+      } catch (_error) {
+        // The visible selector still reflects the current in-memory mode.
+      }
+    }
+
     function loadRunChainSelection() {
       try {
         const raw = localStorage.getItem(RUN_CHAIN_SELECTION_STORAGE_KEY);
@@ -2141,9 +2171,15 @@
           planMode: normalizePlanMode(parsed?.planMode),
           chainPresetId: String(parsed?.chainPresetId || DEFAULT_CHAIN_PRESET_ID),
           executionMode: normalizeExecutionMode(parsed?.executionMode || loadExecutionMode()),
+          symphonyWorkerMode: normalizeSymphonyWorkerMode(parsed?.symphonyWorkerMode || loadSymphonyWorkerMode()),
         };
       } catch (_error) {
-        return { planMode: "real", chainPresetId: DEFAULT_CHAIN_PRESET_ID, executionMode: loadExecutionMode() };
+        return {
+          planMode: "real",
+          chainPresetId: DEFAULT_CHAIN_PRESET_ID,
+          executionMode: loadExecutionMode(),
+          symphonyWorkerMode: loadSymphonyWorkerMode(),
+        };
       }
     }
 
@@ -2163,6 +2199,10 @@
       return normalizeExecutionMode(selectedRunChainConfig.executionMode || loadExecutionMode());
     }
 
+    function selectedSymphonyWorkerMode() {
+      return normalizeSymphonyWorkerMode(selectedRunChainConfig.symphonyWorkerMode || loadSymphonyWorkerMode());
+    }
+
     function renderRunChainPresetSelect() {
       const presets = loadChainPresets();
       const selectedId = presets.some((preset) => preset.id === selectedRunChainConfig.chainPresetId)
@@ -2172,9 +2212,11 @@
         planMode: normalizePlanMode(selectedRunChainConfig.planMode),
         chainPresetId: selectedId,
         executionMode: selectedExecutionMode(),
+        symphonyWorkerMode: selectedSymphonyWorkerMode(),
       };
       planMode.value = selectedRunChainConfig.planMode;
       executionMode.value = selectedExecutionMode();
+      symphonyWorkerMode.value = selectedSymphonyWorkerMode();
       runChainPreset.replaceChildren(...presets.map((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
@@ -2199,9 +2241,11 @@
 
     function updateCurrentExecutionLabel() {
       const mode = selectedExecutionMode();
+      const workerMode = selectedSymphonyWorkerMode();
       const label = mode === "symphony" ? "Symphony" : "Dispatcher";
-      currentExecutionLabel.textContent = `Execution: ${label}`;
-      currentExecutionLabel.title = `Execution mode: ${label}`;
+      const suffix = mode === "symphony" ? ` / ${workerMode}` : "";
+      currentExecutionLabel.textContent = `Execution: ${label}${suffix}`;
+      currentExecutionLabel.title = `Execution mode: ${label}${suffix}`;
       currentExecutionLabel.classList.toggle("symphony", mode === "symphony");
     }
 
@@ -2214,6 +2258,7 @@
         planMode: normalizePlanMode(planMode.value),
         chainPresetId: selectedId,
         executionMode: selectedExecutionMode(),
+        symphonyWorkerMode: selectedSymphonyWorkerMode(),
       };
       saveRunChainSelection();
       renderRunChainPresetSelect();
@@ -2225,11 +2270,13 @@
       selectedRunChainConfig = {
         ...selectedRunChainConfig,
         executionMode: normalizeExecutionMode(executionMode.value),
+        symphonyWorkerMode: normalizeSymphonyWorkerMode(symphonyWorkerMode.value),
       };
       saveExecutionMode(selectedRunChainConfig.executionMode);
+      saveSymphonyWorkerMode(selectedRunChainConfig.symphonyWorkerMode);
       saveRunChainSelection();
       updateCurrentExecutionLabel();
-      setMessage(`Execution mode confirmed: ${selectedRunChainConfig.executionMode}`, "ok");
+      setMessage(`Execution mode confirmed: ${selectedRunChainConfig.executionMode}; Symphony worker mode: ${selectedRunChainConfig.symphonyWorkerMode}`, "ok");
     }
 
     function runStatusClass(status) {
@@ -3366,6 +3413,7 @@
       setBusy(true, "Запускаю");
       const chainPreset = selectedRunChainPreset();
       const execution = selectedExecutionMode();
+      const workerMode = selectedSymphonyWorkerMode();
       setMessage(`Выполняю approved workflow через ${execution}: ${chainPreset.name}`);
       try {
         const payload = await postJson(execution === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run", {
@@ -3375,6 +3423,9 @@
           mode: selectedPlanMode(),
           executionMode: execution,
           submitToSymphony: execution === "symphony",
+          orchestrationMode: execution === "symphony" ? "mini-owned-chain" : undefined,
+          waitForCompletion: execution === "symphony",
+          symphonyWorkerMode: workerMode,
           chainPreset,
         });
         renderPayload(payload);
@@ -3401,6 +3452,15 @@
     });
     selectChainButton.addEventListener("click", selectCurrentRunChain);
     selectExecutionButton.addEventListener("click", selectCurrentExecutionMode);
+    symphonyWorkerMode.addEventListener("change", () => {
+      selectedRunChainConfig = {
+        ...selectedRunChainConfig,
+        symphonyWorkerMode: normalizeSymphonyWorkerMode(symphonyWorkerMode.value),
+      };
+      saveSymphonyWorkerMode(selectedRunChainConfig.symphonyWorkerMode);
+      saveRunChainSelection();
+      updateCurrentExecutionLabel();
+    });
     runButton.addEventListener("click", runApprovedWorkflow);
     runDetailsClose.addEventListener("click", closeRunDetails);
     runDetailsBackdrop.addEventListener("click", (event) => {
@@ -3427,6 +3487,7 @@
     window.addEventListener("focus", renderRunChainPresetSelect);
     setLiveRunsSourceMode(loadLiveRunsSourceMode());
     selectedRunChainConfig.executionMode = selectedExecutionMode();
+    selectedRunChainConfig.symphonyWorkerMode = selectedSymphonyWorkerMode();
     renderRunChainPresetSelect();
     restoreRunsBoardHeight();
     setupRunsBoardResize();

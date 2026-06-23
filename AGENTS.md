@@ -45,13 +45,13 @@ startup flow:
   `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
 - Windows commands/network policy:
   `patterns/AGENTS_RUNTIME/05-windows-command-policy.md`
-- Token economy, scoped tool usage, verification lookup:
+- Token economy, scoped tool usage, verification lookup, stack inventory:
   `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
 - Startup, restoration, and scope boundaries:
   `patterns/AGENTS_RUNTIME/07-startup-and-scope.md`
 - Config-service/task-manager flows:
   `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- Commands for reboot/summarize/update/tooling:
+- Commands for reboot/summarize/update/tooling/full test:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
 - Private-scope and missing context handling:
   `patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md`
@@ -89,4 +89,3 @@ startup flow:
 
 Gi commands in this repository apply to this local project and use `AGENTS.md` as
 the shared-instruction runtime entrypoint.
-

@@ -2,6 +2,23 @@
 
 Accepted changes for the shared instruction library.
 
+## 2026.06.23
+
+- Added `gi test task` / `gi test` as release/full-system verification
+  commands. `gi test task` records the user-selected workload for the next full
+  project test, while `gi test` runs the current project's documented
+  verification flow against that task. Agents must verify current local command
+  contracts before running checks and must not treat old summaries, screenshots,
+  demos, or previous completed runs as a substitute for a fresh requested test.
+
+- Added `gi stack` / `ги стек` as a documented command for finding or building
+  the current project's technology stack inventory. Agents first look for a
+  visible canonical stack link or inventory in project-local instructions,
+  README/docs/runbooks, or `tools/project-memory/specs/technology-stack.md`;
+  when it is missing, they gather verified stack facts from current project
+  evidence and add or request a top-level pointer according to local docs
+  policy.
+
 ## 2026.06.21
 
 - Modularized the runtime instruction entrypoint. Root and copied

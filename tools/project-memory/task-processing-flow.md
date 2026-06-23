@@ -138,9 +138,12 @@ flowchart TD
   updates the card/checklist, chooses the next preset agent, and sends a new
   one-agent Symphony request containing the next agent settings plus previous
   outputs.
-- Symphony owns worker runtime only: start or reuse an IDLE worker, run the
-  supplied agent work package, track progress/tokens/retries/blocked state, and
-  return retained result details to Mini.
+- Symphony owns worker runtime only: start a fresh worker/agent monitor for
+  `symphonyWorkerMode=debug-new-worker`, or reuse a compatible IDLE worker when
+  `symphonyWorkerMode=optimal-reuse-idle`, run the supplied agent work package,
+  track progress/tokens/retries/blocked state, and return retained result
+  details to Mini. The dashboard default is debug-new-worker while the
+  integration is being inspected.
 - The dashboard should keep two distinct mental models: the main task Kanban
   for Mini/WorkNest cards, and the Symphony monitor area for current or IDLE
   Symphony worker entities.

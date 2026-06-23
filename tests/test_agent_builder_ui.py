@@ -282,11 +282,15 @@ def test_dashboard_can_route_approved_workflow_to_symphony_gateway() -> None:
 
     assert '"/api/symphony/runs"' in html
     assert 'id="execution-mode"' in html
+    assert 'id="symphony-worker-mode"' in html
     assert 'id="select-execution-button"' in html
     assert "EXECUTION_MODE_STORAGE_KEY" in html
+    assert "SYMPHONY_WORKER_MODE_STORAGE_KEY" in html
     assert 'execution === "symphony" ? "/api/symphony/runs" : "/api/dispatcher/run"' in html
     assert 'background: execution !== "symphony"' in html
     assert 'submitToSymphony: execution === "symphony"' in html
+    assert 'orchestrationMode: execution === "symphony" ? "mini-owned-chain" : undefined' in html
+    assert "symphonyWorkerMode: workerMode" in html
 
 
 def test_dashboard_kanban_refresh_preserves_column_scroll_positions() -> None:
@@ -436,6 +440,16 @@ def test_dashboard_rework_action_starts_background_workflow() -> None:
     assert 'mode: "real"' in html
     assert 'setMessage("Rework workflow started. Watch Live Runs for progress.", "ok")' in html
     assert 'setRunReviewDecision(run, "rework", profile)' in html
+
+
+def test_dashboard_review_decision_forces_live_runs_rerender() -> None:
+    html = Path("mini_orchestrator/web/index.html").read_text(encoding="utf-8")
+
+    assert (
+        "runReviewDecisions = { ...runReviewDecisions, [key]: decision };\n"
+        "      saveRunReviewDecisions();\n"
+        "      lastLiveRunsRenderKey = \"\";"
+    ) in html
 
 
 def test_approved_dispatcher_workflow_uses_extended_turn_timeout() -> None:

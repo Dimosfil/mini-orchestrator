@@ -30,8 +30,31 @@ def test_handoff_payload_contains_one_agent_and_previous_outputs():
     assert handoff["chainControl"]["owner"] == "mini-orchestrator"
     assert handoff["chainControl"]["handoffIndex"] == 1
     assert handoff["chainControl"]["previousOutputsCount"] == 1
+    assert handoff["chainControl"]["symphonyWorkerMode"] == "debug-new-worker"
+    assert handoff["chainControl"]["symphonyWorkerPolicy"]["newWorkerPerHandoff"] is True
     assert [item["agent"]["id"] for item in handoff["agentTasks"]] == ["executor"]
     assert "Plan ready" in handoff["agentTasks"][0]["task"]["previousOutputs"]
+
+
+def test_handoff_payload_can_allow_idle_symphony_worker_reuse():
+    payload = {
+        "approved": True,
+        "task": "Build CRM",
+        "symphonyWorkerMode": "optimal-reuse-idle",
+        "chainPreset": {
+            "flow": {
+                "agents": [
+                    {"id": "planner", "name": "Planner", "role": "planner"},
+                ]
+            },
+        },
+    }
+
+    handoff = build_symphony_handoff_payload(payload, agent_index=0)
+
+    assert handoff["chainControl"]["symphonyWorkerMode"] == "optimal-reuse-idle"
+    assert handoff["chainControl"]["symphonyWorkerPolicy"]["reuseIdle"] is True
+    assert handoff["chainControl"]["symphonyWorkerPolicy"]["newWorkerPerHandoff"] is False
 
 
 def test_gateway_runs_mini_owned_chain_as_sequential_handoffs():

@@ -109,6 +109,80 @@ def test_agent_flow_validation_accepts_default_chain(tmp_path) -> None:
     assert validation["selectedStartAgentId"] == "planner"
 
 
+def test_agent_flow_validation_accepts_qa_role(tmp_path) -> None:
+    flow = sample_one_card_flow("QA Flow")
+    flow["agents"] = [{**sample_agent("qa", "QA", "QA"), "x": 10, "y": 20}]
+    created = create_agent_flow({"flow": flow}, tmp_path)
+
+    validation = validate_saved_agent_flow(created["id"], tmp_path)
+
+    assert validation["valid"] is True
+    assert validation["errors"] == []
+    assert validation["startNodeCandidates"] == [{"agentId": "qa", "name": "QA"}]
+    assert validation["selectedStartAgentId"] == "qa"
+
+
+def test_agent_flow_validation_accepts_bounded_qa_rework_loop(tmp_path) -> None:
+    flow = sample_flow("QA Rework Flow")
+    flow["agents"].insert(2, {**sample_agent("qa", "QA", "QA"), "x": 500, "y": 20})
+    flow["connections"] = [
+        {"id": "planner-to-executor", "fromAgentId": "planner", "toAgentId": "executor", "fromPort": "success"},
+        {"id": "executor-to-qa", "fromAgentId": "executor", "toAgentId": "qa", "fromPort": "success"},
+        {"id": "qa-to-executor", "fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure"},
+        {"id": "qa-to-reviewer", "fromAgentId": "qa", "toAgentId": "reviewer", "fromPort": "success"},
+    ]
+    created = create_agent_flow({"flow": flow}, tmp_path)
+
+    validation = validate_saved_agent_flow(created["id"], tmp_path)
+    manifest = compile_saved_agent_flow(created["id"], tmp_path, {"approval": {"approved": True}})
+
+    assert validation["valid"] is True
+    assert validation["errors"] == []
+    assert validation["loopPolicy"]["mode"] == "bounded-rework"
+    assert validation["loopPolicy"]["loops"] == [
+        {"fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure", "maxIterations": 3}
+    ]
+    assert manifest["graph"]["executionOrder"] == ["planner", "executor", "qa", "reviewer"]
+    assert manifest["graph"]["loopPolicy"]["mode"] == "bounded-rework"
+
+
+def test_agent_flow_validation_accepts_pm_checklist_control_loop(tmp_path) -> None:
+    flow = sample_flow("PM Checklist Flow")
+    flow["agents"] = [
+        {**sample_agent("planner", "Planner", "Planner"), "x": 10, "y": 20},
+        {**sample_agent("pm", "PM", "PM"), "x": 250, "y": 20},
+        {**sample_agent("executor", "Executor", "Executor"), "x": 490, "y": 20},
+        {**sample_agent("qa", "QA", "QA"), "x": 730, "y": 20},
+        {**sample_agent("reviewer", "Reviewer", "Reviewer"), "x": 970, "y": 20},
+    ]
+    flow["connections"] = [
+        {"id": "planner-to-pm", "fromAgentId": "planner", "toAgentId": "pm", "fromPort": "success"},
+        {"id": "pm-to-executor", "fromAgentId": "pm", "toAgentId": "executor", "fromPort": "success"},
+        {"id": "executor-to-qa", "fromAgentId": "executor", "toAgentId": "qa", "fromPort": "success"},
+        {"id": "qa-to-pm", "fromAgentId": "qa", "toAgentId": "pm", "fromPort": "success"},
+        {"id": "qa-to-executor", "fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure"},
+        {"id": "pm-to-reviewer", "fromAgentId": "pm", "toAgentId": "reviewer", "fromPort": "success"},
+    ]
+    created = create_agent_flow({"flow": flow}, tmp_path)
+
+    validation = validate_saved_agent_flow(created["id"], tmp_path)
+    manifest = compile_saved_agent_flow(created["id"], tmp_path, {"approval": {"approved": True}})
+
+    assert validation["valid"] is True
+    assert validation["errors"] == []
+    assert validation["selectedStartAgentId"] == "planner"
+    assert validation["controlPolicy"] == {
+        "mode": "pm-checklist",
+        "pmAgentId": "pm",
+        "checklistSource": "planner-output",
+        "maxAttemptsPerItem": 3,
+        "successCycleAllowed": True,
+    }
+    assert manifest["graph"]["executionOrder"] == ["planner", "pm", "executor", "qa", "reviewer"]
+    assert manifest["graph"]["loopPolicy"]["mode"] == "pm-checklist"
+    assert manifest["graph"]["controlPolicy"]["mode"] == "pm-checklist"
+
+
 def test_agent_flow_validation_rejects_cycles_with_paths(tmp_path) -> None:
     flow = sample_flow("Cyclic Flow")
     flow["connections"].append(

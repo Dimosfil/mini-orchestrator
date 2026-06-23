@@ -38,6 +38,19 @@
   commits unless project rules say otherwise, and report remaining risks or
   follow-up batches. If the project is too large to complete safely in one turn,
   complete the first coherent batch and leave an executable continuation plan.
+- Treat `gi stack` and `ги стек` as requests to find or build the current
+  project's technology stack inventory. First search project-local instructions,
+  README, docs indexes, runbooks, and
+  `tools/project-memory/specs/technology-stack.md` for a canonical stack link or
+  inventory before scanning broadly. If a current inventory exists, verify key
+  facts against manifests, lockfiles, config, run instructions, and source entry
+  points, then report the stack and gaps. If no inventory exists, create or
+  update the canonical stack inventory from current evidence and add a concise
+  pointer near the beginning of the first relevant project doc when local rules
+  allow documentation edits. Do not install dependencies, start services,
+  rebuild indexes, call external APIs, read secrets, or inspect private paths
+  outside the project root for this command unless the user explicitly approves
+  that scope.
 - Do not read large files in full by default, including large `index.html`,
   bundled JS/CSS, logs, lockfiles, generated files, and build artifacts. Prefer
   targeted searches, heads, tails, or small line ranges, such as
