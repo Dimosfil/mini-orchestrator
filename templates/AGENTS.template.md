@@ -98,6 +98,12 @@ business rules, workflow contracts, implementation-driving specifications,
 architecture decisions, and verified findings there, not only in chat or handoff
 summaries.
 
+Do not store raw work results, generated product outputs, screenshots, photos,
+crawled/downloaded files, large logs, model outputs, build artifacts, export
+bundles, or run datasets in `tools/project-memory/`. Use a project-local
+artifact/evidence/output/data/docs-asset location and keep only compact
+manifests, summaries, checksums, or links in project memory when needed.
+
 General project documentation lives in `README.md`, `docs/`, and the runbook.
 Keep overview, visible functionality, stack, commands, operations, and
 troubleshooting there.

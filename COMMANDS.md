@@ -15,8 +15,10 @@
   produce a compact verification plan without running checks by default.
 - `gi test task` / `ги тест таск`: set the active release/full-system
   verification workload for the next `gi test`.
-- `gi test` / `ги тест`: run the current project's documented verification flow
-  against the active test task.
+- `gi test` / `ги тест`: run the current project's documented live full-system
+  verification flow against the active test task; dry-runs, simulations,
+  dispatcher-only runs, log replays, mock-only checks, and compile/unit-only
+  checks are diagnostics only when explicitly requested.
 - `gi default` / `gi defaults` / `ги дефолт`: reset the current project to its
   documented first-run/default state using only documented reset targets, then
   start and verify the default-state signals.
@@ -30,6 +32,13 @@
   project according to all applicable GI rules, in verified batches.
 - `gi reboot` / `gi restart`: start or restart all documented project apps and
   report per-app verification evidence beyond PID creation.
+- `gi commit` / `gi коммит`: commit scoped current changes.
+- `gi push` / `gi пуш`: commit scoped current changes and push the current
+  branch; if there is nothing scoped to commit, report that instead of doing a
+  push-only fallback.
+- `gi only push` / `gi только пуш`: push existing local commits without staging
+  files or creating a commit.
+- `gi commit push` / `gi коммит пуш`: commit scoped current changes and push.
 
 ## Mini-Orchestrator
 

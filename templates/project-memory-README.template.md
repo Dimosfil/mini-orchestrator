@@ -21,6 +21,13 @@ examples, screenshots, troubleshooting, and release notes.
 
 Do not store secrets or credentials here.
 
+Do not store raw work results, generated product outputs, screenshots, photos,
+crawled/downloaded files, large logs, model outputs, build artifacts, export
+bundles, or run datasets in this folder. Put those files in a project-local
+artifact, evidence, output, data, or docs-asset location and keep only compact
+summaries, manifests, checksums, or links here when they are needed for a
+decision, behavior contract, failure, or verification result.
+
 ## Documentation Versus Summary Versus Project Memory
 
 `README.md`, `docs/`, and runbooks are the project documentation layer.
@@ -273,6 +280,10 @@ count, index path, freshness caveats, and readiness.
 - `architecture.md`: verified architecture notes.
 - `decisions.md`: durable decisions and rationale.
 - `known-issues.md`: recurring bugs, caveats, and workarounds.
+
+Avoid folders such as `evidence/`, `photos/`, `outputs/`, `runs/`, `exports/`,
+or `builds/` inside project memory unless the project has explicitly defined
+them as small, reviewable manifests rather than raw artifact storage.
 
 ## Task Planning
 

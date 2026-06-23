@@ -159,6 +159,17 @@ not merely plan, the current project's documented verification flow against the
 active test task. Do not confuse this with `gi test plan`, which remains
 plan-only by default.
 
+For `gi test`, dry-run mode is retired as a validity path. Do not use
+`--dry-run`, simulation mode, dispatcher-only execution, replayed logs,
+mock-only runs, or compile/unit-only checks as the test result. These checks may
+not be run for `gi test` at all unless the user explicitly asks for that
+diagnostic mode in addition to or instead of the live test. If explicitly
+requested, their result must stay under `Diagnostic` or `Not checked`, never
+`Passed`.
+If the project-local instructions expose only a dry-run command, or the live
+services/apps/workers/UI cannot be started or reached, report `gi test` as
+blocked or not checked and name the missing live contract.
+
 For `gi test`, first load the active test task from the current message or
 project-local memory. If no active task exists, ask one short question for the
 test task before running. Then reread project-local instructions, README,
@@ -169,9 +180,14 @@ apps when needed, run the appropriate ladder through the broadest documented
 suite justified by the command, and report the task used, commands run,
 results, blockers, and unverified areas.
 
+A full-system `gi test` must exercise the documented live runtime surface for
+the selected task: application processes, API/backend, storage, queues or
+workers, UI/auth flows, service discovery, orchestrator or agent handoff loops,
+and health/contract endpoints when the project defines them. Local static,
+compile, unit, or isolated integration checks are useful fast checks, but they
+do not replace the live system run.
+
 Old handoff summaries, screenshots, completed demo artifacts, previous task
 statuses, and old chat snippets are evidence only. They may explain what was
 tested before, but they do not satisfy a fresh `gi test` request. Rerun the
 current documented checks or report the exact blocker that prevents a rerun.
-Dry-run dispatcher or daemon output is not valid evidence for `gi test`,
-release, or full-system verification.

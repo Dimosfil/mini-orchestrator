@@ -4,6 +4,27 @@ Accepted changes for the shared instruction library.
 
 ## 2026.06.23
 
+- Clarified that `tools/project-memory/` is for durable specifications and
+  compact evidence references, not raw work results. Generated outputs,
+  screenshots, photos, crawled/downloaded files, logs, model outputs, build
+  artifacts, export bundles, and run datasets should live in project-local
+  artifact/evidence/output/data locations, with only manifests, summaries,
+  checksums, or links kept in project memory when needed.
+
+- Clarified `gi push` / `gi пуш` as a commit-then-push finish command. Agents
+  must not reinterpret it as raw `git push`, a retry of a previous terminal
+  push, or push-only behavior; if there are no scoped changes to commit, they
+  report that instead. Push-only behavior is reserved for `gi only push` /
+  `gi только пуш`.
+
+- Hardened `gi test` as a live full-system verification command. Dry-runs,
+  simulations, dispatcher-only runs, log replays, mock-only checks, and
+  compile/unit-only checks must not be run for `gi test` unless the user
+  explicitly asks for that diagnostic mode; they must never be reported as a
+  passed `gi test`. If the documented live app/service/worker/UI system cannot
+  be started or reached, agents must report the full test as blocked or not
+  checked instead of substituting a dry-run.
+
 - Added `gi test task` / `gi test` as release/full-system verification
   commands. `gi test task` records the user-selected workload for the next full
   project test, while `gi test` runs the current project's documented

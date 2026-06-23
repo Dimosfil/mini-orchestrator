@@ -77,12 +77,22 @@
   environment variables, storage, auth, queues, workers, and health checks.
   Start or restart documented apps when needed, run the verification ladder
   through the broadest documented suite justified by the command, and report
-  the task used, commands run, results, blockers, and unverified areas. Old
+  the task used, commands run, results, blockers, and unverified areas. For
+  `gi test`, dry-run mode is retired as a validity path: do not use `--dry-run`,
+  simulation mode, dispatcher-only execution, replayed logs, mock-only runs, or
+  compile/unit-only checks as the test result, and do not run dry-run mode at
+  all unless the user explicitly asks for that diagnostic mode. If explicitly
+  requested, label it as diagnostic and never report it as a passed `gi test`.
+  A full-system `gi test` must exercise the documented live runtime surface for
+  the selected task, including application processes, API/backend, storage,
+  queues or workers, UI/auth flows, service discovery, orchestrator or agent
+  handoff loops, and health/contract endpoints when the project defines them.
+  If the live services/apps/workers/UI cannot be started or reached, report
+  `gi test` as blocked or not checked instead of substituting a dry-run. Old
   summaries, screenshots, completed demo artifacts, previous task statuses, and
   old chat snippets are evidence only; they do not satisfy a fresh `gi test`
   request. Rerun the current documented checks or report the exact blocker that
-  prevents a rerun. Dry-run dispatcher or daemon output is not valid evidence
-  for `gi test`, release, or full-system verification.
+  prevents a rerun.
 - Treat `gi default`, `gi defaults`, and `ги дефолт` as requests to restore the
   current project to its documented first-run/default state. Read project-local
   reset, cleanup, first-run, run, backup, and test instructions first. Use only

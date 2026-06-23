@@ -73,6 +73,10 @@ startup flow:
 - Use `README.md`, `docs/`, and runbooks for user-facing project context.
 - Use `tools/project-memory/` for implementation-driving behavior, contracts,
   algorithms, and architectural guarantees.
+- Do not store raw work results, generated outputs, screenshots, photos, logs,
+  model outputs, build artifacts, export bundles, or run datasets under
+  `tools/project-memory/`; keep only compact summaries, manifests, checksums,
+  or links there when needed.
 - Prefer project-memory specs when implementing behavior changes and keep runtime
   behavior in one canonical stack and contracts path.
 

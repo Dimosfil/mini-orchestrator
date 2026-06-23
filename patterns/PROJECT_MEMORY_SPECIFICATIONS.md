@@ -72,6 +72,14 @@ searchable. Keep user-facing overview, visible feature descriptions, stack
 inventory, and operational commands in `README.md`, `docs/`, and runbooks unless
 local instructions choose a compatibility path and link it clearly.
 
+Project memory stores specifications and compact evidence references, not raw
+work products. Do not place generated applications, product outputs, screenshots,
+photos, crawled/downloaded data, model outputs, large logs, build artifacts,
+export bundles, or run datasets under `tools/project-memory/`. Store those files
+in a project-local artifact/evidence/output/data location and keep only the
+minimal manifest, summary, checksum, or path/URL reference needed to explain a
+decision, contract, failure, or verification result.
+
 ## Connected Projects Register
 
 When a project depends on, researches, vendors, or regularly interacts with

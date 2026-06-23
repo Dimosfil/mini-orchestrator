@@ -91,6 +91,14 @@ specifications by meaning instead of one giant file. Keep major rewrites in
 `tools/project-memory/architecture-migrations.md`. Follow
 `patterns/PROJECT_DOCUMENTATION_LAYERS.md` and
 `patterns/PROJECT_MEMORY_SPECIFICATIONS.md`.
+Do not use `tools/project-memory/` as the storage location for raw work results,
+generated product outputs, screenshots, photos, crawled/downloaded files, large
+logs, model outputs, build artifacts, export bundles, or run datasets. Store
+those artifacts in a project-local output/evidence/data location chosen by the
+project, usually ignored when rebuildable or private. Project memory may keep a
+small manifest, summary, checksum, or path/URL reference to such evidence only
+when it is needed to preserve a decision, behavior contract, or verification
+result.
 When a project depends on, researches, vendors, or regularly interacts with
 other local repositories, cloned examples, services, libraries, docs sites, or
 upstream tools, keep a connected-projects register in project memory, preferably

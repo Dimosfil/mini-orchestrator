@@ -76,6 +76,12 @@ implementation; project memory is the portable behavior record.
 
 - Do not store the only description of user-facing functionality in
   `tools/project-memory/`. Keep an overview in `README.md` or `docs/`.
+- Do not store raw work results, generated product outputs, screenshots, photos,
+  crawled/downloaded files, large logs, model outputs, build artifacts, export
+  bundles, or run datasets in `tools/project-memory/`. Put them in a
+  project-local artifact, evidence, output, data, or docs-asset location and
+  keep only compact summaries, manifests, checksums, or links in project memory
+  when they are needed for behavior or verification.
 - Do not store algorithms, business rules, state machines, or verification
   contracts only in user documentation, screenshots, tickets, chats, or commit
   messages. Keep them in project memory.

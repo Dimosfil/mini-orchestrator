@@ -1,32 +1,32 @@
 # Project Memory
 
-This folder stores durable project knowledge for AI agents.
+This folder stores concise, implementation-driving project knowledge for AI
+agents.
 
-Use it for verified findings that should survive chat resets:
+Use Markdown and JSON files here for human-reviewable memory. Use the local
+SQLite database only as a generated search index that can be rebuilt from git
+tracked files.
 
-- architecture notes
-- debugging findings
-- important decisions
-- known pitfalls
-- local workflows
-- dependency maps
-- reusable agent experience that may improve `gi`
+## Documentation Versus Summary Versus Project Memory
 
-Do not store secrets or credentials here.
-
+`README.md`, `docs/`, and runbooks are project documentation: overview,
+functionality, stack, commands, operations, troubleshooting, and examples.
 `tools/summary/` is compact handoff state for the current or recent chat.
-`tools/project-memory/` is long-lived product and project knowledge.
+`tools/project-memory/` is long-lived implementation-driving knowledge:
+algorithms, business rules, workflow contracts, state machines, invariants,
+architecture decisions, and verification guarantees.
+
+Do not store raw work results, generated product outputs, screenshots, photos,
+crawled/downloaded files, large logs, model outputs, build artifacts, export
+bundles, or run datasets in this folder. Put those files in a project-local
+artifact, evidence, output, data, or docs-asset location and keep only compact
+summaries, manifests, checksums, or links here when they are needed for a
+decision, behavior contract, failure, or verification result.
 
 Write project-memory documents so another agent could rebuild the project on a
 different language, framework, platform, or UI stack and preserve the same
 behavior. Code is the current implementation; project-memory specifications are
-the durable description of important behavior, business rules, algorithms,
-state transitions, data rules, workflow contracts, verification guarantees, and
-architecture decisions.
-
-Split durable knowledge by meaning instead of one giant file. Use feature
-specs, business-rule docs, data-model docs, integration contracts, and
-architecture migration history as needed.
+the portable behavioral source of truth.
 
 Recommended specification structure:
 
@@ -34,9 +34,6 @@ Recommended specification structure:
 tools/project-memory/
   architecture-migrations.md
   specs/
-    technology-stack.md
-    product-overview.md
-    glossary.md
     features/
     business-rules/
     data-model/
@@ -44,178 +41,155 @@ tools/project-memory/
       connected-projects.md
 ```
 
-Keep the current stack inventory in:
+Split documents by meaning. Keep feature algorithms, business logic,
+architecture contracts, and implementation mapping searchable as separate
+focused files instead of one giant document. Keep user-facing functionality,
+stack, commands, and operations in project documentation unless a compatibility
+path is explicitly linked.
+
+Keep a connected-projects register when this project depends on, researches,
+vendors, or regularly interacts with external repositories, cloned examples,
+service projects, libraries, docs sites, upstream tools, or sibling workspaces:
 
 ```text
-tools/project-memory/specs/technology-stack.md
+tools/project-memory/specs/integration-contracts/connected-projects.md
 ```
 
-Update it when languages, runtimes, frameworks, package managers, build/test
-tools, storage engines, services, or deployment targets materially change.
+For each connected project, record its purpose, business or architectural role,
+local folder when applicable, canonical Git/package/docs URLs, service IDs or
+runtime endpoints, owner/source of truth, data or API contract, setup/update
+commands, privacy and access boundaries, status, caveats, and why this project
+needs it. Agents should read the register before touching integrations or
+external project folders, and update it when a connected project is added,
+removed, moved, replaced, or given a new role.
 
-## Reusable Experience For GI
+## SQLite Index
 
-When this project reveals a reusable workflow, failure pattern, token-saving
-tactic, or agent-instruction improvement, write a concise recommendation for the
-shared instruction kit.
-
-Prefer the `updates/` folder in an available checkout/cache of the canonical
-shared-instruction source repo when this repository is being maintained:
-
-```text
-<general-instructions checkout>\updates\
-```
-
-If the shared library is unavailable, use a local intake folder:
-
-```text
-tools/project-memory/instruction-updates/
-```
-
-Recommendations should include:
-
-- observed problem or repeated friction
-- reusable rule, pattern, template, checklist, or migration idea
-- evidence paths or commands
-- expected benefit for token economy, startup retrieval, safety, or workflow
-- privacy review notes
-
-Do not include secrets, credentials, private user data, production data, or
-unnecessary project-specific details.
-
-## Agent Memory SQLite
-
-If the project benefits from searchable agent memory, use a local SQLite
-database as an agent index/experience store, not as the application database.
-
-Recommended path:
+Recommended local database:
 
 ```text
 tools/project-memory/project_memory.sqlite
 ```
 
-The SQLite file is usually local/generated and ignored by git when it is large
-or rebuildable. Commit the indexing script, schema notes, and Markdown exports
-instead.
-
-Use the database for verified facts, searchable file/symbol indexes, debugging
-findings, useful commands, recurring failures, and durable notes with evidence
-paths. Do not store secrets, credentials, private user data, or production data.
-
-Do not dump the database into chat. Query it by symbol, path, topic, error, or
-feature name with small limits.
-
-Use structured memory for deterministic project facts and graphs: exact paths,
-symbols, references, generated identifiers, asset links, reverse dependencies,
-commands, failures, and evidence-backed notes. Exact identifiers and dependency
-edges belong in structured memory or keyword search, not only embeddings.
-
-## Two Memory Layers
-
-- Markdown is the human-reviewable layer. Keep summaries, decisions,
-  architecture notes, and curated exports concise.
-- SQLite is the searchable agent-memory layer for detailed findings,
-  file/symbol indexes, references, commands, failures, and evidence-backed notes.
-- Vector retrieval is a second semantic layer for conceptual questions over
-  curated notes, summaries, architecture docs, and selected chunks.
-
-Do not blindly migrate all Markdown into SQLite. When Markdown memory becomes
-too large to read cheaply, introduce or rebuild the SQLite memory/index and keep
-Markdown as the concise reviewable export.
-
-Always verify current source files before editing because memory indexes can be
-stale.
-
-## RAG System Structure
-
-When the project needs retrieval that can grow beyond Markdown and SQLite FTS,
-add:
-
-```text
-tools/project-memory/rag-system.json
-```
-
-Use `templates/rag-system.template.json` as the starter shape and
-`patterns/RAG_SYSTEM_STRUCTURE.md` as the architecture rule. Keep vector stores
-such as Chroma, Qdrant, and pgvector behind retrieval adapters so prompts and
-agent workflows do not depend on one storage backend.
-
-Before enabling vector retrieval, prepare semantic-ready chunks and embedding
-metadata with `patterns/SEMANTIC_RAG_RETRIEVAL.md`. Keep generated files such as
-`tools/project-memory/semantic-corpus.jsonl` ignored.
-
-Use the activation limits in `rag-system.json` to decide when SQLite or vector
-retrieval should be recommended, current, or stale. `gi sql` / `gi sqlite` and
-`gi vector` are diagnostic commands: they report counts, readiness, staleness,
-and recommendations without deploying external services, installing heavy
-dependencies, uploading data, or indexing private sources by default.
-
-Use `gi tools rebuild` / `gi rag rebuild` only for a confirmed full rebuild of
-the configured project-memory/RAG retrieval system. Scoped node rebuilds should
-use documented node commands such as SQL, chunks, vector, manifest, and evals.
-Do not mark rebuild state current until rebuild and status checks succeed.
-
-For a local semantic MVP, build Chroma from exported chunks:
+Rebuild it from git tracked repository content:
 
 ```powershell
 python .\tools\project-memory\build_project_memory_index.py rebuild
+```
+
+Check index size:
+
+```powershell
+python .\tools\project-memory\build_project_memory_index.py stats
+```
+
+Search indexed content:
+
+```powershell
+python .\tools\project-memory\build_project_memory_index.py search "gi config"
+```
+
+Export semantic-ready chunks for a future embedding adapter:
+
+```powershell
 python .\tools\project-memory\build_project_memory_index.py export-chunks
+```
+
+Build a local Chroma vector index from the exported chunks:
+
+```powershell
 uv run --with chromadb python .\tools\project-memory\build_chroma_index.py rebuild
+```
+
+Run semantic search through Chroma:
+
+```powershell
+uv run --with chromadb python .\tools\project-memory\build_chroma_index.py query "semantic startup retrieval"
 ```
 
 Run local RAG health checks and retrieval evals:
 
 ```powershell
-python .\tools\project-memory\rag_check.py run
+uv run --with chromadb python .\tools\project-memory\rag_check.py run
 ```
 
 The check verifies that `rag-system.json` is readable, generated indexes are
-ignored, SQLite chunks match the semantic corpus when chunking is enabled, and
-the reviewable eval cases in `retrieval-evals.json` return expected source
-paths in the configured top results. Do not make free-form model answer wording
-the primary eval target.
+ignored, SQLite chunks match the semantic corpus, Chroma records match the
+semantic corpus when vector retrieval is enabled, and the reviewable eval cases
+in `retrieval-evals.json` return at least one expected source in the configured
+top results.
 
-## Suggested Files
+The database is ignored by git. Commit this README, durable Markdown notes,
+preference JSON files, and indexing scripts instead.
 
-- `pending-tasks.md`: active project-wide plans and multi-step work.
-- `STUDY_PLAN.md`: roadmap for understanding the project.
-- `git-preferences.json`: commit-message language preferences.
-- `system-preferences.json`: agent user-facing working language preferences.
-- `rag-system.json`: RAG source, exclusion, retrieval, context-packet, and
-  writeback configuration.
-- `semantic-retrieval-evals.md`: small eval set for semantic and hybrid
-  retrieval quality.
-- `retrieval-evals.json`: machine-checkable retrieval eval cases for keyword,
-  semantic, and hybrid retrieval quality.
-- `rag_check.py`: optional health and retrieval eval runner.
-- `specs/integration-contracts/connected-projects.md`: register of external
-  repositories, services, libraries, docs, tools, and sibling workspaces.
-- `build_chroma_index.py`: optional local Chroma adapter when semantic
-  retrieval is enabled.
-- `NOTES.md`: reviewable export of durable notes from local agent memory.
-- `architecture.md`: verified architecture notes.
-- `architecture-migrations.md`: durable history of architecture changes and
-  migrations.
-- `decisions.md`: durable decisions and rationale.
-- `known-issues.md`: recurring bugs, caveats, and workarounds.
+Use SQLite for deterministic project facts and graphs: paths, symbols, exact
+references, generated identifiers, asset links, reverse dependencies, commands,
+failures, and evidence-backed notes. In Unity-like projects, this can include
+`.meta` GUID mappings, prefab/scene/material/script references, and
+assembly-definition dependencies.
 
-## Task Planning
+Keep logical separation between code memory and specification memory. Code
+memory tracks current implementation facts such as files, symbols, commands,
+schemas, and errors. Specification memory tracks product behavior, business
+rules, feature algorithms, workflow contracts, architecture migrations, and
+verification guarantees. Small projects may use one SQLite database with source
+metadata. Larger projects should split code and spec indexes into separate
+databases, schemas, collections, or source groups.
 
-For analysis, refactoring, migration, or multi-step implementation tasks, keep a
-concise checklist in `pending-tasks.md` or a dedicated task plan in this folder.
+Use vector retrieval only as a second semantic layer for conceptual questions
+over curated notes, summaries, architecture docs, and selected chunks. Do not
+replace exact graph queries with embeddings, and always verify current source
+files before editing because generated indexes can be stale.
 
-Include:
+## RAG System Structure
 
-- goal
-- planned changes
-- execution order
-- risks or dependencies
-- verification steps
+This repository records its expandable RAG configuration in:
 
-Update progress as meaningful steps complete. Keep plans task-relevant and avoid
-full diffs, large logs, generated outputs, secrets, credentials, or private
-production data.
+```text
+tools/project-memory/rag-system.json
+```
 
-## Rule
+The current mode is SQLite FTS. Chroma, Qdrant, pgvector, or other vector stores
+should be added as retrieval adapters behind the same structure rather than as a
+replacement for project memory.
 
-If a future agent would waste time rediscovering the same fact, write it down.
+Generated semantic exports such as `tools/project-memory/semantic-corpus.jsonl`
+are ignored and should be rebuilt from tracked source files.
+
+The generated Chroma index under `tools/project-memory/vector-index/chroma` is
+ignored and can be rebuilt from `semantic-corpus.jsonl`.
+
+## Activation Limits And Diagnostics
+
+Start with Markdown specifications and targeted search. Use generated databases
+when size or retrieval failures justify them.
+
+Default SQLite/FTS activation limits:
+
+- tracked text sources exceed 50 files;
+- project-memory Markdown/JSON exceeds 25 files or about 200 KB;
+- feature specifications exceed 10 files;
+- exact retrieval repeatedly misses paths, commands, symbols, or feature specs;
+- startup restore needs too many focused file reads.
+
+Default vector activation limits:
+
+- semantic-ready chunks exceed 300;
+- curated project-memory specs exceed about 500 KB;
+- feature specifications exceed 25 files;
+- conceptual retrieval misses relevant memory at least three times;
+- multiple agents need conceptual lookup over the same memory.
+
+Use `gi sql` to inspect SQLite/FTS readiness and metrics. The agent should read
+`rag-system.json`, run the local stats helper when available, count memory/spec
+files, compare them with limits, and report whether SQL indexing is absent,
+current, stale, or recommended.
+
+Use `gi vector` to inspect vector readiness and metrics. The agent should read
+embedding/vector metadata, check semantic corpus size and chunk count, run the
+vector adapter status helper when available, and report collection, record
+count, index path, freshness caveats, and readiness.
+
+Use `gi tools rebuild evals` or `gi rag rebuild evals` to run the configured
+RAG checks without rebuilding source indexes. A failing eval means retrieval may
+still be structurally present but not yet trustworthy for that kind of question.

@@ -70,6 +70,10 @@
   git finish requests. `gi коммит` commits scoped current changes only; `gi пуш`
   and `gi коммит пуш` commit scoped current changes and push the current branch;
   `gi только пуш` pushes existing local commits without creating a new commit.
+  Do not reinterpret `gi push` / `gi пуш` as a raw `git push`, a retry of a
+  previous terminal push, or push-only behavior. Reserve push-only behavior for
+  `gi only push` / `gi только пуш`; if there are no scoped changes to commit,
+  report that clearly instead of running a push-only fallback.
   Inspect status, keep unrelated/user changes out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
@@ -311,9 +315,14 @@ or:
 - For verification plans and smoke checks, confirm exact CLI flags, ports,
   routes, methods, JSON payload fields, and required environment variables from
   current local instructions, manifests, config, or source code. Summaries and
-  old chat snippets are evidence, not authoritative command contracts. Dry-run
-  dispatcher or daemon output is not valid evidence for `gi test`, release, or
-  full-system verification.
+  old chat snippets are evidence, not authoritative command contracts. For
+  `gi test`, dry-run mode is retired as a validity path: do not use `--dry-run`,
+  simulation mode, dispatcher-only execution, replayed logs, mock-only runs, or
+  compile/unit-only checks as the test result, and do not run dry-run mode at
+  all unless the user explicitly asks for that diagnostic mode. A full-system
+  `gi test` must exercise the documented live runtime surface; if live
+  services/apps/workers/UI cannot be started or reached, report the test as
+  blocked or not checked instead of substituting a dry-run.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and clear typo variants as
   build-and-installer requests. The task is complete only after the packaging
   command runs and a current installer artifact is produced or explicitly
@@ -382,7 +391,10 @@ or:
   verification steps.
 - Update progress as meaningful steps complete.
 - Keep plans concise. Do not store full diffs, large logs, generated outputs,
-  secrets, credentials, or private production data.
+  screenshots, photos, raw work results, model outputs, build artifacts, export
+  bundles, run datasets, secrets, credentials, or private production data in
+  `tools/project-memory/`; keep only compact summaries, manifests, checksums,
+  or links there when needed.
 
 ## Shared Instruction Updates
 
