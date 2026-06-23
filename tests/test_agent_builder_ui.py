@@ -53,6 +53,22 @@ def test_agent_builder_canvas_supports_figma_style_pan_and_zoom() -> None:
     assert 'canvasWrap.addEventListener("wheel", handleCanvasWheel, { passive: false });' in html
 
 
+def test_agent_builder_supports_flow_undo() -> None:
+    html_path = Path("mini_orchestrator/web/agents-builder.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert 'id="undo-flow"' in html
+    assert "const UNDO_LIMIT = 60;" in html
+    assert "const undoStack = [];" in html
+    assert "function pushUndoSnapshot" in html
+    assert "function restoreFlowSnapshot" in html
+    assert "function undoFlow()" in html
+    assert "pushUndoSnapshot();\n      const count = flow.nextAgentNumber++;" in html
+    assert "pushUndoSnapshot(dragState.undoSnapshot);" in html
+    assert 'undoButton.addEventListener("click", undoFlow);' in html
+    assert 'event.key.toLowerCase() === "z" && !isEditingField' in html
+
+
 def test_agent_builder_connection_ports_are_compact_and_modern() -> None:
     html_path = Path("mini_orchestrator/web/agents-builder.html")
     html = html_path.read_text(encoding="utf-8")
@@ -66,6 +82,11 @@ def test_agent_builder_connection_ports_are_compact_and_modern() -> None:
     assert "transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;" in html
     assert "path.setAttribute(\"stroke-linecap\", \"round\");" in html
     assert "path.setAttribute(\"stroke-linejoin\", \"round\");" in html
+    assert "function finishLinkAtPointer(event)" in html
+    assert ".elementsFromPoint(event.clientX, event.clientY)" in html
+    assert 'node.matches(".port.input")' in html
+    assert "finishLinkAtPointer(event);" in html
+    assert 'window.removeEventListener("pointerup", cancelLink);' in html
 
 
 def test_agent_builder_save_can_overwrite_loaded_default_chain_preset() -> None:
@@ -115,6 +136,37 @@ def test_agent_builder_can_delete_selected_custom_chain_preset_with_confirmation
     assert "chainPresets = chainPresets.filter((item) => item.id !== preset.id);" in html
     assert "deleteChainPresetButton.addEventListener(\"click\", deleteSelectedChainPreset);" in html
     assert "deleteChainPresetButton.disabled = !chainPresetSelect.value" in html
+
+
+def test_agent_builder_exposes_qa_agent_preset() -> None:
+    html_path = Path("mini_orchestrator/web/agents-builder.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "qa: {" in html
+    assert 'label: "QA"' in html
+    assert 'role: "QA"' in html
+    assert 'if (normalized === "qa")' in html
+
+
+def test_agent_builder_exposes_pm_agent_preset() -> None:
+    html_path = Path("mini_orchestrator/web/agents-builder.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "pm: {" in html
+    assert 'label: "PM"' in html
+    assert 'role: "PM"' in html
+    assert 'if (normalized === "pm" || normalized === "project manager")' in html
+    assert "Own the execution checklist" in html
+
+
+def test_agent_builder_orders_preview_by_success_edges_with_cycle_guard() -> None:
+    html_path = Path("mini_orchestrator/web/agents-builder.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert 'if (normalizeConnection(connection).fromPort !== "success")' in html
+    assert "const visited = new Set();" in html
+    assert "if (visited.has(id))" in html
+    assert "for (const agent of snapshot.agents)" in html
 
 
 def test_dashboard_maps_daemon_node_states_to_stage_artifacts() -> None:

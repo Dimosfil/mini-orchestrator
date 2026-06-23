@@ -311,6 +311,10 @@
       background: var(--blue);
     }
 
+    .swatch.pm {
+      background: #4f7b45;
+    }
+
     .swatch.reviewer {
       background: var(--amber);
     }
@@ -1234,6 +1238,7 @@
         <div class="subtitle">Соберите флоу из карточек агентов, настройте LLM и соедините шаги стрелками.</div>
       </div>
       <div class="actions">
+        <button id="undo-flow" class="btn-secondary" type="button" disabled>Undo</button>
         <button id="save-flow" class="btn-primary" type="button">Сохранить</button>
         <button id="reset-flow" class="btn-danger" type="button">Очистить</button>
       </div>
@@ -1429,6 +1434,25 @@
           expectedOutput: "Objective, proposed steps, risks, executor handoff, reviewer checklist.",
         },
       },
+      pm: {
+        label: "PM",
+        role: "PM",
+        namePrefix: "PM",
+        llm: DEFAULT_LLM,
+        speed: "balanced",
+        reasoning: "high",
+        accessMode: DEFAULT_ACCESS_MODE,
+        color: "#4f7b45",
+        workPackage: {
+          instructions: "Own the execution checklist, route one item at a time, and keep workflow state current.",
+          currentObjective: "Turn the planner checklist into controlled execution steps and decide the next active item.",
+          inputsArtifacts: "Planner checklist, acceptance criteria, executor outputs, QA verdicts, known blockers.",
+          constraints: "Do not implement code. Track item status, attempts, evidence, and stop when max attempts are reached.",
+          previousOutputs: "Planner output plus executor and QA outputs for the current checklist item.",
+          allowedTools: "Inspect run state, update checklist status, route work to Executor, route completed bundles to Reviewer.",
+          expectedOutput: "Current checklist state, next route decision, active item handoff, blocked item details when needed.",
+        },
+      },
       executor: {
         label: "Executor",
         role: "Executor",
@@ -1465,6 +1489,25 @@
           previousOutputs: "Planner and executor outputs from this run.",
           allowedTools: "Read files, inspect diffs, run focused checks, summarize review findings.",
           expectedOutput: "Findings first, residual risk, verification notes, final recommendation.",
+        },
+      },
+      qa: {
+        label: "QA",
+        role: "QA",
+        namePrefix: "QA",
+        llm: DEFAULT_LLM,
+        speed: "careful",
+        reasoning: "high",
+        accessMode: DEFAULT_ACCESS_MODE,
+        color: "#7c4d9f",
+        workPackage: {
+          instructions: "Validate the delivered behavior against acceptance criteria, edge cases, and user-facing quality expectations.",
+          currentObjective: "Run a focused QA pass over the current implementation or release candidate.",
+          inputsArtifacts: "Acceptance criteria, build output, test results, user flows, known risks, and prior agent outputs.",
+          constraints: "Report reproducible issues with clear steps, expected behavior, and actual behavior.",
+          previousOutputs: "Planner, executor, reviewer, and any prior QA outputs from this run.",
+          allowedTools: "Inspect files, run focused tests or smoke checks, capture defects, and summarize release readiness.",
+          expectedOutput: "QA verdict, tested scope, defects with reproduction steps, coverage gaps, and release recommendation.",
         },
       },
       agent: {
@@ -1547,6 +1590,7 @@
     const zoomOutButton = document.querySelector("#zoom-out");
     const zoomInButton = document.querySelector("#zoom-in");
     const zoomResetButton = document.querySelector("#zoom-reset");
+    const undoButton = document.querySelector("#undo-flow");
     const emptyState = document.querySelector("#empty-state");
     const flowJson = document.querySelector("#flow-json");
     const flowSummary = document.querySelector("#flow-summary");
@@ -1585,12 +1629,14 @@
     const CONNECTION_STUB = 36;
     const CONNECTION_CLEARANCE = 46;
     const CONNECTION_CORNER_RADIUS = 14;
+    const UNDO_LIMIT = 60;
     let dragState = null;
     let linkState = null;
     let panState = null;
     let autoPanFrame = 0;
     let isSpacePanActive = false;
     const viewport = loadViewport();
+    const undoStack = [];
     const chatHistories = new Map();
     const chatBusyAgents = new Set();
     let translationRequestSerial = 0;
@@ -1830,11 +1876,17 @@
       if (normalized === "planner") {
         return "planner";
       }
+      if (normalized === "pm" || normalized === "project manager") {
+        return "pm";
+      }
       if (normalized === "executor") {
         return "executor";
       }
       if (normalized === "reviewer") {
         return "reviewer";
+      }
+      if (normalized === "qa") {
+        return "qa";
       }
       if (normalized === "custom") {
         return "custom";
@@ -2162,6 +2214,56 @@
       return payload.flow;
     }
 
+    function flowSnapshotFromState() {
+      return flowFromChainPreset({ id: flow.chainPresetId, name: flow.name, flow });
+    }
+
+    function flowSnapshotKey(snapshot = flowSnapshotFromState()) {
+      return JSON.stringify(snapshot);
+    }
+
+    function updateUndoButton() {
+      undoButton.disabled = undoStack.length === 0;
+      undoButton.title = undoStack.length ? "Undo last flow change (Ctrl+Z)" : "Nothing to undo";
+    }
+
+    function pushUndoSnapshot(snapshotKey = flowSnapshotKey()) {
+      if (undoStack.at(-1) === snapshotKey) {
+        updateUndoButton();
+        return;
+      }
+      undoStack.push(snapshotKey);
+      if (undoStack.length > UNDO_LIMIT) {
+        undoStack.shift();
+      }
+      updateUndoButton();
+    }
+
+    function restoreFlowSnapshot(snapshotKey) {
+      const snapshot = JSON.parse(snapshotKey);
+      Object.assign(flow, flowFromChainPreset({ id: snapshot.chainPresetId, name: snapshot.name, flow: snapshot }));
+      if (selectedAgentId && !flow.agents.some((agent) => agent.id === selectedAgentId)) {
+        selectedAgentId = "";
+      }
+      if (selectedConnectionId && !flow.connections.some((connection) => connection.id === selectedConnectionId)) {
+        selectedConnectionId = "";
+      }
+      renderChainPresetSelect();
+      render();
+      persistFlowLocalSnapshot("Undo.");
+      updateUndoButton();
+    }
+
+    function undoFlow() {
+      const snapshotKey = undoStack.pop();
+      if (!snapshotKey) {
+        statusLine.textContent = "Nothing to undo.";
+        updateUndoButton();
+        return;
+      }
+      restoreFlowSnapshot(snapshotKey);
+    }
+
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
     }
@@ -2459,25 +2561,35 @@
         if (!byId.has(connection.fromAgentId) || !byId.has(connection.toAgentId)) {
           continue;
         }
+        if (normalizeConnection(connection).fromPort !== "success") {
+          continue;
+        }
         outgoing.get(connection.fromAgentId).push(connection.toAgentId);
         incoming.set(connection.toAgentId, (incoming.get(connection.toAgentId) || 0) + 1);
       }
       const ready = snapshot.agents.map((agent) => agent.id).filter((id) => (incoming.get(id) || 0) === 0);
       const order = [];
-      while (ready.length) {
-        const id = ready.shift();
+      const visited = new Set();
+      const visit = (id) => {
+        if (visited.has(id)) {
+          return;
+        }
+        visited.add(id);
         const agent = byId.get(id);
         if (agent) {
           order.push(agent);
         }
         for (const target of outgoing.get(id) || []) {
-          incoming.set(target, (incoming.get(target) || 0) - 1);
-          if ((incoming.get(target) || 0) === 0) {
-            ready.push(target);
-          }
+          visit(target);
         }
+      };
+      while (ready.length) {
+        visit(ready.shift());
       }
-      return order.length === snapshot.agents.length ? order : snapshot.agents;
+      for (const agent of snapshot.agents) {
+        visit(agent.id);
+      }
+      return order;
     }
 
     async function compileApprovedManifest() {
@@ -2567,6 +2679,7 @@
     }
 
     function addAgent(presetKey) {
+      pushUndoSnapshot();
       const count = flow.nextAgentNumber++;
       const selectedPreset = normalizePresetKey(presetKey);
       const preset = effectivePreset(selectedPreset);
@@ -2660,6 +2773,7 @@
         renderConnectionEditor();
         return;
       }
+      pushUndoSnapshot();
       Object.assign(connection, next);
       renderConnections();
       updateFlowPreview("Стрелка переаттачена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
@@ -2669,6 +2783,7 @@
       if (!selectedConnectionId) {
         return;
       }
+      pushUndoSnapshot();
       flow.connections = flow.connections.filter((connection) => connection.id !== selectedConnectionId);
       selectedConnectionId = "";
       renderConnections();
@@ -2680,6 +2795,7 @@
       if (!agent) {
         return;
       }
+      pushUndoSnapshot();
       flow.agents = flow.agents.filter((item) => item.id !== agentId);
       flow.connections = flow.connections.filter((connection) => connection.fromAgentId !== agentId && connection.toAgentId !== agentId);
       if (selectedAgentId === agentId) {
@@ -2694,6 +2810,11 @@
       const target = event.target;
       const isEditingField = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea"));
       const isInteractiveControl = target instanceof HTMLElement && Boolean(target.closest("input, select, textarea, button"));
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !isEditingField) {
+        event.preventDefault();
+        undoFlow();
+        return;
+      }
       if (event.code === "Space" && !isInteractiveControl) {
         event.preventDefault();
         isSpacePanActive = true;
@@ -2730,6 +2851,7 @@
       if (!agent) {
         return;
       }
+      pushUndoSnapshot();
       Object.assign(agent, patch);
       renderConnections();
       updateFlowPreview("Настройки агента обновлены. Есть несохраненные изменения.");
@@ -2742,6 +2864,7 @@
       if (!agent || !preset) {
         return;
       }
+      pushUndoSnapshot();
       Object.assign(agent, {
         preset: selectedPreset,
         role: preset.role,
@@ -2764,6 +2887,7 @@
       if (!agent) {
         return;
       }
+      pushUndoSnapshot();
       agent.workPackage = normalizeWorkPackage(agent.workPackage, agent.preset || "agent");
       agent.workPackage[key] = value;
       updateFlowPreview("Рабочий пакет агента обновлен.");
@@ -3126,6 +3250,7 @@
       }
       if (settingsMode === "preset") {
         const presetKey = normalizePresetKey(settingsPresetKey || settingsDraft.preset);
+        pushUndoSnapshot();
         flow.presetSettings = normalizePresetSettings({
           ...(flow.presetSettings || {}),
           [presetKey]: settingsDraft,
@@ -3141,6 +3266,7 @@
         closeAgentSettings();
         return;
       }
+      pushUndoSnapshot();
       Object.assign(agent, {
         preset: normalizePresetKey(settingsDraft.preset),
         role: settingsDraft.role,
@@ -3434,6 +3560,8 @@
         offsetY: point.y - agent.y,
         clientX: event.clientX,
         clientY: event.clientY,
+        undoSnapshot: flowSnapshotKey(),
+        undoCaptured: false,
       };
       canvasWrap.setPointerCapture(event.pointerId);
     }
@@ -3448,6 +3576,10 @@
       }
       const card = canvas.querySelector(`[data-agent-id="${agent.id}"]`);
       const point = screenToWorld(clientX, clientY);
+      if (!dragState.undoCaptured) {
+        pushUndoSnapshot(dragState.undoSnapshot);
+        dragState.undoCaptured = true;
+      }
       agent.x = clamp(point.x - dragState.offsetX, -WORLD_LIMIT, WORLD_LIMIT);
       agent.y = clamp(point.y - dragState.offsetY, -WORLD_LIMIT, WORLD_LIMIT);
       if (card) {
@@ -3487,6 +3619,7 @@
         fromAgentId: agentId,
         fromPort,
         pointer: pointerPoint(event),
+        pointerId: event.pointerId,
         clientX: event.clientX,
         clientY: event.clientY,
       };
@@ -3511,6 +3644,7 @@
           connection.toAgentId === toAgentId
         ));
         if (!exists) {
+          pushUndoSnapshot();
           flow.connections.push({
             id: `connection-${Date.now()}`,
             fromAgentId,
@@ -3520,11 +3654,27 @@
           });
         }
       }
+      window.removeEventListener("pointerup", cancelLink);
       linkState = null;
       stopEdgeAutoPan();
       document.querySelectorAll(".port").forEach((port) => port.classList.remove("active"));
       renderConnections();
       updateFlowPreview("Связь добавлена. Нажмите Сохранить, чтобы пересобрать JSON флоу.");
+    }
+
+    function finishLinkAtPointer(event) {
+      if (!linkState) {
+        return false;
+      }
+      const inputPort = document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find((node) => node instanceof HTMLElement && node.matches(".port.input"));
+      const toAgentId = inputPort?.dataset.agentId || "";
+      if (!toAgentId) {
+        return false;
+      }
+      finishLink(event, toAgentId);
+      return true;
     }
 
     function cancelLink() {
@@ -3800,6 +3950,7 @@
         statusLine.textContent = "Цепочка не найдена.";
         return;
       }
+      pushUndoSnapshot();
       const nextFlow = flowFromChainPreset(preset);
       Object.assign(flow, nextFlow);
       selectedAgentId = "";
@@ -3872,6 +4023,7 @@
         statusLine.textContent = `Пресет с названием "${nextName}" уже есть. Выберите другое имя или перезапишите существующий пресет.`;
         return;
       }
+      pushUndoSnapshot();
       flow.name = nextName;
       flow.chainPresetId = overwriteId || `chain-${chainPresetSlug(trimmedName)}-${Date.now()}`;
       const snapshot = buildFlowSnapshotFromCanvas();
@@ -3916,6 +4068,7 @@
       }
       chainPresets = chainPresets.filter((item) => item.id !== preset.id);
       if (flow.chainPresetId === preset.id) {
+        pushUndoSnapshot();
         flow.chainPresetId = "";
       }
       saveChainPresets();
@@ -3927,6 +4080,7 @@
       if (!window.confirm("Очистить текущий флоу агентов?")) {
         return;
       }
+      pushUndoSnapshot();
       flow.agents = [];
       flow.connections = [];
       flow.nextAgentNumber = 1;
@@ -3959,6 +4113,7 @@
         || !chainPresets.some((preset) => preset.id === chainPresetSelect.value);
     });
     compileManifestButton.addEventListener("click", compileApprovedManifest);
+    undoButton.addEventListener("click", undoFlow);
     document.querySelector("#save-flow").addEventListener("click", saveFlow);
     document.querySelector("#reset-flow").addEventListener("click", resetFlow);
     document.querySelector("#close-settings").addEventListener("click", closeAgentSettings);
@@ -3989,7 +4144,8 @@
         renderConnections();
       }
     });
-    canvasWrap.addEventListener("pointerup", () => {
+    canvasWrap.addEventListener("pointerup", (event) => {
+      finishLinkAtPointer(event);
       endDrag();
       endPan();
     });
@@ -4002,6 +4158,7 @@
     window.addEventListener("keydown", handleKeyboardShortcuts);
     window.addEventListener("keyup", handleKeyboardRelease);
     updateViewport();
+    updateUndoButton();
     renderChainPresetSelect();
     renderPresetPreview();
     render();
