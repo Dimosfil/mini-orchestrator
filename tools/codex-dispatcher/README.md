@@ -49,6 +49,10 @@ compatibility runs outside the dashboard path.
 Real Codex app-server runs pass the selected worker model by default. Use
 `--model <name>` to override all worker model labels for a run, or
 `--use-codex-default-models` to let the current Codex config choose the model.
+Dispatcher CLI agent turns wait up to 300 seconds by default. Override with
+`--turn-timeout-seconds <seconds>` or
+`MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS` for heavier release-chain
+runs.
 
 ## Generated App Artifacts
 

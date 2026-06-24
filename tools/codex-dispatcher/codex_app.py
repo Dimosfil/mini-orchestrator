@@ -29,6 +29,7 @@ MOJIBAKE_MARKERS = (
     "Г‚",
 )
 ACCESS_MODES = {"danger-full-access", "workspace-write", "read-only"}
+DEFAULT_TURN_TIMEOUT_SECONDS = 300.0
 
 
 def mojibake_score(text: str) -> int:
@@ -134,7 +135,7 @@ class CodexAppServer:
         root: Path,
         codex_command: str | None = None,
         request_timeout_seconds: float = 30,
-        turn_timeout_seconds: float = 90,
+        turn_timeout_seconds: float = DEFAULT_TURN_TIMEOUT_SECONDS,
         use_worker_models: bool = False,
         worker_chat_root: str | Path | None = None,
     ) -> None:
@@ -208,12 +209,31 @@ class CodexAppServer:
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
+        if not self.proc:
+            return
+        self._terminate_process_tree(self.proc)
+
+    def _terminate_process_tree(self, proc: subprocess.Popen[str]) -> None:
+        if os.name == "nt":
+            if proc.poll() is None:
+                subprocess.run(
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
             try:
-                self.proc.wait(timeout=5)
+                proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                self.proc.kill()
+                proc.kill()
+            return
+
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
     def read_stdout(self) -> None:
         if not self.proc or not self.proc.stdout:

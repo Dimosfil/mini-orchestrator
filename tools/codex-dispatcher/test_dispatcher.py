@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import dispatcher
+from cli import DEFAULT_TURN_TIMEOUT_SECONDS, default_turn_timeout_seconds
+from codex_app import CodexAppServer
 from mini_orchestrator.model_defaults import DEFAULT_COORDINATOR_MODEL, DEFAULT_EXECUTOR_MODEL
 
 
@@ -36,6 +38,26 @@ class FakeCodexAppServer:
 
 
 class DispatchDecisionTests(unittest.TestCase):
+    def test_cli_default_turn_timeout_is_release_chain_sized(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(default_turn_timeout_seconds(), DEFAULT_TURN_TIMEOUT_SECONDS)
+        self.assertGreaterEqual(DEFAULT_TURN_TIMEOUT_SECONDS, 300)
+
+    def test_cli_turn_timeout_env_override_is_validated(self) -> None:
+        with patch.dict(os.environ, {"MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS": "450"}):
+            self.assertEqual(default_turn_timeout_seconds(), 450)
+
+        with patch.dict(os.environ, {"MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS": "0"}):
+            with self.assertRaisesRegex(ValueError, "greater than 0"):
+                default_turn_timeout_seconds()
+
+    def test_codex_app_server_default_turn_timeout_matches_cli_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            server = CodexAppServer(root / "run.jsonl", root=root)
+
+        self.assertEqual(server.turn_timeout_seconds, DEFAULT_TURN_TIMEOUT_SECONDS)
+
     def test_default_workers_use_shared_model_defaults_and_env_overrides(self) -> None:
         workers = dispatcher.default_workers(dispatcher.ROOT)
 

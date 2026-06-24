@@ -20,6 +20,9 @@ from worker_profiles import workers_from_chain_preset, workers_from_chain_preset
 from worknest_client import load_worknest_task
 
 
+DEFAULT_TURN_TIMEOUT_SECONDS = 300.0
+
+
 def print_json(payload: dict[str, object]) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     sys.stdout.buffer.write(text.encode("utf-8"))
@@ -33,6 +36,19 @@ def path_is_inside(child: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def default_turn_timeout_seconds() -> float:
+    raw_value = os.environ.get("MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS")
+    if not raw_value:
+        return DEFAULT_TURN_TIMEOUT_SECONDS
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise ValueError("MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS must be a number.") from exc
+    if value <= 0:
+        raise ValueError("MINI_ORCHESTRATOR_DISPATCHER_TURN_TIMEOUT_SECONDS must be greater than 0.")
+    return value
 
 
 def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
@@ -64,7 +80,12 @@ def main(root: Path, runs_dir: Path, workers: list[Worker]) -> int:
         help="Do not pass worker model names; let Codex config choose the model.",
     )
     parser.add_argument("--request-timeout-seconds", type=float, default=30, help="Timeout for app-server request responses.")
-    parser.add_argument("--turn-timeout-seconds", type=float, default=90, help="Timeout for each agent turn.")
+    parser.add_argument(
+        "--turn-timeout-seconds",
+        type=float,
+        default=default_turn_timeout_seconds(),
+        help="Timeout for each agent turn.",
+    )
     args = parser.parse_args()
     if args.dry_run and os.environ.get("MINI_ORCHESTRATOR_ENABLE_LEGACY_DRY_RUN") != "1":
         parser.error("--dry-run is retired for dispatcher CLI. Use real Codex/Symphony execution.")
