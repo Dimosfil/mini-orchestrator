@@ -29,6 +29,18 @@ implemented against each goal criterion and list remaining gaps as blockers.
 - Read only the modules needed for the current request.
 - Before acting on a concrete task, select and read the matching module(s);
   this entrypoint alone is enough only for greetings or status-neutral replies.
+- If the request contains a GI chat command such as `gi ...`, `ги ...`, or a
+  known mojibake form such as `РіРё ...`, treat it as a concrete task even when
+  the message is short. First read `COMMANDS.md` when present, then read every
+  runtime module routed to that command before acting.
+- For state-changing GI commands that start, stop, restart, rebuild, deploy,
+  test, install, reset, update, commit, push, or manage task-manager state, do
+  not execute from memory, old chat examples, or a command name alone. If the
+  command's routed module is unavailable, stop and report the missing path.
+- For `gi restart`, `gi reboot`, `ги рестарт`, `ги ребут`, and equivalent
+  aliases, `patterns/AGENTS_RUNTIME/09-project-operation-commands.md` is
+  mandatory context before any process inspection, stop, start, or success
+  report.
 - For broad or unclear work, read `patterns/AGENTS_RUNTIME/01-purpose.md`,
   `patterns/AGENTS_RUNTIME/03-rule-precedence.md`,
   `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`, and the most
@@ -65,19 +77,22 @@ Use the RAG startup flow and retrieve only task-relevant context.
   and shared-rule propagation: `patterns/AGENTS_RUNTIME/01-purpose.md`
 - Repository map: `patterns/AGENTS_RUNTIME/02-repository-map.md`
 - Rule precedence and scope arbitration: `patterns/AGENTS_RUNTIME/03-rule-precedence.md`
-- Authoring reusable rules, configuration boundaries, code quality, stack
-  inventory, and batch verification: `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
+- Authoring reusable rules, configuration boundaries, code quality, project
+  info/stack inventory, and batch verification:
+  `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
 - Windows shell and networking policy: `patterns/AGENTS_RUNTIME/05-windows-command-policy.md`
-- Token economy, verification command lookup, `gi refactor`, feature contracts,
-  and large-output handling: `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
+- Token economy, verification command lookup, `gi info`, `gi stack`,
+  `gi refactor`, feature contracts, and large-output handling:
+  `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
 - Startup, restore, project goal, bug evidence, PDF inspection, repository
   cleanup, filesystem boundaries, and first-message handling:
   `patterns/AGENTS_RUNTIME/07-startup-and-scope.md`
 - Config-service, service guide/contract lookup, task manager commands, sprint
   commands, and web-service port registration:
   `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- FTP deploy, restart/reboot, first test, full test, default reset, installer
-  packaging, SQL/vector inspection, and project/RAG rebuild commands:
+- Dev/prod online service publication, FTP deploy, restart/reboot, first test,
+  full test, default reset, installer packaging, SQL/vector inspection, and
+  project/RAG rebuild commands:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
 - Nested repositories, private local app data, product-plan intent signals, and
   missing required entities:

@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.06.23.5",
+  "instruction_kit_version": "2026.06.24.5",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "TODO",
   "update_check": {
@@ -127,10 +127,17 @@
     "2026.06.23.2__add_gi_full_test_task_commands",
     "2026.06.23.3__retire_dry_run_for_gi_test",
     "2026.06.23.4__clarify_gi_push_requires_commit",
-    "2026.06.23.5__keep_raw_artifacts_out_of_project_memory"
+    "2026.06.23.5__keep_raw_artifacts_out_of_project_memory",
+    "2026.06.23.6__ask_before_boundary_violating_hardcode",
+    "2026.06.24.1__harden_routed_gi_command_loading",
+    "2026.06.24.2__add_gi_prod_online_service_publication",
+    "2026.06.24.3__add_gi_info_command",
+    "2026.06.24.4__gi_info_uses_project_languages",
+    "2026.06.24.5__make_gi_info_idempotent"
   ],
   "copied_files": [
     "AGENTS.md",
+    "COMMANDS.md",
     "tools/AGENT_WORKING_AGREEMENTS.md",
     "tools/AGENT_RUNBOOK.md",
     "tools/agent-start.ps1",
@@ -154,6 +161,7 @@
     "patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md",
     "patterns/CONFIGURATION_BOUNDARIES.md",
     "patterns/QUERY_PROMPT_NORMALIZATION_BOUNDARIES.md",
+    "patterns/PROJECT_DEV_PROD_SERVICES.md",
     "tools/select-project-language.ps1",
     "tools/select-git-commit-languages.ps1",
     "tools/select-system-language.ps1",

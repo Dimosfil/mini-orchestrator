@@ -27,6 +27,14 @@ startup flow:
 ## Loading Contract
 
 - Start with this file.
+- If the request contains a GI chat command such as `gi ...`, `ги ...`, or a
+  known mojibake form such as `РіРё ...`, treat it as a concrete task even when
+  the message is short. First read `COMMANDS.md` when present, then read every
+  runtime module routed to the requested command before acting.
+- For state-changing GI commands that start, stop, restart, rebuild, deploy,
+  test, install, reset, update, commit, push, or manage task-manager state, do
+  not execute from memory, old chat examples, or the command name alone. If the
+  command's routed module is unavailable, stop and report the missing path.
 - Read only the module(s) needed for the current request.
 - For broad or unclear work, read these shared modules before acting:
   - `patterns/AGENTS_RUNTIME/01-purpose.md`
@@ -45,13 +53,15 @@ startup flow:
   `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
 - Windows commands/network policy:
   `patterns/AGENTS_RUNTIME/05-windows-command-policy.md`
-- Token economy, scoped tool usage, verification lookup, stack inventory:
+- Token economy, scoped tool usage, verification lookup, `gi info`,
+  `gi stack`, refactor guidance, and stack inventory:
   `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
 - Startup, restoration, and scope boundaries:
   `patterns/AGENTS_RUNTIME/07-startup-and-scope.md`
 - Config-service/task-manager flows:
   `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- Commands for reboot/summarize/update/tooling/full test:
+- Commands for dev/prod publication, FTP, reboot, summarize, update, tooling,
+  rebuild, install, and full test:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
 - Private-scope and missing context handling:
   `patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md`

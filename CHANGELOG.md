@@ -2,7 +2,52 @@
 
 Accepted changes for the shared instruction library.
 
+## 2026.06.24
+
+- Clarified that `gi info` / `ги инфо` is idempotent. If verified project facts
+  already match current documentation and the canonical stack inventory, agents
+  should report that everything is current and avoid rewriting files. If only
+  part of the inventory changed, agents should update only the affected
+  sections and avoid unrelated formatting, wording, or translation churn.
+
+- Clarified that `gi info` / `ги инфо` writes new or updated project information
+  in the configured project working-environment languages from `gi язык` /
+  `gi language`, preserving the selected order with the first language as
+  primary. It must not use commit-message or task-manager language preferences
+  for project documentation.
+
+- Added `gi info` / `ги инфо` as a documented command for finding or building
+  the current project's orientation inventory: purpose, target users,
+  user-visible functionality, common workflows, technology stack, and
+  documentation gaps. Agents must keep the overview in project documentation,
+  keep stack facts in the canonical stack inventory, preserve detailed behavior
+  contracts in project memory, and mark unknowns with evidence instead of
+  guessing.
+
+- Added `gi prod` / `gi production` / `gi прод` / `ги прод` for publishing a
+  development version into a separate production service folder for online
+  services connected to real remote APIs. Agents must keep normal development,
+  tests, cleanup, formatting, and restarts on the development checkout/service,
+  preserve production-local secrets and runtime state, and ask when the
+  production folder, sync rules, health check, or rollback path is undocumented.
+
+- Hardened routed GI command loading after the modular runtime split. Agents
+  must treat `gi ...` / `ги ...` chat commands as concrete tasks, read
+  `COMMANDS.md` when present, and load the routed runtime module before acting.
+  State-changing GI commands may not run from memory or old chat examples, and
+  `gi restart` / `gi reboot` specifically require the project-operation command
+  module before process changes or success reports. The shared command index is
+  now copied with project instruction kits and includes the same execution
+  guard.
+
 ## 2026.06.23
+
+- Added a configuration-boundary guardrail for quick fixes and legacy
+  compatibility. Agents must not silently hard-code changeable product,
+  language, prompt, synonym, intent, or model-behavior values to satisfy tests
+  or observed samples; they must first use the compliant config/resource/adapter
+  path, and ask only when the source of truth or temporary compatibility layer
+  is undocumented.
 
 - Clarified that `tools/project-memory/` is for durable specifications and
   compact evidence references, not raw work results. Generated outputs,

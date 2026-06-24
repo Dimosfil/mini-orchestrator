@@ -52,7 +52,11 @@
   paths in source or shared instructions; when paths are accepted from config,
   resolve and validate them as absolute paths at the application boundary. When
   applying this rule to existing projects, audit and refactor relevant
-  hard-coded values instead of only adding the rule text. Follow
+  hard-coded values instead of only adding the rule text. If a shortcut, legacy
+  compatibility case, or test expectation would require violating this boundary,
+  first implement the compliant config/resource/adapter path; ask only when the
+  source of truth or temporary compatibility layer is genuinely undocumented.
+  Follow
   `patterns/CONFIGURATION_BOUNDARIES.md`.
 - Build applications with clear architecture and code-quality boundaries. Apply
   OOP, SOLID, DRY, clean-code, maintainability, and extensibility principles
@@ -67,6 +71,14 @@
   commands, evidence paths, and open verification gaps. Update it when stack
   components are added, removed, upgraded, replaced, or materially
   reconfigured. Follow `patterns/TECHNOLOGY_STACK_INVENTORY.md`.
+- Keep the current project purpose, target users or stakeholders,
+  user-visible functionality, common workflows, and stack pointer visible in
+  project documentation. Treat `gi info` and `ги инфо` as the command to find or
+  build this orientation inventory. Prefer `README.md`, `docs/`, and
+  `tools/AGENT_RUNBOOK.md` for the human-facing overview; use project memory
+  only for implementation-driving behavior, contracts, algorithms, invariants,
+  and architecture decisions. Mark unknowns as gaps/TODOs with evidence paths
+  or missing-source notes instead of guessing.
 - After any meaningful implementation, refactor, migration, or configuration
   cleanup batch, verify the batch at the right abstraction level. Check all
   touched layers for duplicated defaults, policies, workflows, contracts, or

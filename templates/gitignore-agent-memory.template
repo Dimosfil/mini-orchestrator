@@ -9,22 +9,5 @@ tools/project-memory/embedding-cache/
 tools/project-memory/semantic-corpus*.jsonl
 tools/summary/*.tmp
 tools/deploy/ftp.local.json
-*.log
-*.err
-.mini_orchestrator/
-tools/codex-dispatcher/runs/
-test-projects/
-
-# Python
-.venv/
-__pycache__/
-*.py[cod]
-
-# Node
-node_modules/
-dist/
-build/
-*.tsbuildinfo
-launch-desk/backend/data/*.sqlite
-launch-desk/backend/data/*.sqlite-*
 tools/deploy/prod.local.json
+*.log
