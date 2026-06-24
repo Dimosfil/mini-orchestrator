@@ -700,18 +700,25 @@ def clear_runtime_files(root: Path) -> dict[str, int]:
 
     deleted_files = 0
     deleted_dirs = 0
+    locked = 0
     for path in sorted(runtime_dir.iterdir(), key=lambda item: len(item.parts), reverse=True):
         if path.name in RUNTIME_FILE_KEEP_NAMES:
             continue
         path_resolved = path.resolve()
         path_resolved.relative_to(runtime_dir_resolved)
-        if path.is_dir():
-            _remove_directory_tree(path, runtime_dir_resolved)
-            deleted_dirs += 1
-        elif path.is_file():
-            path.unlink()
-            deleted_files += 1
-    return {"files": deleted_files, "directories": deleted_dirs}
+        try:
+            if path.is_dir():
+                _remove_directory_tree(path, runtime_dir_resolved)
+                deleted_dirs += 1
+            elif path.is_file():
+                path.unlink()
+                deleted_files += 1
+        except (OSError, PermissionError):
+            locked += 1
+    result = {"files": deleted_files, "directories": deleted_dirs}
+    if locked:
+        result["locked"] = locked
+    return result
 
 
 def _remove_directory_tree(path: Path, allowed_root: Path) -> None:

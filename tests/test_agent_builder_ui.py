@@ -183,18 +183,19 @@ def test_dashboard_maps_daemon_node_states_to_stage_artifacts() -> None:
     assert "verdict" in html
 
 
-def test_dashboard_kanban_board_is_vertically_bounded_and_resizable() -> None:
+def test_dashboard_kanban_board_has_session_only_resize() -> None:
     html_path = Path("mini_orchestrator/web/index.html")
     html = html_path.read_text(encoding="utf-8")
 
     assert ".runs-board" in html
-    assert "height: min(520px, calc(100vh - 190px));" in html
-    assert "max-height: calc(100vh - 140px);" in html
-    assert "resize: vertical;" in html
+    assert "height: min(520px, calc(100vh - 190px));" not in html
+    assert "max-height: calc(100vh - 140px);" not in html
     assert 'id="runs-board-resize-handle"' in html
-    assert "RUNS_BOARD_HEIGHT_STORAGE_KEY" in html
+    assert "RUNS_BOARD_HEIGHT_STORAGE_KEY" not in html
     assert "setupRunsBoardResize" in html
-    assert "grid-template-rows: auto minmax(0, 1fr);" in html
+    assert "grid-template-rows: auto 10px;" in html
+    assert ".runs-board.manual-height" in html
+    assert 'runsBoard.classList.add("manual-height");' in html
     assert "flex-direction: column;" in html
     assert "flex: 0 0 auto;" in html
     assert "overflow-y: auto;" in html
@@ -246,10 +247,25 @@ def test_dashboard_kanban_cards_have_clickable_agent_details() -> None:
 
     assert "function openAgentDetails(run, profile, stage)" in html
     assert 'currentName.className = "kanban-agent-button";' in html
-    assert 'currentName.addEventListener("click", () => openAgentDetails(run, profile));' in html
+    assert "if (isSymphonyGatewayRun(run))" in html
+    assert "openRunDetails(run, profile);" in html
+    assert "openAgentDetails(run, profile);" in html
     assert 'chip.type = "button";' in html
     assert 'chip.addEventListener("click", () => openAgentDetails(run, profile, stage));' in html
     assert 'runDetailsJson("Agent config", agentConfig)' in html
+
+
+def test_dashboard_symphony_gateway_shows_chain_and_worker_counts() -> None:
+    html_path = Path("mini_orchestrator/web/index.html")
+    html = html_path.read_text(encoding="utf-8")
+
+    assert "function symphonyGatewaySummary(run, profile)" in html
+    assert '`Chain: ${chainPresetLabel(run)}`' in html
+    assert '`Symphony handoffs: ${handoffCount}`' in html
+    assert '`worker records: ${workerCount}`' in html
+    assert '["Run type", isSymphonyGatewayRun(run) ? "Mini-owned chain aggregate" : (run.mode || "-")]' in html
+    assert '["Chain preset", detailPayload.chainPresetLabel]' in html
+    assert '["Symphony handoffs", detailPayload.symphonyHandoffs || "-"]' in html
 
 
 def test_dashboard_kanban_cards_show_stage_based_progress_ring() -> None:
@@ -338,9 +354,9 @@ def test_dashboard_splits_task_cards_from_symphony_daemon_cards() -> None:
     assert "function isSymphonyDaemonRun(run)" in html
     assert "function isSymphonyDaemonSummary(run)" in html
     assert "function isSymphonyWorkerMonitorRun(run)" in html
-    assert "const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run));" in html
     assert "const daemonSummaryRuns = runs.filter(isSymphonyDaemonSummary);" in html
     assert "const daemonWorkerRuns = runs.filter(isSymphonyWorkerMonitorRun);" in html
+    assert "const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run) && !isSymphonyWorkerMonitorRun(run));" in html
     assert "const daemonRuns = [...daemonWorkerRuns, ...daemonSummaryRuns];" in html
     assert "for (const run of taskRuns)" in html
     assert "for (const run of daemonWorkerRuns)" in html

@@ -301,15 +301,17 @@
 
     .runs-board {
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) 12px;
-      height: min(520px, calc(100vh - 190px));
-      min-height: 220px;
-      max-height: calc(100vh - 140px);
-      resize: vertical;
-      overflow: hidden;
+      grid-template-rows: auto 10px;
+      overflow-x: auto;
+      overflow-y: visible;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fbfcfd;
+    }
+
+    .runs-board.manual-height {
+      grid-template-rows: minmax(0, 1fr) 10px;
+      overflow: hidden;
     }
 
     .daemon-board {
@@ -370,16 +372,21 @@
       grid-template-columns: repeat(5, minmax(260px, 1fr));
       gap: 12px;
       height: 100%;
-      min-height: 0;
+      min-height: max-content;
       overflow-x: auto;
-      overflow-y: hidden;
+      overflow-y: visible;
       padding: 0;
       padding-bottom: 2px;
       scrollbar-gutter: stable;
     }
 
+    .runs-board.manual-height .kanban-board {
+      min-height: 0;
+      overflow-y: hidden;
+    }
+
     .runs-board-resize-handle {
-      min-height: 12px;
+      min-height: 10px;
       border: 0;
       border-top: 1px dashed var(--line-strong);
       border-radius: 0;
@@ -403,6 +410,16 @@
     .runs-board.resizing .runs-board-resize-handle {
       background:
         linear-gradient(90deg, transparent, rgba(37, 111, 108, 0.28), transparent);
+    }
+
+    .runs-board-resize-handle::before {
+      content: "";
+      display: block;
+      width: min(82%, 960px);
+      height: 8px;
+      margin: 1px auto 0;
+      border-radius: 999px;
+      background: rgba(98, 113, 131, 0.58);
     }
 
     .kanban-column {
@@ -1806,7 +1823,6 @@
     const RUN_CHAIN_SELECTION_STORAGE_KEY = "mini-orchestrator-run-chain-selection-v1";
     const EXECUTION_MODE_STORAGE_KEY = "mini-orchestrator-execution-mode-v1";
     const SYMPHONY_WORKER_MODE_STORAGE_KEY = "mini-orchestrator-symphony-worker-mode-v1";
-    const RUNS_BOARD_HEIGHT_STORAGE_KEY = "mini-orchestrator-runs-board-height-v1";
     const LIVE_RUNS_SOURCE_MODE_STORAGE_KEY = "mini-orchestrator-live-runs-source-mode-v1";
     const LIVE_RUNS_SOURCE_MODES = new Set(["dispatcher", "symphony", "combined"]);
     const EXECUTION_MODES = new Set(["dispatcher", "symphony"]);
@@ -2344,11 +2360,51 @@
     }
 
     function runDisplayTitle(run, profile) {
-      return run.task?.title || profile.displayName || run.profileSnapshotId || run.runId || "Run";
+      return displayText(run.task?.title || profile.displayName || run.profileSnapshotId || run.runId || "Run");
     }
 
     function runRawTask(run, profile) {
-      return String(run.task?.raw || run.task?.title || runDisplayTitle(run, profile) || "").trim();
+      return displayText(run.task?.raw || run.task?.title || runDisplayTitle(run, profile) || "").trim();
+    }
+
+    function displayText(value) {
+      const text = String(value || "");
+      if (!text || !/[РС][А-џ]/.test(text)) {
+        return text;
+      }
+      const decoded = decodeWindows1251Mojibake(text);
+      return decoded || text;
+    }
+
+    function decodeWindows1251Mojibake(value) {
+      if (typeof TextDecoder === "undefined") {
+        return "";
+      }
+      try {
+        if (!decodeWindows1251Mojibake.map) {
+          const bytes = new Uint8Array(128);
+          for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = index + 128;
+          }
+          const chars = new TextDecoder("windows-1251").decode(bytes);
+          decodeWindows1251Mojibake.map = new Map(Array.from(chars).map((char, index) => [char, index + 128]));
+        }
+        const out = [];
+        for (const char of String(value)) {
+          const code = char.charCodeAt(0);
+          if (code < 128) {
+            out.push(code);
+          } else if (decodeWindows1251Mojibake.map.has(char)) {
+            out.push(decodeWindows1251Mojibake.map.get(char));
+          } else {
+            return "";
+          }
+        }
+        const decoded = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(out));
+        return /[А-Яа-яЁё]/.test(decoded) ? decoded : "";
+      } catch (error) {
+        return "";
+      }
     }
 
     function runOutputsSummary(run) {
@@ -2394,6 +2450,9 @@
     }
 
     function runSourceLabel(run) {
+      if (isSymphonyGatewayRun(run)) {
+        return "Symphony gateway";
+      }
       return run.sourceLabel || (run.sourceKey === "symphony" ? "Symphony" : "Dispatcher");
     }
 
@@ -2404,6 +2463,10 @@
     function isSymphonyDaemonRun(run) {
       return run.sourceKey === "symphony"
         && (String(run.mode || "").startsWith("symphony-daemon") || Boolean(run.daemonSnapshot));
+    }
+
+    function isSymphonyGatewayRun(run) {
+      return run.sourceKey === "symphony" && run.mode === "symphony-gateway";
     }
 
     function isSymphonyDaemonSummary(run) {
@@ -2869,30 +2932,13 @@
       return Math.max(220, window.innerHeight - 140);
     }
 
-    function setRunsBoardHeight(height, persist = true) {
+    function setRunsBoardHeight(height) {
       if (!runsBoard) {
         return;
       }
-      const nextHeight = Math.max(220, Math.min(runsBoardMaxHeight(), Number(height) || 0));
+      const nextHeight = Math.max(150, Math.min(runsBoardMaxHeight(), Number(height) || 0));
+      runsBoard.classList.add("manual-height");
       runsBoard.style.height = `${nextHeight}px`;
-      if (persist) {
-        try {
-          localStorage.setItem(RUNS_BOARD_HEIGHT_STORAGE_KEY, String(Math.round(nextHeight)));
-        } catch {
-          // Browser storage can be unavailable in private or restricted contexts.
-        }
-      }
-    }
-
-    function restoreRunsBoardHeight() {
-      try {
-        const savedHeight = Number(localStorage.getItem(RUNS_BOARD_HEIGHT_STORAGE_KEY) || 0);
-        if (savedHeight > 0) {
-          setRunsBoardHeight(savedHeight, false);
-        }
-      } catch {
-        // Browser storage can be unavailable in private or restricted contexts.
-      }
     }
 
     function setupRunsBoardResize() {
@@ -2934,9 +2980,6 @@
         event.preventDefault();
         const delta = event.key === "ArrowDown" ? 32 : -32;
         setRunsBoardHeight(runsBoard.getBoundingClientRect().height + delta);
-      });
-      window.addEventListener("resize", () => {
-        setRunsBoardHeight(runsBoard.getBoundingClientRect().height, false);
       });
     }
 
@@ -2997,6 +3040,70 @@
       }) || {};
     }
 
+    function chainPresetLabel(run) {
+      const preset = run.chainPreset && typeof run.chainPreset === "object" ? run.chainPreset : {};
+      const name = String(preset.name || "").trim();
+      const id = String(preset.id || preset.chainPresetId || "").trim();
+      if (name && id && name !== id) {
+        return `${name} (${id})`;
+      }
+      return name || id || "-";
+    }
+
+    function chainStageCount(run, profile) {
+      return configuredChainStagesForRun(run, profile).length;
+    }
+
+    function symphonyHandoffSteps(run) {
+      const steps = run.symphony?.miniOwnedChain?.steps;
+      if (Array.isArray(steps) && steps.length) {
+        return steps;
+      }
+      const tasks = run.symphony?.intakePayload?.agentTasks;
+      return Array.isArray(tasks) ? tasks : [];
+    }
+
+    function symphonyWorkerIssueCount(run) {
+      const outputs = run.symphony?.miniOwnedChain?.outputs;
+      if (!Array.isArray(outputs)) {
+        return 0;
+      }
+      const issueIds = new Set();
+      for (const output of outputs) {
+        const issues = Array.isArray(output?.issues) ? output.issues : [];
+        for (const issue of issues) {
+          const id = issue?.issue_identifier || issue?.issue_id;
+          if (id) {
+            issueIds.add(String(id));
+          }
+        }
+      }
+      return issueIds.size;
+    }
+
+    function symphonyGatewaySummary(run, profile) {
+      const handoffCount = symphonyHandoffSteps(run).length;
+      const workerCount = symphonyWorkerIssueCount(run);
+      const parts = [
+        `Chain: ${chainPresetLabel(run)}`,
+        `Stages: ${chainStageCount(run, profile)}`,
+      ];
+      if (handoffCount) {
+        parts.push(`Symphony handoffs: ${handoffCount}`);
+      }
+      if (workerCount) {
+        parts.push(`worker records: ${workerCount}`);
+      }
+      return parts.join(" / ");
+    }
+
+    function displayedCurrentAgentLabel(run, profile) {
+      if (isSymphonyGatewayRun(run)) {
+        return run.currentAgent || "Mini Orchestrator chain aggregate";
+      }
+      return currentAgentLabel(run, profile);
+    }
+
     function detailValue(value) {
       if (value === null || value === undefined || value === "") {
         return "-";
@@ -3051,10 +3158,13 @@
       const configuredStages = configuredChainStagesForRun(run, profile);
       const detailPayload = {
         column: runKanbanColumnId(run, profile),
-        currentAgent: currentAgentLabel(run, profile),
+        currentAgent: displayedCurrentAgentLabel(run, profile),
         reviewDecision: runReviewDecision(run),
         stages,
         configuredStages,
+        chainPresetLabel: chainPresetLabel(run),
+        symphonyHandoffs: symphonyHandoffSteps(run).length,
+        symphonyWorkerRecords: symphonyWorkerIssueCount(run),
         run,
         profile,
       };
@@ -3065,18 +3175,23 @@
           ["Status", run.status || "unknown"],
           ["Column", detailPayload.column],
           ["Source", runSourceLabel(run)],
+          ["Run type", isSymphonyGatewayRun(run) ? "Mini-owned chain aggregate" : (run.mode || "-")],
           ["Current agent", detailPayload.currentAgent],
           ["Review decision", detailPayload.reviewDecision || "-"],
           ["Run id", run.runId || "-"],
           ["Profile snapshot", run.profileSnapshotId || "-"],
+          ["Chain preset", detailPayload.chainPresetLabel],
+          ["Chain stages", detailPayload.configuredStages.length],
+          ["Symphony handoffs", detailPayload.symphonyHandoffs || "-"],
+          ["Symphony worker records", detailPayload.symphonyWorkerRecords || "-"],
           ["Last event", run.lastEvent || "-"],
           ["Last error", run.lastError || "-"],
         ]),
         runDetailsSection("Task", [
           ["Task id", run.task?.taskId || "-"],
           ["Sprint id", run.task?.sprintId || "-"],
-          ["Title", run.task?.title || "-"],
-          ["Summary", run.task?.summary || "-"],
+          ["Title", displayText(run.task?.title || "-")],
+          ["Summary", displayText(run.task?.summary || "-")],
         ]),
         runDetailsJson("Stages", configuredStages),
         runDetailsJson("Artifacts", {
@@ -3117,10 +3232,11 @@
           ["Last event", selectedStage.lastEvent || run.lastEvent || "-"],
         ]),
         runDetailsSection("Run", [
-          ["Task", run.task?.title || run.task?.taskId || "-"],
-          ["Current agent", currentAgentLabel(run, profile) || "-"],
+          ["Task", displayText(run.task?.title || run.task?.taskId || "-")],
+          ["Current agent", displayedCurrentAgentLabel(run, profile) || "-"],
           ["Source", runSourceLabel(run)],
           ["Mode", run.mode || "-"],
+          ["Chain preset", chainPresetLabel(run)],
           ["Workspace", run.workspacePath || "-"],
         ]),
         runDetailsJson("Output", selectedStage.output || run.outputs || {}),
@@ -3167,15 +3283,21 @@
 
       const current = document.createElement("p");
       current.className = "kanban-current-agent";
-      const currentLabel = currentAgentLabel(run, profile);
+      const currentLabel = displayedCurrentAgentLabel(run, profile);
       const currentPrefix = status === "queued" ? "Queued for: " : "Current: ";
       current.append(document.createTextNode(currentPrefix));
       const currentName = document.createElement("button");
       currentName.className = "kanban-agent-button";
       currentName.type = "button";
       currentName.textContent = currentLabel || "-";
-      currentName.title = "Open current agent details";
-      currentName.addEventListener("click", () => openAgentDetails(run, profile));
+      currentName.title = isSymphonyGatewayRun(run) ? "Open chain aggregate details" : "Open current agent details";
+      currentName.addEventListener("click", () => {
+        if (isSymphonyGatewayRun(run)) {
+          openRunDetails(run, profile);
+        } else {
+          openAgentDetails(run, profile);
+        }
+      });
       current.append(currentName);
 
       const stageRow = document.createElement("div");
@@ -3197,7 +3319,14 @@
 
       const body = document.createElement("div");
       body.className = "kanban-card-body";
-      body.append(current, stageRow, event);
+      body.append(current);
+      if (isSymphonyGatewayRun(run)) {
+        const chainSummary = document.createElement("p");
+        chainSummary.className = "run-event";
+        chainSummary.textContent = symphonyGatewaySummary(run, profile);
+        body.append(chainSummary);
+      }
+      body.append(stageRow, event);
 
       const footer = document.createElement("div");
       footer.className = "kanban-card-footer";
@@ -3268,9 +3397,9 @@
       const kanbanScrollState = captureKanbanScrollState();
       const summary = payload.summary || {};
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
-      const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run));
       const daemonSummaryRuns = runs.filter(isSymphonyDaemonSummary);
       const daemonWorkerRuns = runs.filter(isSymphonyWorkerMonitorRun);
+      const taskRuns = runs.filter((run) => !isSymphonyDaemonSummary(run) && !isSymphonyWorkerMonitorRun(run));
       const daemonRuns = [...daemonWorkerRuns, ...daemonSummaryRuns];
       const profiles = payload.profiles || {};
       const primaryRun = primaryWorkflowRun(taskRuns);
@@ -3553,7 +3682,6 @@
     selectedRunChainConfig.symphonyWorkerMode = selectedSymphonyWorkerMode();
     renderRunChainPresetSelect();
     refreshChainPresetsFromBackend().catch(() => renderRunChainPresetSelect());
-    restoreRunsBoardHeight();
     setupRunsBoardResize();
     loadLiveRuns();
     window.setInterval(loadLiveRuns, 3000);
