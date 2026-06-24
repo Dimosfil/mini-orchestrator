@@ -11,6 +11,7 @@ import os
 import uuid
 
 from . import service_discovery
+from .agent_flows import AgentFlowError, execution_order_for_flow
 from . import runtime_store
 from .model_defaults import coordinator_model, executor_model, reviewer_model
 
@@ -197,7 +198,14 @@ def _flow_agents(chain_preset: Dict[str, Any]) -> list[Dict[str, Any]]:
     agents = flow.get("agents") if isinstance(flow.get("agents"), list) else []
     normalized = [agent for agent in agents if isinstance(agent, dict)]
     if normalized:
-        return normalized
+        agent_by_id = {_text(agent.get("id")).strip(): agent for agent in normalized}
+        try:
+            flow_for_validation = {**flow, "updatedAt": _text(chain_preset.get("updatedAt") or flow.get("updatedAt") or _utc_now())}
+            ordered_ids = execution_order_for_flow(flow_for_validation)
+        except AgentFlowError as exc:
+            raise SymphonyDaemonError(f"Selected chain preset is not executable: {exc}") from exc
+        ordered = [agent_by_id[agent_id] for agent_id in ordered_ids if agent_id in agent_by_id]
+        return ordered or normalized
     stages = chain_preset.get("stages") if isinstance(chain_preset.get("stages"), list) else []
     return [
         {"id": f"stage-{index + 1}", "name": _text(stage), "role": _text(stage), "preset": _text(stage)}
@@ -231,7 +239,7 @@ def _agent_task_from_preset_agent(
         "constraints": _text(work_package.get("constraints")),
         "expectedOutput": _text(work_package.get("expectedOutput")),
         "inputsArtifacts": _text(work_package.get("inputsArtifacts")),
-        "previousOutputs": _text(work_package.get("previousOutputs") or previous_output_text),
+        "previousOutputs": previous_output_text if previous_outputs else _text(work_package.get("previousOutputs") or previous_output_text),
     }
     if checklist_item:
         task["checklistItem"] = checklist_item

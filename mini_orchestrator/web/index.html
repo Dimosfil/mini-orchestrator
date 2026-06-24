@@ -1868,6 +1868,7 @@
     let busy = false;
     let runReviewDecisions = loadRunReviewDecisions();
     let selectedRunChainConfig = loadRunChainSelection();
+    let chainPresets = loadChainPresets();
 
     function setBusy(nextBusy, label = "Работаю") {
       busy = nextBusy;
@@ -2103,6 +2104,51 @@
       return presets;
     }
 
+    function saveChainPresetsCache() {
+      try {
+        localStorage.setItem(CHAIN_PRESETS_STORAGE_KEY, JSON.stringify(chainPresets));
+      } catch (_error) {
+        // The backend remains the source of truth if the browser cache is unavailable.
+      }
+    }
+
+    async function fetchBackendChainPresets() {
+      const response = await fetch("/api/agent-chain-presets");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Chain presets load failed with HTTP ${response.status}.`);
+      }
+      return Array.isArray(payload.presets)
+        ? payload.presets.map(normalizeChainPreset).filter(Boolean)
+        : [];
+    }
+
+    async function importLocalChainPresetsToBackend() {
+      const localPresets = loadChainPresets().filter((preset) => preset.id !== DEFAULT_CHAIN_PRESET_ID);
+      if (!localPresets.length) {
+        return;
+      }
+      const response = await fetch("/api/agent-chain-presets/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presets: localPresets }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Chain presets import failed with HTTP ${response.status}.`);
+      }
+    }
+
+    async function refreshChainPresetsFromBackend() {
+      await importLocalChainPresetsToBackend();
+      const backendPresets = await fetchBackendChainPresets();
+      if (backendPresets.length) {
+        chainPresets = backendPresets;
+        saveChainPresetsCache();
+        renderRunChainPresetSelect();
+      }
+    }
+
     function loadCurrentAgentFlowPreset() {
       try {
         const raw = localStorage.getItem(AGENT_FLOW_STORAGE_KEY);
@@ -2191,6 +2237,18 @@
       }
     }
 
+    async function persistRunChainSelection() {
+      try {
+        await postJson("/api/current-run-config", {
+          chainPresetId: selectedRunChainConfig.chainPresetId,
+          executionMode: selectedExecutionMode(),
+          symphonyWorkerMode: selectedSymphonyWorkerMode(),
+        });
+      } catch (error) {
+        setMessage(`Run settings were kept locally but not saved for gi test: ${error.message}`, "error");
+      }
+    }
+
     function selectedPlanMode() {
       return normalizePlanMode(selectedRunChainConfig.planMode);
     }
@@ -2204,7 +2262,7 @@
     }
 
     function renderRunChainPresetSelect() {
-      const presets = loadChainPresets();
+      const presets = chainPresets;
       const selectedId = presets.some((preset) => preset.id === selectedRunChainConfig.chainPresetId)
         ? selectedRunChainConfig.chainPresetId
         : presets[0]?.id || DEFAULT_CHAIN_PRESET_ID;
@@ -2229,7 +2287,7 @@
     }
 
     function selectedRunChainPreset() {
-      const presets = loadChainPresets();
+      const presets = chainPresets;
       return presets.find((preset) => preset.id === selectedRunChainConfig.chainPresetId) || presets[0] || defaultChainPreset();
     }
 
@@ -2250,7 +2308,7 @@
     }
 
     function selectCurrentRunChain() {
-      const presets = loadChainPresets();
+      const presets = chainPresets;
       const selectedId = presets.some((preset) => preset.id === runChainPreset.value)
         ? runChainPreset.value
         : presets[0]?.id || DEFAULT_CHAIN_PRESET_ID;
@@ -2261,6 +2319,7 @@
         symphonyWorkerMode: selectedSymphonyWorkerMode(),
       };
       saveRunChainSelection();
+      persistRunChainSelection();
       renderRunChainPresetSelect();
       const chainPreset = selectedRunChainPreset();
       setMessage(`Выбран текущий чейн: ${chainPreset.name}`, "ok");
@@ -2275,6 +2334,7 @@
       saveExecutionMode(selectedRunChainConfig.executionMode);
       saveSymphonyWorkerMode(selectedRunChainConfig.symphonyWorkerMode);
       saveRunChainSelection();
+      persistRunChainSelection();
       updateCurrentExecutionLabel();
       setMessage(`Execution mode confirmed: ${selectedRunChainConfig.executionMode}; Symphony worker mode: ${selectedRunChainConfig.symphonyWorkerMode}`, "ok");
     }
@@ -3459,6 +3519,7 @@
       };
       saveSymphonyWorkerMode(selectedRunChainConfig.symphonyWorkerMode);
       saveRunChainSelection();
+      persistRunChainSelection();
       updateCurrentExecutionLabel();
     });
     runButton.addEventListener("click", runApprovedWorkflow);
@@ -3484,11 +3545,14 @@
         closeRunDetails();
       }
     });
-    window.addEventListener("focus", renderRunChainPresetSelect);
+    window.addEventListener("focus", () => {
+      refreshChainPresetsFromBackend().catch(() => renderRunChainPresetSelect());
+    });
     setLiveRunsSourceMode(loadLiveRunsSourceMode());
     selectedRunChainConfig.executionMode = selectedExecutionMode();
     selectedRunChainConfig.symphonyWorkerMode = selectedSymphonyWorkerMode();
     renderRunChainPresetSelect();
+    refreshChainPresetsFromBackend().catch(() => renderRunChainPresetSelect());
     restoreRunsBoardHeight();
     setupRunsBoardResize();
     loadLiveRuns();

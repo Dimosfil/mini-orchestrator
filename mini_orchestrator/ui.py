@@ -23,7 +23,15 @@ from .agent_flows import (
     list_agent_flows,
     read_agent_flow,
     update_agent_flow,
+    validate_agent_flow,
     validate_saved_agent_flow,
+)
+from .agent_chain_presets import (
+    AgentChainPresetError,
+    delete_agent_chain_preset,
+    import_agent_chain_presets,
+    list_agent_chain_presets,
+    upsert_agent_chain_preset,
 )
 from .agent_api import AgentApiError, VisualAgentApi
 from .agent_profiles import (
@@ -58,6 +66,24 @@ MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
 LIVE_RUN_SOURCE_MODES = {"dispatcher", "symphony", "combined"}
 APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS = 300
+
+
+def _validate_executable_chain_preset(payload: Dict[str, Any]) -> None:
+    chain_preset = payload.get("chainPreset")
+    if not isinstance(chain_preset, dict):
+        raise ValueError("Field 'chainPreset' is required for approved workflow execution.")
+    flow = chain_preset.get("flow")
+    if not isinstance(flow, dict):
+        raise ValueError("Selected chain preset must include a flow object.")
+    validation = validate_agent_flow(
+        {
+            **flow,
+            "updatedAt": str(chain_preset.get("updatedAt") or flow.get("updatedAt") or runtime_store.utc_now()),
+        }
+    )
+    if not validation["valid"]:
+        messages = "; ".join(str(error.get("message") or error.get("code")) for error in validation["errors"])
+        raise ValueError(f"Selected chain preset is invalid and cannot run: {messages}")
 
 
 def _empty_run_summary() -> Dict[str, int]:
@@ -845,6 +871,13 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             return ""
         return path.removeprefix(prefix).strip("/")
 
+    def _agent_chain_preset_id(self) -> str:
+        prefix = "/api/agent-chain-presets/"
+        path = self._path()
+        if not path.startswith(prefix):
+            return ""
+        return path.removeprefix(prefix).strip("/")
+
     def do_POST(self) -> None:
         path = self._path()
         if path not in {
@@ -859,6 +892,9 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/agents/translate-work-package",
             "/api/agents/translation-log",
             "/api/agent-flows",
+            "/api/agent-chain-presets",
+            "/api/agent-chain-presets/import",
+            "/api/current-run-config",
             "/api/daemon/run",
             "/api/daemon/review",
             "/api/symphony/refresh",
@@ -888,6 +924,36 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._http_error(500, str(exc))
             return
 
+        if path == "/api/agent-chain-presets":
+            try:
+                preset = upsert_agent_chain_preset(payload, ROOT)
+                self._json_response(201, {"preset": preset})
+            except AgentChainPresetError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/agent-chain-presets/import":
+            try:
+                result = import_agent_chain_presets(payload, ROOT)
+                self._json_response(200, result)
+            except AgentChainPresetError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/current-run-config":
+            try:
+                config = runtime_store.set_current_run_config(ROOT, payload)
+                self._json_response(200, {"config": config})
+            except ValueError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
         if path == "/api/daemon/run":
             self._http_error(410, "Manifest daemon dry-run is retired. Use approved Dispatcher or Symphony execution.")
             return
@@ -909,6 +975,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
         if path == "/api/symphony/runs":
             try:
+                _validate_executable_chain_preset(payload)
                 state_payload = build_symphony_live_runs_from_url()
                 orchestration_mode = str(payload.get("orchestrationMode") or "").strip()
                 wait_for_completion = payload.get("waitForCompletion") is True
@@ -1097,6 +1164,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 if payload.get("approved") is not True:
                     self._http_error(400, "Field 'approved' must be true before running the workflow.")
                     return
+                _validate_executable_chain_preset(payload)
                 if payload.get("background") is True:
                     run_id = "ui-" + uuid.uuid4().hex[:12]
                     task_args, _ = self._write_task_file(task, run_id)
@@ -1305,13 +1373,27 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         path = self._path()
-        if not path.startswith("/api/agent-flows/"):
+        if not (path.startswith("/api/agent-flows/") or path.startswith("/api/agent-chain-presets/")):
             self._http_error(404, "Unknown endpoint.")
             return
         try:
             payload = self._read_json()
         except ValueError as exc:
             self._http_error(400, str(exc))
+            return
+        if path.startswith("/api/agent-chain-presets/"):
+            preset_id = self._agent_chain_preset_id()
+            if not preset_id:
+                self._http_error(404, "Agent chain preset id is required.")
+                return
+            payload = {**payload, "id": preset_id}
+            try:
+                preset = upsert_agent_chain_preset(payload, ROOT)
+                self._json_response(200, {"preset": preset})
+            except AgentChainPresetError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
             return
         flow_id = self._agent_flow_id()
         if not flow_id:
@@ -1326,8 +1408,39 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._http_error(500, str(exc))
 
+    def do_DELETE(self) -> None:
+        path = self._path()
+        if not path.startswith("/api/agent-chain-presets/"):
+            self._http_error(404, "Unknown endpoint.")
+            return
+        preset_id = self._agent_chain_preset_id()
+        if not preset_id:
+            self._http_error(404, "Agent chain preset id is required.")
+            return
+        try:
+            delete_agent_chain_preset(preset_id, ROOT)
+            self._json_response(200, {"deleted": True, "id": preset_id})
+        except AgentChainPresetError as exc:
+            status = 404 if "not found" in str(exc).lower() else 400
+            self._http_error(status, str(exc))
+        except Exception as exc:
+            self._http_error(500, str(exc))
+
     def do_GET(self) -> None:
         path = self._path()
+        if path == "/api/current-run-config":
+            try:
+                config = runtime_store.get_current_run_config(ROOT)
+                self._json_response(200, {"config": config})
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+        if path == "/api/agent-chain-presets":
+            try:
+                self._json_response(200, {"presets": list_agent_chain_presets(ROOT)})
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
         if path == "/api/agent-flows":
             try:
                 self._json_response(200, {"flows": list_agent_flows(ROOT)})
@@ -1410,6 +1523,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Test one visual agent card through /api/agents/chat.",
                         "Compile visual agent cards through /api/agents/compile.",
                         "Persist visual agent flows through /api/agent-flows.",
+                        "Persist project-owned agent chain presets through /api/agent-chain-presets.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
                         "Refresh Symphony daemon observability through /api/symphony/refresh.",
@@ -1507,6 +1621,24 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "path": "/api/agent-flows/{id}/compile",
                             "required": ["approval"],
                             "optional": ["selectedStartAgentId", "maxTurnsPerNode"],
+                        },
+                        "agentChainPresetsList": {
+                            "method": "GET",
+                            "path": "/api/agent-chain-presets",
+                        },
+                        "agentChainPresetsUpsert": {
+                            "method": "PUT",
+                            "path": "/api/agent-chain-presets/{id}",
+                            "required": ["name", "flow"],
+                        },
+                        "agentChainPresetsImport": {
+                            "method": "POST",
+                            "path": "/api/agent-chain-presets/import",
+                            "required": ["presets"],
+                        },
+                        "agentChainPresetsDelete": {
+                            "method": "DELETE",
+                            "path": "/api/agent-chain-presets/{id}",
                         },
                         "daemonRun": {
                             "method": "POST",

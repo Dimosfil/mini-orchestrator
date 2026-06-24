@@ -6,6 +6,7 @@ import json
 import re
 
 from mini_orchestrator.model_defaults import coordinator_model, executor_model, reviewer_model
+from mini_orchestrator.agent_flows import execution_order_for_flow
 
 from models import Worker
 
@@ -56,7 +57,8 @@ def workers_from_chain_preset(preset: dict[str, Any], root: Path) -> list[Worker
         raise ValueError("Chain preset flow must include at least one agent.")
     connections = flow.get("connections") if isinstance(flow.get("connections"), list) else []
     agent_map = {str(agent.get("id") or "").strip(): agent for agent in agents if isinstance(agent, dict)}
-    ordered_ids = _ordered_agent_ids(agents, connections)
+    flow_for_validation = {**flow, "updatedAt": str(preset.get("updatedAt") or flow.get("updatedAt") or "")}
+    ordered_ids = execution_order_for_flow(flow_for_validation)
     workers: list[Worker] = []
     used_names: set[str] = set()
     for agent_id in ordered_ids:

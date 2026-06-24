@@ -106,7 +106,15 @@
   active test task. Do not confuse this with `gi test plan`, which remains a
   plan-only command by default. First load the active test task from the current
   message or project-local memory; if none exists, ask one short question for
-  the test task before running. Then read project-local instructions, README,
+  the test task before running. Before starting the fresh run, clear documented
+  runtime database state, dispatcher run logs, local logs, and generated runtime
+  artifacts while preserving saved chain presets; for this project use
+  `python tools\run_gi_test.py --task "<task>"`, which performs the cleanup and
+  then runs the saved current dashboard chain/execution settings. Do not call
+  `tools\codex-dispatcher\dispatcher.py --chain` directly for `gi test`; that
+  bypasses the selected chain preset and execution mode and is only a
+  low-level diagnostic path.
+  Then read project-local instructions, README,
   manifests, runbooks, test configs, and source entry points needed to identify
   exact current commands, services, app set, ports, routes, payloads,
   environment variables, storage, auth, queues, workers, and health checks.

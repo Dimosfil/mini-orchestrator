@@ -334,7 +334,15 @@ class DispatchDecisionTests(unittest.TestCase):
                                     "llm": "gpt-5.5",
                                     "reasoning": "high",
                                     "accessMode": "read-only",
-                                    "workPackage": {"instructions": "Plan only."},
+                                    "workPackage": {
+                                        "instructions": "Plan only.",
+                                        "currentObjective": "Plan the work.",
+                                        "inputsArtifacts": "Task.",
+                                        "constraints": "Read only.",
+                                        "previousOutputs": "None.",
+                                        "allowedTools": "Inspect.",
+                                        "expectedOutput": "Plan.",
+                                    },
                                 },
                                 {
                                     "id": "executor-card",
@@ -344,7 +352,15 @@ class DispatchDecisionTests(unittest.TestCase):
                                     "llm": "gpt-5.3-codex-spark",
                                     "reasoning": "medium",
                                     "accessMode": "workspace-write",
-                                    "workPackage": {"instructions": "Execute with Spark."},
+                                    "workPackage": {
+                                        "instructions": "Execute with Spark.",
+                                        "currentObjective": "Implement the work.",
+                                        "inputsArtifacts": "Plan.",
+                                        "constraints": "Scoped edits.",
+                                        "previousOutputs": "Planner output.",
+                                        "allowedTools": "Edit and test.",
+                                        "expectedOutput": "Implementation summary.",
+                                    },
                                 },
                             ],
                             "connections": [
@@ -406,8 +422,60 @@ class DispatchDecisionTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(ValueError, "missing an explicit llm setting"):
+            with self.assertRaisesRegex(ValueError, "Agent model is required"):
                 dispatcher.workers_from_chain_preset_file(preset_path, temp_path)
+
+    def test_chain_preset_workers_follow_pm_control_graph_order(self) -> None:
+        def agent(agent_id: str, name: str, role: str) -> dict[str, object]:
+            return {
+                "id": agent_id,
+                "name": name,
+                "role": role,
+                "preset": role.lower(),
+                "llm": "gpt-5.5",
+                "reasoning": "medium",
+                "accessMode": "workspace-write",
+                "workPackage": {
+                    "instructions": f"Act as {role}.",
+                    "currentObjective": "Complete the assigned step.",
+                    "inputsArtifacts": "Task and previous outputs.",
+                    "constraints": "Stay in scope.",
+                    "previousOutputs": "Use prior outputs.",
+                    "allowedTools": "Use approved tools.",
+                    "expectedOutput": "Structured result.",
+                },
+            }
+
+        preset = {
+            "id": "pm-chain",
+            "name": "PM chain",
+            "updatedAt": "2026-06-24T00:00:00Z",
+            "flow": {
+                "agents": [
+                    agent("executor", "Executor", "Executor"),
+                    agent("reviewer", "Reviewer", "Reviewer"),
+                    agent("qa", "QA", "QA"),
+                    agent("pm", "PM", "PM"),
+                    agent("planner", "Planner", "Planner"),
+                ],
+                "connections": [
+                    {"fromAgentId": "executor", "toAgentId": "qa", "fromPort": "success"},
+                    {"fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure"},
+                    {"fromAgentId": "planner", "toAgentId": "pm", "fromPort": "success"},
+                    {"fromAgentId": "pm", "toAgentId": "executor", "fromPort": "failure"},
+                    {"fromAgentId": "qa", "toAgentId": "pm", "fromPort": "success"},
+                    {"fromAgentId": "pm", "toAgentId": "reviewer", "fromPort": "success"},
+                ],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preset_path = temp_path / "pm-chain.json"
+            preset_path.write_text(json.dumps(preset), encoding="utf-8")
+            workers = dispatcher.workers_from_chain_preset_file(preset_path, temp_path)
+
+        self.assertEqual([worker.source_agent_id for worker in workers], ["planner", "pm", "executor", "qa", "reviewer"])
 
 
 if __name__ == "__main__":

@@ -57,6 +57,37 @@ No other `.mini_orchestrator/<theme>/` folder should be created for normal
 runtime writes. If a new runtime theme is added, add a table or structured JSON
 document storage in `mini_orchestrator/runtime_store.py`.
 
+## Pre-Test Cleanup
+
+Before `gi test`, clear runtime database state, dispatcher JSONL run logs, local
+logs, and generated runtime artifacts so stale cards, process output,
+dispatcher task snapshots, generated demos, and Symphony gateway runs do not
+pollute the fresh verification result:
+
+```powershell
+python tools\clear_runtime_task_state.py
+```
+
+The full `gi test` command should use:
+
+```powershell
+python tools\run_gi_test.py --task "<release/full-system test task>"
+```
+
+That runner performs the cleanup and then launches the workflow through the
+saved dashboard `current_run_config`, including the selected chain preset,
+execution mode, and Symphony worker mode. Direct dispatcher CLI runs are
+diagnostic only and must not be treated as `gi test`.
+
+The cleanup preserves saved reusable chain presets in `agent_chain_presets`,
+current dashboard run config in `runtime_meta`, and the runtime schema metadata.
+It clears all other runtime tables, including builder drafts/cards/manifests,
+task/run tables, dispatcher snapshots, Symphony gateway runs, and imported
+runtime files. It also removes generated
+`tools/codex-dispatcher/runs/*.jsonl` Live Runs cards and all
+`.mini_orchestrator/` files/directories except `runtime.sqlite3` and SQLite side
+cars.
+
 ## Migration
 
 Migration command:

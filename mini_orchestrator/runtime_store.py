@@ -11,16 +11,39 @@ import sqlite3
 
 
 DB_RELATIVE_PATH = Path(".mini_orchestrator") / "runtime.sqlite3"
+TEMPORARY_TASK_STATE_TABLES = (
+    "runtime_files",
+    "agent_cards",
+    "worker_profiles",
+    "agent_flows",
+    "agent_flow_manifests",
+    "daemon_events",
+    "daemon_runs",
+    "symphony_runs",
+    "dispatcher_tasks",
+    "dispatcher_chain_presets",
+    "dispatcher_process_outputs",
+    "migration_runs",
+)
+PRESERVED_RUNTIME_TABLES = ("runtime_meta", "agent_chain_presets")
+RUNTIME_FILE_KEEP_NAMES = {
+    "runtime.sqlite3",
+    "runtime.sqlite3-shm",
+    "runtime.sqlite3-wal",
+}
 
 JSON_THEMES = {
     "agent_cards": ("agent_cards", "card_id"),
     "worker_profiles": ("worker_profiles", "snapshot_id"),
     "agent_flows": ("agent_flows", "flow_id"),
     "agent_flow_manifests": ("agent_flow_manifests", "manifest_id"),
+    "agent_chain_presets": ("agent_chain_presets", "preset_id"),
     "daemon_runs": ("daemon_runs", "run_id"),
     "symphony_runs": ("symphony_runs", "run_id"),
     "dispatcher_chain_presets": ("dispatcher_chain_presets", "run_id"),
 }
+
+CURRENT_RUN_CONFIG_META_KEY = "current_run_config"
 
 
 def db_path(root: Path) -> Path:
@@ -114,6 +137,15 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             source_path TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS agent_chain_presets (
+            preset_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT NOT NULL,
+            source_path TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS daemon_runs (
             run_id TEXT PRIMARY KEY,
             status TEXT NOT NULL,
@@ -186,6 +218,70 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+def set_runtime_meta(root: Path, key: str, value: str) -> None:
+    with connect(root) as conn:
+        conn.execute(
+            """
+            INSERT INTO runtime_meta(key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            (key, value, utc_now()),
+        )
+
+
+def get_runtime_meta(root: Path, key: str) -> str | None:
+    with connect(root) as conn:
+        row = conn.execute("SELECT value FROM runtime_meta WHERE key = ?", (key,)).fetchone()
+    return str(row["value"]) if row else None
+
+
+def set_current_run_config(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    config = {
+        "chainPresetId": str(payload.get("chainPresetId") or "").strip(),
+        "executionMode": _normalized_execution_mode(payload.get("executionMode")),
+        "symphonyWorkerMode": _normalized_symphony_worker_mode(payload.get("symphonyWorkerMode")),
+        "updatedAt": utc_now(),
+    }
+    if not config["chainPresetId"]:
+        raise ValueError("Current run config requires chainPresetId.")
+    set_runtime_meta(root, CURRENT_RUN_CONFIG_META_KEY, json.dumps(config, ensure_ascii=False, sort_keys=True))
+    return config
+
+
+def get_current_run_config(root: Path) -> dict[str, Any] | None:
+    raw = get_runtime_meta(root, CURRENT_RUN_CONFIG_META_KEY)
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, dict):
+        return None
+    chain_preset_id = str(value.get("chainPresetId") or "").strip()
+    if not chain_preset_id:
+        return None
+    return {
+        "chainPresetId": chain_preset_id,
+        "executionMode": _normalized_execution_mode(value.get("executionMode")),
+        "symphonyWorkerMode": _normalized_symphony_worker_mode(value.get("symphonyWorkerMode")),
+        "updatedAt": str(value.get("updatedAt") or ""),
+    }
+
+
+def _normalized_execution_mode(value: Any) -> str:
+    mode = str(value or "").strip().casefold()
+    return mode if mode in {"dispatcher", "symphony"} else "dispatcher"
+
+
+def _normalized_symphony_worker_mode(value: Any) -> str:
+    mode = str(value or "").strip().casefold()
+    return mode if mode in {"debug-new-worker", "optimal-reuse-idle"} else "debug-new-worker"
+
+
 def upsert_json_document(
     root: Path,
     theme: str,
@@ -246,6 +342,27 @@ def upsert_json_document(
                     payload_json,
                     str(payload.get("compiledAt") or ""),
                     now,
+                    source_path,
+                ),
+            )
+        elif theme == "agent_chain_presets":
+            conn.execute(
+                """
+                INSERT INTO agent_chain_presets(preset_id, name, payload_json, created_at, updated_at, source_path)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(preset_id) DO UPDATE SET
+                    name = excluded.name,
+                    payload_json = excluded.payload_json,
+                    created_at = COALESCE(NULLIF(agent_chain_presets.created_at, ''), excluded.created_at),
+                    updated_at = excluded.updated_at,
+                    source_path = excluded.source_path
+                """,
+                (
+                    key,
+                    str(payload.get("name") or ""),
+                    payload_json,
+                    str(payload.get("createdAt") or now),
+                    str(payload.get("updatedAt") or now),
                     source_path,
                 ),
             )
@@ -353,6 +470,19 @@ def list_json_documents(root: Path, theme: str) -> list[dict[str, Any]]:
 
 def json_document_exists(root: Path, theme: str, key: str) -> bool:
     return get_json_document(root, theme, key) is not None
+
+
+def delete_json_document(root: Path, theme: str, key: str) -> bool:
+    table_info = JSON_THEMES.get(theme)
+    if not table_info:
+        raise ValueError(f"Unsupported JSON runtime theme: {theme}")
+    table, key_column = table_info
+    with connect(root) as conn:
+        cursor = conn.execute(
+            f"DELETE FROM {table} WHERE {key_column} = ?",
+            (key,),
+        )
+        return cursor.rowcount > 0
 
 
 def insert_daemon_event(root: Path, run_id: str, event: dict[str, Any]) -> None:
@@ -534,6 +664,7 @@ def table_counts(root: Path) -> dict[str, int]:
         "worker_profiles",
         "agent_flows",
         "agent_flow_manifests",
+        "agent_chain_presets",
         "daemon_runs",
         "daemon_events",
         "symphony_runs",
@@ -543,3 +674,76 @@ def table_counts(root: Path) -> dict[str, int]:
     ]
     with connect(root) as conn:
         return {table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]) for table in tables}
+
+
+def clear_temporary_task_state(root: Path) -> dict[str, int]:
+    """Clear runtime state while preserving saved chain presets."""
+    deleted: dict[str, int] = {}
+    with connect(root) as conn:
+        for table in TEMPORARY_TASK_STATE_TABLES:
+            before = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            conn.execute(f"DELETE FROM {table}")
+            deleted[table] = before
+    return deleted
+
+
+def clear_runtime_files(root: Path) -> dict[str, int]:
+    runtime_dir = db_path(root).parent
+    root_resolved = root.resolve()
+    runtime_dir_resolved = runtime_dir.resolve()
+    try:
+        runtime_dir_resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise RuntimeError(f"Runtime directory is outside project root: {runtime_dir_resolved}") from exc
+    if not runtime_dir.exists():
+        return {"files": 0, "directories": 0}
+
+    deleted_files = 0
+    deleted_dirs = 0
+    for path in sorted(runtime_dir.iterdir(), key=lambda item: len(item.parts), reverse=True):
+        if path.name in RUNTIME_FILE_KEEP_NAMES:
+            continue
+        path_resolved = path.resolve()
+        path_resolved.relative_to(runtime_dir_resolved)
+        if path.is_dir():
+            _remove_directory_tree(path, runtime_dir_resolved)
+            deleted_dirs += 1
+        elif path.is_file():
+            path.unlink()
+            deleted_files += 1
+    return {"files": deleted_files, "directories": deleted_dirs}
+
+
+def _remove_directory_tree(path: Path, allowed_root: Path) -> None:
+    path_resolved = path.resolve()
+    path_resolved.relative_to(allowed_root)
+    if not path.is_dir():
+        raise RuntimeError(f"Refusing to remove non-directory as directory: {path_resolved}")
+    for child in sorted(path.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        child.resolve().relative_to(path_resolved)
+        if child.is_dir():
+            child.rmdir()
+        else:
+            child.unlink()
+    path.rmdir()
+
+
+def clear_dispatcher_run_logs(root: Path) -> dict[str, int]:
+    runs_dir = root / "tools" / "codex-dispatcher" / "runs"
+    root_resolved = root.resolve()
+    runs_dir_resolved = runs_dir.resolve()
+    try:
+        runs_dir_resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise RuntimeError(f"Dispatcher runs directory is outside project root: {runs_dir_resolved}") from exc
+    if not runs_dir.exists():
+        return {"jsonl_files": 0}
+
+    deleted = 0
+    for path in runs_dir.glob("*.jsonl"):
+        if not path.is_file():
+            continue
+        path.resolve().relative_to(runs_dir_resolved)
+        path.unlink()
+        deleted += 1
+    return {"jsonl_files": deleted}

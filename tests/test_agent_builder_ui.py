@@ -291,6 +291,8 @@ def test_dashboard_can_route_approved_workflow_to_symphony_gateway() -> None:
     assert 'submitToSymphony: execution === "symphony"' in html
     assert 'orchestrationMode: execution === "symphony" ? "mini-owned-chain" : undefined' in html
     assert "symphonyWorkerMode: workerMode" in html
+    assert 'postJson("/api/current-run-config"' in html
+    assert "persistRunChainSelection();" in html
 
 
 def test_dashboard_kanban_refresh_preserves_column_scroll_positions() -> None:

@@ -122,6 +122,17 @@ The approved workflow runs the selected release dispatcher chain preset through
 Codex app-server. Local demo project generation is no longer part of the active
 dispatcher surface.
 
+For a real `gi test`, do not call the dispatcher CLI directly. Use the
+project-local GI runner so the saved dashboard settings are honored:
+
+```powershell
+python tools\run_gi_test.py --task "<release/full-system test task>"
+```
+
+The runner preserves saved presets and current run settings, clears temporary
+runtime state, reads the selected chain/execution mode from Mini Orchestrator,
+and then calls either `/api/dispatcher/run` or `/api/symphony/runs`.
+
 ## Core Orchestrator
 
 The **Core run** button sends the textarea content to the package-native
@@ -148,38 +159,36 @@ summary, selected flow, agent order, model/reasoning/access settings, workspace
 policy, and first prompt summary, then explicitly checks approval before the UI
 creates an immutable manifest. Compiling the manifest does not launch workers.
 
-The first daemon runner slice is an in-process dry-run path for compiled
-manifests. `POST /api/daemon/run` creates a local run state and replayable JSONL
-event log under `.mini_orchestrator/daemon-runs/`; it can run one selected
-profile or a linear manifest graph such as Planner -> Executor -> Reviewer. It
-does not bind a new port or launch real Codex workers. A successful dry-run
-lands in `review`, not final `done`, until the user accepts it.
-
-Live Runs renders per-node state from daemon `nodeStates` and `flowArtifacts`:
-each node shows status, last event, output summary, artifact id, and reviewer
-verdict when present.
+Compiled manifests are validation artifacts until an approved Dispatcher or
+Symphony workflow is started from the main dashboard. Live Runs renders the
+approved workflow state: each task card shows status, last event, output
+summary, selected chain, and reviewer verdict when present.
 
 The WorkNest lifecycle bridge resolves the configured task manager through
 config-service at use time, reads the WorkNest contract before state-changing
 calls, and only exposes the documented external-agent operations:
 `next-task` claim and terminal `task-completed` reporting.
 
-The **Настройка агентов** page stores visual agent cards in browser
-`localStorage`. Each card includes a mini chat for checking how that card talks
-through its selected `llm`, `speed`, and `reasoning` settings.
+The **Настройка агентов** page keeps browser `localStorage` as a draft/cache
+layer for the currently open canvas. Important project-owned data is persisted
+through the backend SQLite runtime store.
 
-Agent chains are browser-local presets. The builder includes a default
+Agent chains are project-owned presets stored in
+`.mini_orchestrator/runtime.sqlite3` and exposed through
+`/api/agent-chain-presets`. The builder includes a default
 `planner -> executor -> reviewer` example chain in the chain dropdown, and
 saving the current canvas asks for a chain name so the visible cards and
-connections can be reused later as a named preset. The default chain is not a
-fixed workflow; saved presets may contain any approved number of configured
-agents and stages.
+connections can be reused later as a named preset. Browser-local presets are
+imported into the backend on page load, then `localStorage` is only a cache and
+migration fallback. The default chain is not a fixed workflow; saved presets may
+contain any approved number of configured agents and stages.
 
 Runtime state is stored in SQLite at `.mini_orchestrator/runtime.sqlite3`.
 `.mini_orchestrator/test-runs/` remains file-based for generated runnable
 artifacts. Other runtime themes such as saved flows, manifests, dispatcher
-tasks, process output, agent cards, worker profiles, and local daemon state
-belong in the SQLite store. Import legacy runtime files with:
+tasks, process output, agent cards, agent chain presets, worker profiles, and
+Symphony gateway state belong in the SQLite store. Import legacy runtime files
+with:
 
 ```powershell
 python tools\migrate_runtime_to_sqlite.py
@@ -199,9 +208,9 @@ progress.
 
 Live Runs has explicit source modes: **Combined**, **Dispatcher**, and
 **Symphony**. Combined is the default and shows dispatcher/local run state plus
-read-only Symphony daemon state. Dispatcher mode shows only local daemon dry-run
-state and dispatcher JSONL replay. Symphony mode shows only the read-only
-Symphony daemon bridge. By default Mini Orchestrator resolves the `symphony`
+read-only Symphony daemon state. Dispatcher mode shows approved dispatcher JSONL
+workflow replay. Symphony mode shows the read-only Symphony daemon bridge and
+Mini-owned Symphony gateway runs. By default Mini Orchestrator resolves the `symphony`
 service through GI config-service and reads its `endpoints.availability` /
 `/api/v1/state` endpoint. Override the service id with
 `MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID`, or set
@@ -249,9 +258,8 @@ the task through Live Runs.
 
 Completed agent runs appear in **Human Review** first. The user chooses
 **ToDone** to accept the result into final Done, or **Доработки** to mark that
-the task needs another pass. Local compiled-flow daemon runs record this choice
-durably through `/api/daemon/review`; dispatcher JSONL runs still keep the
-dashboard-local review bridge until a task-manager state-transition endpoint
+the task needs another pass. Dispatcher JSONL and Symphony gateway runs keep
+the dashboard-local review bridge until a task-manager state-transition endpoint
 exists.
 
 WorkNest remains the task source and terminal completion sink. The local
@@ -288,8 +296,10 @@ reserved for unrecoverable blocked results.
 - `PUT /api/agent-flows/{id}` - replace a saved backend flow and increment its version
 - `POST /api/agent-flows/{id}/validate` - validate graph/runtime settings and return field-path errors
 - `POST /api/agent-flows/{id}/compile` - compile a valid approved flow into an immutable run manifest
-- `POST /api/daemon/run` - create a single-card daemon dry-run from an approved manifest
-- `POST /api/daemon/review` - record a local daemon Human Review decision (`done` or `rework`)
+- `GET /api/agent-chain-presets` - list project-owned chain presets
+- `POST /api/agent-chain-presets/import` - import browser-local preset arrays into SQLite
+- `PUT /api/agent-chain-presets/{id}` - create or replace one project-owned chain preset
+- `DELETE /api/agent-chain-presets/{id}` - remove one non-default chain preset
 - `GET /api/daemon/runs?source=combined|dispatcher|symphony` - normalized read-only Live Runs state
 - `POST /api/symphony/runs` - validates approved Symphony run intake, can run a Mini-owned sequential handoff chain one agent at a time, submits to documented Symphony intake, or records a blocked gateway run
 - `POST /api/symphony/refresh` - config-service-resolved Symphony observability refresh
@@ -320,6 +330,6 @@ Approved run request:
 ```powershell
 python -m compileall mini_orchestrator tools\codex-dispatcher
 python -m pytest tests
-python tools\codex-dispatcher\dispatcher.py --task "orchestrator plan Smoke sprint7" --chain
+python tools\run_gi_test.py --task "orchestrator plan Smoke sprint7"
 python -m mini_orchestrator "search AGENTS" --no-log
 ```

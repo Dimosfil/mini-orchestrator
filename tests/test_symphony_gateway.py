@@ -4,20 +4,49 @@ from mini_orchestrator.symphony_daemon import build_symphony_handoff_payload
 from mini_orchestrator.symphony_gateway import SymphonyDaemonError, SymphonyGateway, SymphonySubmitResult
 
 
+def executable_agent(agent_id: str, name: str, role: str) -> dict:
+    return {
+        "id": agent_id,
+        "name": name,
+        "role": role,
+        "preset": role.lower(),
+        "llm": "gpt-5.5",
+        "reasoning": "medium",
+        "accessMode": "workspace-write",
+        "workPackage": {
+            "instructions": f"Act as {role}.",
+            "currentObjective": "Complete this stage.",
+            "inputsArtifacts": "Task and previous outputs.",
+            "constraints": "Stay in scope.",
+            "previousOutputs": "Use prior outputs.",
+            "allowedTools": "Use approved tools.",
+            "expectedOutput": "Stage result.",
+        },
+    }
+
+
+def two_agent_chain() -> dict:
+    return {
+        "id": "chain-1",
+        "updatedAt": "2026-06-24T00:00:00Z",
+        "flow": {
+            "agents": [
+                executable_agent("planner", "Planner", "Planner"),
+                executable_agent("executor", "Executor", "Executor"),
+            ],
+            "connections": [
+                {"id": "planner-to-executor", "fromAgentId": "planner", "toAgentId": "executor", "fromPort": "success"}
+            ],
+        },
+    }
+
+
 def test_handoff_payload_contains_one_agent_and_previous_outputs():
     payload = {
         "approved": True,
         "project": "mini-orchestrator",
         "task": "Build CRM",
-        "chainPreset": {
-            "id": "chain-1",
-            "flow": {
-                "agents": [
-                    {"id": "planner", "name": "Planner", "role": "planner"},
-                    {"id": "executor", "name": "Executor", "role": "executor"},
-                ]
-            },
-        },
+        "chainPreset": two_agent_chain(),
     }
 
     handoff = build_symphony_handoff_payload(
@@ -42,10 +71,12 @@ def test_handoff_payload_can_allow_idle_symphony_worker_reuse():
         "task": "Build CRM",
         "symphonyWorkerMode": "optimal-reuse-idle",
         "chainPreset": {
+            "updatedAt": "2026-06-24T00:00:00Z",
             "flow": {
                 "agents": [
-                    {"id": "planner", "name": "Planner", "role": "planner"},
-                ]
+                    executable_agent("planner", "Planner", "Planner"),
+                ],
+                "connections": [],
             },
         },
     }
@@ -80,18 +111,11 @@ def test_gateway_runs_mini_owned_chain_as_sequential_handoffs():
     )
 
     result = gateway.run_mini_owned_chain(
-        {
-            "approved": True,
-            "task": "Build CRM",
-            "chainPreset": {
-                "flow": {
-                    "agents": [
-                        {"id": "planner", "name": "Planner", "role": "planner"},
-                        {"id": "executor", "name": "Executor", "role": "executor"},
-                    ]
-                }
+            {
+                "approved": True,
+                "task": "Build CRM",
+                "chainPreset": two_agent_chain(),
             },
-        },
         state_url="http://symphony.test/api/v1/state",
         timeout_per_step_seconds=30,
         poll_interval_seconds=0,

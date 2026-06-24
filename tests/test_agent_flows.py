@@ -9,6 +9,7 @@ from mini_orchestrator import ui
 from mini_orchestrator.agent_flows import (
     compile_saved_agent_flow,
     create_agent_flow,
+    execution_order_for_flow,
     list_agent_flows,
     read_agent_flow,
     update_agent_flow,
@@ -183,6 +184,34 @@ def test_agent_flow_validation_accepts_pm_checklist_control_loop(tmp_path) -> No
     assert manifest["graph"]["controlPolicy"]["mode"] == "pm-checklist"
 
 
+def test_agent_flow_validation_accepts_pm_failure_route_to_executor(tmp_path) -> None:
+    flow = sample_flow("PM Failure Route Flow")
+    flow["agents"] = [
+        {**sample_agent("executor", "Executor", "Executor"), "x": 490, "y": 20},
+        {**sample_agent("reviewer", "Reviewer", "Reviewer"), "x": 970, "y": 20},
+        {**sample_agent("qa", "QA", "QA"), "x": 730, "y": 20},
+        {**sample_agent("pm", "PM", "PM"), "x": 250, "y": 20},
+        {**sample_agent("planner", "Planner", "Planner"), "x": 10, "y": 20},
+    ]
+    flow["connections"] = [
+        {"id": "executor-to-qa", "fromAgentId": "executor", "toAgentId": "qa", "fromPort": "success"},
+        {"id": "qa-to-executor", "fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure"},
+        {"id": "planner-to-pm", "fromAgentId": "planner", "toAgentId": "pm", "fromPort": "success"},
+        {"id": "pm-to-executor", "fromAgentId": "pm", "toAgentId": "executor", "fromPort": "failure"},
+        {"id": "qa-to-pm", "fromAgentId": "qa", "toAgentId": "pm", "fromPort": "success"},
+        {"id": "pm-to-reviewer", "fromAgentId": "pm", "toAgentId": "reviewer", "fromPort": "success"},
+    ]
+    created = create_agent_flow({"flow": flow}, tmp_path)
+
+    validation = validate_saved_agent_flow(created["id"], tmp_path)
+    order = execution_order_for_flow(read_agent_flow(created["id"], tmp_path))
+
+    assert validation["valid"] is True
+    assert validation["errors"] == []
+    assert validation["startNodeCandidates"] == [{"agentId": "planner", "name": "Planner"}]
+    assert order == ["planner", "pm", "executor", "qa", "reviewer"]
+
+
 def test_agent_flow_validation_rejects_cycles_with_paths(tmp_path) -> None:
     flow = sample_flow("Cyclic Flow")
     flow["connections"].append(
@@ -293,6 +322,51 @@ def test_agent_flow_http_api_crud(tmp_path, monkeypatch) -> None:
         assert manifest["flowId"] == flow_id
         assert manifest["runContext"]["taskSummary"] == "HTTP task"
         assert len(manifest["profileSnapshots"]) == 3
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_agent_chain_presets_http_api_crud(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(ui, "ROOT", tmp_path)
+
+    handler = ui._OrchestratorUIHandler
+    handler.orchestrator = None
+    handler.dispatcher_service = None
+    handler.web_root = tmp_path
+    handler.service_id = "mini-orchestrator"
+    server = ui._ThreadedHttpServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    preset = {
+        "id": "chain-custom",
+        "name": "Custom Chain",
+        "flow": {**sample_flow("Custom Chain"), "chainPresetId": "chain-custom"},
+    }
+
+    try:
+        imported = _json_request(f"{base_url}/api/agent-chain-presets/import", "POST", {"presets": [preset]})
+        assert imported["imported"][0]["id"] == "chain-custom"
+
+        listing = _json_request(f"{base_url}/api/agent-chain-presets")["presets"]
+        assert listing[0]["id"] == "default-planner-executor-reviewer"
+        assert any(item["id"] == "chain-custom" for item in listing)
+
+        updated = _json_request(
+            f"{base_url}/api/agent-chain-presets/chain-custom",
+            "PUT",
+            {**preset, "name": "Custom Chain Updated"},
+        )["preset"]
+        assert updated["name"] == "Custom Chain Updated"
+        assert updated["flow"]["chainPresetId"] == "chain-custom"
+
+        deleted = _json_request(f"{base_url}/api/agent-chain-presets/chain-custom", "DELETE")
+        assert deleted == {"deleted": True, "id": "chain-custom"}
+
+        listing = _json_request(f"{base_url}/api/agent-chain-presets")["presets"]
+        assert not any(item["id"] == "chain-custom" for item in listing)
     finally:
         server.shutdown()
         server.server_close()

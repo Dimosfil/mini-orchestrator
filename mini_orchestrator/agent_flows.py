@@ -105,6 +105,34 @@ def validate_agent_flow(
     return _validate_graph(flow, selected_start_agent_id=selected_start_agent_id)
 
 
+def execution_order_for_flow(flow: dict[str, Any], *, selected_start_agent_id: str | None = None) -> list[str]:
+    validation = validate_agent_flow(flow, selected_start_agent_id=selected_start_agent_id)
+    if not validation["valid"]:
+        messages = "; ".join(str(error.get("message") or error.get("code")) for error in validation["errors"])
+        raise AgentFlowError(f"Flow must validate before execution. {messages}")
+    nodes = [
+        {
+            "agentId": str(agent.get("id") or ""),
+            "name": str(agent.get("name") or ""),
+            "role": str(agent.get("role") or ""),
+        }
+        for agent in flow.get("agents", [])
+        if isinstance(agent, dict)
+    ]
+    edges = [
+        {
+            "id": str(connection.get("id") or ""),
+            "fromAgentId": str(connection.get("fromAgentId") or ""),
+            "toAgentId": str(connection.get("toAgentId") or ""),
+            "fromPort": str(connection.get("fromPort") or "success"),
+            "toPort": "input",
+        }
+        for connection in flow.get("connections", [])
+        if isinstance(connection, dict)
+    ]
+    return _execution_order(nodes, edges, str(validation.get("selectedStartAgentId") or ""))
+
+
 def compile_saved_agent_flow(flow_id: str, root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     approval = payload.get("approval") if isinstance(payload.get("approval"), dict) else {}
     if approval.get("approved") is not True:
@@ -330,8 +358,7 @@ def _validate_graph(
                         "maxIterations": _loop_max_iterations(flow),
                     }
                 )
-            if from_port == "success":
-                incoming_counts[to_agent] += 1
+            incoming_counts[to_agent] += 1
 
     start_node_candidates = [
         {"agentId": agent_id, "name": _agent_name(agents, agent_id)}
@@ -376,7 +403,7 @@ def _validate_graph(
         "selectedStartAgentId": selected or (start_node_candidates[0]["agentId"] if len(start_node_candidates) == 1 else ""),
         "loopPolicy": loop_policy,
         "controlPolicy": control_policy,
-        "checkedAt": flow["updatedAt"],
+        "checkedAt": str(flow.get("updatedAt") or _utc_now()),
     }
 
 
@@ -571,10 +598,9 @@ def _execution_order(nodes: list[dict[str, str]], edges: list[dict[str, str]], s
 def _success_reachable_order(nodes: list[dict[str, str]], edges: list[dict[str, str]], start_agent_id: str) -> list[str]:
     node_ids = [node["agentId"] for node in nodes]
     node_set = set(node_ids)
+    roles = {node["agentId"]: str(node.get("role") or "") for node in nodes}
     outgoing = {node_id: [] for node_id in node_ids}
-    for edge in edges:
-        if edge.get("fromPort") != "success":
-            continue
+    for edge in _ordered_edges(edges, roles):
         source = edge["fromAgentId"]
         target = edge["toAgentId"]
         if source in outgoing and target in node_set:
@@ -591,11 +617,28 @@ def _success_reachable_order(nodes: list[dict[str, str]], edges: list[dict[str, 
             visit(target)
 
     visit(start_agent_id)
-    for node_id in _topological_order(nodes, edges):
+    for node_id in _graph_order(nodes, edges):
         if node_id not in visited:
             order.append(node_id)
             visited.add(node_id)
     return order
+
+
+def _ordered_edges(edges: list[dict[str, str]], roles: dict[str, str]) -> list[dict[str, str]]:
+    return [edge for _index, edge in sorted(enumerate(edges), key=lambda item: (_edge_priority(item[1], roles), item[0]))]
+
+
+def _edge_priority(edge: dict[str, str], roles: dict[str, str]) -> int:
+    source_role = str(roles.get(edge.get("fromAgentId") or "") or "").casefold()
+    target_role = str(roles.get(edge.get("toAgentId") or "") or "").casefold()
+    from_port = str(edge.get("fromPort") or "success")
+    if source_role == "pm" and target_role == "reviewer":
+        return 30
+    if source_role == "pm":
+        return 5
+    if from_port == "success":
+        return 10
+    return 20
 
 
 def _topological_order(nodes: list[dict[str, str]], edges: list[dict[str, str]]) -> list[str]:
@@ -622,6 +665,38 @@ def _topological_order(nodes: list[dict[str, str]], edges: list[dict[str, str]])
     for node_id in node_ids:
         if node_id not in order:
             order.append(node_id)
+    return order
+
+
+def _graph_order(nodes: list[dict[str, str]], edges: list[dict[str, str]]) -> list[str]:
+    node_ids = [node["agentId"] for node in nodes]
+    node_set = set(node_ids)
+    incoming = {node_id: 0 for node_id in node_ids}
+    outgoing = {node_id: [] for node_id in node_ids}
+    roles = {node["agentId"]: str(node.get("role") or "") for node in nodes}
+    for edge in _ordered_edges(edges, roles):
+        source = edge["fromAgentId"]
+        target = edge["toAgentId"]
+        if source in outgoing and target in incoming:
+            outgoing[source].append(target)
+            incoming[target] += 1
+    ready = [node_id for node_id in node_ids if incoming[node_id] == 0]
+    order: list[str] = []
+    visiting: set[str] = set()
+
+    def visit(node_id: str) -> None:
+        if node_id in order or node_id in visiting or node_id not in node_set:
+            return
+        visiting.add(node_id)
+        order.append(node_id)
+        for target in outgoing.get(node_id, []):
+            visit(target)
+        visiting.remove(node_id)
+
+    for node_id in ready:
+        visit(node_id)
+    for node_id in node_ids:
+        visit(node_id)
     return order
 
 

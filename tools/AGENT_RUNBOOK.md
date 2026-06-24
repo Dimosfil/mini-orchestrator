@@ -30,6 +30,20 @@ complete.
 
 ## Test
 
+Before a fresh `gi test`, run the project-local GI test runner. It clears
+runtime database state, dispatcher JSONL run cards, logs, and generated runtime
+artifacts while preserving saved chain presets, then runs the saved dashboard
+chain/execution settings:
+
+```powershell
+python tools\run_gi_test.py --task "<release/full-system test task>"
+```
+
+Use `python tools\clear_runtime_task_state.py` only for cleanup diagnostics. Do
+not use direct `tools\codex-dispatcher\dispatcher.py --chain` as a `gi test`
+result because it bypasses the selected dashboard chain preset and execution
+mode.
+
 ```powershell
 python -m compileall mini_orchestrator tools\codex-dispatcher
 python -m pytest tests

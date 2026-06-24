@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
@@ -40,6 +41,50 @@ class FakeResponse:
 
     def read(self):
         return json.dumps(self.payload).encode("utf-8")
+
+
+def executable_agent(agent_id: str, name: str, role: str, *, model: str = "gpt-5.5") -> dict:
+    return {
+        "id": agent_id,
+        "name": name,
+        "role": role,
+        "preset": role.lower(),
+        "llm": model,
+        "reasoning": "medium",
+        "accessMode": "workspace-write",
+        "workPackage": {
+            "instructions": f"Act as {role}.",
+            "currentObjective": "Complete this stage.",
+            "inputsArtifacts": "Task and previous outputs.",
+            "constraints": "Stay in scope.",
+            "previousOutputs": "Use prior outputs.",
+            "allowedTools": "Use approved tools.",
+            "expectedOutput": "Stage result.",
+        },
+    }
+
+
+def executable_chain(*agents: dict) -> dict:
+    selected_agents = list(agents) or [
+        executable_agent("planner", "Planner", "Planner"),
+        executable_agent("executor", "Executor", "Executor", model="gpt-5.3-codex-spark"),
+        executable_agent("reviewer", "Reviewer", "Reviewer"),
+    ]
+    connections = [
+        {
+            "id": f"{selected_agents[index]['id']}-to-{selected_agents[index + 1]['id']}",
+            "fromAgentId": selected_agents[index]["id"],
+            "toAgentId": selected_agents[index + 1]["id"],
+            "fromPort": "success",
+        }
+        for index in range(len(selected_agents) - 1)
+    ]
+    return {
+        "id": "chain-1",
+        "name": "Executable chain",
+        "updatedAt": "2026-06-24T00:00:00Z",
+        "flow": {"agents": selected_agents, "connections": connections},
+    }
 
 
 def test_symphony_state_maps_runtime_entries_to_live_runs():
@@ -298,17 +343,7 @@ def test_symphony_gateway_run_preserves_chain_and_is_listed(tmp_path):
             "approved": True,
             "project": "mini-orchestrator",
             "task": {"taskId": "task-1", "sprintId": "sprint-1", "title": "Bridge task"},
-            "chainPreset": {
-                "id": "chain-1",
-                "name": "Planner -> Executor -> Reviewer",
-                "flow": {
-                    "agents": [
-                        {"id": "planner", "name": "Planner", "role": "planner"},
-                        {"id": "executor", "name": "Executor", "role": "executor"},
-                        {"id": "reviewer", "name": "Reviewer", "role": "reviewer"},
-                    ]
-                },
-            },
+            "chainPreset": executable_chain(),
         },
         {"stateUrl": "http://daemon/state", "summary": {"total": 0}},
     )
@@ -331,34 +366,13 @@ def test_symphony_intake_payload_expands_preset_agents():
             "approved": True,
             "project": "mini-orchestrator",
             "task": "Build the requested release web app",
-            "chainPreset": {
-                "id": "chain-eight",
-                "name": "Eight agent preset",
-                "flow": {
-                    "agents": [
-                        {
-                            "id": "planner",
-                            "name": "Planner",
-                            "role": "planner",
-                            "preset": "planner",
-                            "llm": "gpt-5.5",
-                            "reasoning": "high",
-                            "accessMode": "read-only",
-                            "workPackage": {"currentObjective": "Plan the release."},
-                        },
-                        {
-                            "id": "executor",
-                            "name": "Executor",
-                            "role": "executor",
-                            "preset": "executor",
-                            "llm": "gpt-5.3-codex-spark",
-                            "reasoning": "medium",
-                            "accessMode": "danger-full-access",
-                            "workPackage": {"currentObjective": "Build the app."},
-                        },
-                    ],
+            "chainPreset": executable_chain(
+                {**executable_agent("planner", "Planner", "Planner"), "reasoning": "high", "accessMode": "read-only"},
+                {
+                    **executable_agent("executor", "Executor", "Executor", model="gpt-5.3-codex-spark"),
+                    "accessMode": "danger-full-access",
                 },
-            },
+            ),
         }
     )
 
@@ -408,16 +422,10 @@ def test_symphony_gateway_run_submits_when_intake_contract_exists(tmp_path, monk
             "approved": True,
             "project": "mini-orchestrator",
             "task": "Bridge task",
-            "chainPreset": {
-                "id": "chain-1",
-                "name": "Two agents",
-                "flow": {
-                    "agents": [
-                        {"id": "planner", "name": "Planner", "llm": "gpt-5.5"},
-                        {"id": "executor", "name": "Executor", "llm": "gpt-5.3-codex-spark"},
-                    ]
-                },
-            },
+            "chainPreset": executable_chain(
+                executable_agent("planner", "Planner", "Planner"),
+                executable_agent("executor", "Executor", "Executor", model="gpt-5.3-codex-spark"),
+            ),
         },
         {"stateUrl": "http://daemon/state", "summary": {"total": 0}},
         submit=True,
@@ -531,15 +539,12 @@ def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_p
             method="POST",
             headers={"content-type": "application/json; charset=utf-8"},
         )
-        with urllib.request.urlopen(request, timeout=5) as response:
-            body = json.loads(response.read().decode("utf-8"))
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request, timeout=5)
 
-        assert response.status == 202
-        assert body["status"] == "blocked"
-        assert body["mode"] == "symphony-gateway"
-        assert body["lastError"]
-        assert body["task"]["taskId"] == "task-1"
-        assert body["symphony"]["intakePayload"]["schemaVersion"] == "mini-orchestrator.symphony-intake.v1"
+        assert exc_info.value.code == 400
+        body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert "chainPreset" in body["error"]
     finally:
         server.shutdown()
         server.server_close()
@@ -688,14 +693,10 @@ def test_symphony_run_http_endpoint_can_run_mini_owned_chain(tmp_path, monkeypat
             "approved": True,
             "task": "Bridge task",
             "waitForCompletion": True,
-            "chainPreset": {
-                "flow": {
-                    "agents": [
-                        {"id": "planner", "name": "Planner", "role": "planner"},
-                        {"id": "executor", "name": "Executor", "role": "executor"},
-                    ]
-                }
-            },
+            "chainPreset": executable_chain(
+                executable_agent("planner", "Planner", "Planner"),
+                executable_agent("executor", "Executor", "Executor"),
+            ),
         }
         request = urllib.request.Request(
             f"{base_url}/api/symphony/runs",
