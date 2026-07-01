@@ -56,6 +56,35 @@ def test_clear_temporary_task_state_preserves_presets_and_builder_data(tmp_path)
     runtime_store.store_dispatcher_task(tmp_path, "dispatcher-1", "test task")
     runtime_store.store_dispatcher_chain_preset(tmp_path, "dispatcher-1", {"id": "selected-chain"})
     runtime_store.store_dispatcher_process_output(tmp_path, "dispatcher-1", "stdout", "output")
+    runtime_store.upsert_json_document(
+        tmp_path,
+        "eval_suites",
+        "suite-1",
+        {"id": "suite-1", "name": "Suite", "cases": [{"id": "case-1", "checks": [{"type": "file_exists", "path": "x"}]}]},
+    )
+    runtime_store.upsert_json_document(
+        tmp_path,
+        "eval_runs",
+        "eval-1",
+        {"runId": "eval-1", "suiteId": "suite-1", "caseId": "case-1", "status": "failed", "createdAt": "now", "updatedAt": "now"},
+    )
+    runtime_store.replace_eval_results(
+        tmp_path,
+        "eval-1",
+        [{"checkId": "check-1", "type": "file_exists", "status": "failed"}],
+    )
+    runtime_store.upsert_json_document(
+        tmp_path,
+        "eval_artifacts",
+        "artifact-1",
+        {"artifactId": "artifact-1", "runId": "eval-1", "path": "artifact", "createdAt": "now", "updatedAt": "now"},
+    )
+    runtime_store.upsert_json_document(
+        tmp_path,
+        "eval_reports",
+        "eval-1",
+        {"reportId": "eval-1", "runId": "eval-1", "status": "failed", "createdAt": "now", "updatedAt": "now"},
+    )
 
     deleted = runtime_store.clear_temporary_task_state(tmp_path)
     counts = runtime_store.table_counts(tmp_path)
@@ -67,6 +96,10 @@ def test_clear_temporary_task_state_preserves_presets_and_builder_data(tmp_path)
         "dispatcher_tasks": 1,
         "dispatcher_chain_presets": 1,
         "dispatcher_process_outputs": 1,
+        "eval_runs": 1,
+        "eval_results": 1,
+        "eval_artifacts": 1,
+        "eval_reports": 1,
         "migration_runs": 0,
         "runtime_files": 0,
         "agent_cards": 1,
@@ -83,6 +116,11 @@ def test_clear_temporary_task_state_preserves_presets_and_builder_data(tmp_path)
     assert counts["dispatcher_tasks"] == 0
     assert counts["dispatcher_chain_presets"] == 0
     assert counts["dispatcher_process_outputs"] == 0
+    assert counts["eval_suites"] == 1
+    assert counts["eval_runs"] == 0
+    assert counts["eval_results"] == 0
+    assert counts["eval_artifacts"] == 0
+    assert counts["eval_reports"] == 0
 
 
 def test_clear_dispatcher_run_logs_removes_only_jsonl_logs(tmp_path) -> None:

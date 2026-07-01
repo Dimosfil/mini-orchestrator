@@ -4,6 +4,7 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -18,8 +19,11 @@ from mini_orchestrator.symphony_daemon import (
     build_symphony_live_runs,
     create_symphony_gateway_run,
     configured_state_url,
+    ensure_artifact_contract,
     fetch_symphony_state,
     fetch_symphony_issue,
+    inspect_artifact_contract,
+    materialize_artifact_from_issues,
     refresh_symphony_state,
 )
 from mini_orchestrator.ui import build_live_runs_payload, build_symphony_run_blocker
@@ -382,6 +386,145 @@ def test_symphony_intake_payload_expands_preset_agents():
     assert payload["agentTasks"][0]["codex"]["model"] == "gpt-5.5"
     assert payload["agentTasks"][1]["codex"]["accessMode"] == "danger-full-access"
     assert payload["agentTasks"][1]["task"]["global"]["title"] == "Build the requested release web app"
+    assert "Do not use Linear" in payload["agentTasks"][1]["workPackage"]["constraints"]
+    assert "MCP authorization flows" in payload["agentTasks"][1]["task"]["constraints"]
+
+
+def test_artifact_contract_reserves_versioned_project_folder(tmp_path):
+    payload = ensure_artifact_contract(
+        {
+            "approved": True,
+            "task": "CRM стоматология",
+            "chainPreset": executable_chain(),
+        },
+        tmp_path,
+        reserve=True,
+    )
+
+    assert payload["artifactContract"]["slug"] == "dental-crm"
+    assert payload["artifactContract"]["version"] == "v001"
+    assert payload["artifactContract"]["relativePath"] == ".mini_orchestrator/test-runs/dental-crm/v001"
+    assert (tmp_path / ".mini_orchestrator" / "test-runs" / "dental-crm" / "v001" / ".artifact-contract.json").exists()
+    assert inspect_artifact_contract(tmp_path, payload["artifactContract"])["status"] == "empty"
+
+    second = ensure_artifact_contract(
+        {
+            "approved": True,
+            "task": "CRM стоматология",
+            "chainPreset": executable_chain(),
+        },
+        tmp_path,
+    )
+
+    assert second["artifactContract"]["version"] == "v002"
+
+
+def test_artifact_contract_is_injected_into_agent_task(tmp_path):
+    payload = ensure_artifact_contract(
+        {
+            "approved": True,
+            "task": "CRM стоматология",
+            "chainPreset": executable_chain(
+                executable_agent("planner", "Planner", "Planner"),
+                executable_agent("executor", "Executor", "Executor"),
+            ),
+        },
+        tmp_path,
+    )
+
+    intake = build_symphony_intake_payload(payload)
+    executor = intake["agentTasks"][1]
+
+    assert intake["artifactContract"]["relativePath"] == ".mini_orchestrator/test-runs/dental-crm/v001"
+    assert executor["task"]["artifactContract"]["slug"] == "dental-crm"
+    assert ".mini_orchestrator/test-runs/dental-crm/v001" in executor["task"]["constraints"]
+    assert "artifactPath=.mini_orchestrator/test-runs/dental-crm/v001" in executor["task"]["expectedOutput"]
+
+
+def test_materialize_artifact_from_executor_workspace(tmp_path):
+    payload = ensure_artifact_contract(
+        {
+            "approved": True,
+            "task": "CRM стоматология",
+            "chainPreset": executable_chain(),
+        },
+        tmp_path,
+        reserve=True,
+    )
+    workspace = tmp_path / "symphony-workspace"
+    workspace.mkdir()
+    (workspace / "package.json").write_text('{"scripts":{"dev":"vite"}}\n', encoding="utf-8")
+    (workspace / "index.html").write_text("<div id=\"root\"></div>\n", encoding="utf-8")
+    (workspace / "codex-workpad.md").write_text("notes only\n", encoding="utf-8")
+    (workspace / ".env").write_text("SECRET=value\n", encoding="utf-8")
+
+    result = materialize_artifact_from_issues(
+        tmp_path,
+        payload["artifactContract"],
+        [
+            {
+                "agentId": "main-executor",
+                "issues": [
+                    {
+                        "issue_id": "mini-orchestrator:test:main-executor",
+                        "workspace_path": str(workspace),
+                    }
+                ],
+            }
+        ],
+    )
+    artifact_root = tmp_path / ".mini_orchestrator" / "test-runs" / "dental-crm" / "v001"
+
+    assert result["status"] == "materialized"
+    assert (artifact_root / "package.json").exists()
+    assert (artifact_root / "index.html").exists()
+    assert not (artifact_root / "codex-workpad.md").exists()
+    assert not (artifact_root / ".env").exists()
+    assert inspect_artifact_contract(tmp_path, payload["artifactContract"])["status"] == "found"
+
+
+def test_materialize_artifact_from_nested_workspace_contract_path(tmp_path):
+    payload = ensure_artifact_contract(
+        {
+            "approved": True,
+            "task": "CRM стоматология",
+            "chainPreset": executable_chain(),
+        },
+        tmp_path,
+        reserve=True,
+    )
+    workspace = tmp_path / "symphony-workspace"
+    nested = workspace / ".mini_orchestrator" / "test-runs" / "dental-crm" / "v001"
+    nested.mkdir(parents=True)
+    (nested / "artifactManifest.json").write_text('{"name":"Dental CRM","entrypoint":"app/main.py"}\n', encoding="utf-8")
+    (nested / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
+    (nested / ".venv").mkdir()
+    (nested / ".venv" / "pyvenv.cfg").write_text("ignored\n", encoding="utf-8")
+    app_dir = nested / "app"
+    app_dir.mkdir()
+    (app_dir / "main.py").write_text("print('ok')\n", encoding="utf-8")
+
+    result = materialize_artifact_from_issues(
+        tmp_path,
+        payload["artifactContract"],
+        [
+            {
+                "agentId": "main-executor",
+                "issues": [
+                    {
+                        "issue_identifier": "MO-test-main-executor",
+                        "workspace_path": str(workspace),
+                    }
+                ],
+            }
+        ],
+    )
+    artifact_root = tmp_path / ".mini_orchestrator" / "test-runs" / "dental-crm" / "v001"
+
+    assert result["status"] == "materialized"
+    assert (artifact_root / "artifactManifest.json").exists()
+    assert (artifact_root / "app" / "main.py").exists()
+    assert not (artifact_root / ".venv").exists()
 
 
 def test_symphony_gateway_run_submits_when_intake_contract_exists(tmp_path, monkeypatch):
@@ -497,6 +640,111 @@ def test_symphony_gateway_run_marks_missing_old_queued_intake_stale(tmp_path, mo
     assert stale_run["stages"][0]["status"] == "stale"
     assert persisted is not None
     assert persisted["status"] == "stale"
+
+
+def test_timed_out_gateway_run_reconciles_late_completed_handoff(tmp_path):
+    run = {
+        "schemaVersion": 1,
+        "runId": "symphony-gateway-timeout",
+        "sourceKey": "symphony",
+        "sourceLabel": "Symphony",
+        "status": "timeout",
+        "mode": "symphony-gateway",
+        "currentAgent": "Mini Orchestrator chain",
+        "task": {"taskId": "symphony-gateway-timeout", "title": "Release task", "raw": "Release task"},
+        "profileSnapshotId": "symphony-gateway",
+        "thread": {"threadId": None, "currentTurnId": None, "turnCount": 0, "workers": []},
+        "tokens": {"input": 0, "output": 0, "total": 0},
+        "lastEvent": "Timed out waiting for Symphony result.",
+        "lastError": "Timed out waiting for Symphony result.",
+        "approval": {"required": True, "count": 0},
+        "chainPreset": executable_chain(
+            executable_agent("planner", "Planner", "Planner"),
+            executable_agent("pm", "PM", "PM"),
+            executable_agent("executor", "Executor", "Executor"),
+        ),
+        "stages": [
+            {"agent": "Planner", "label": "Planner", "status": "done", "statusLabel": "Done"},
+            {"agent": "PM", "label": "PM", "status": "timeout", "statusLabel": "Timeout"},
+            {"agent": "Executor", "label": "Executor", "status": "pending", "statusLabel": "Pending"},
+        ],
+        "eventTypes": {},
+        "createdAt": "2026-06-24T19:40:43+00:00",
+        "updatedAt": "2026-06-24T19:40:43+00:00",
+        "outputs": {"planner": "completed", "pm": "Timed out waiting for Symphony result."},
+        "taskCard": {
+            "owner": "mini-orchestrator",
+            "status": "timeout",
+            "checklist": [{"id": "item-1", "index": 0, "title": "Release task", "status": "failed"}],
+            "chainOwner": "mini-orchestrator",
+        },
+        "symphony": {
+            "miniOwnedChain": {
+                "status": "timeout",
+                "requestId": "request-1,request-2",
+                "steps": [
+                    {"agentIndex": 0, "agent": {"id": "planner", "name": "Planner"}, "status": "done"},
+                    {"agentIndex": 1, "agent": {"id": "pm", "name": "PM"}, "status": "timeout"},
+                ],
+                "outputs": [
+                    {"agentIndex": 0, "agentId": "planner", "agentName": "Planner", "status": "done", "summary": "completed"},
+                    {
+                        "agentIndex": 1,
+                        "agentId": "pm",
+                        "agentName": "PM",
+                        "status": "timeout",
+                        "summary": "Timed out waiting for Symphony result.",
+                        "issues": [
+                            {
+                                "issue_id": "mini-orchestrator:request-2:1:pm",
+                                "issue_identifier": "MO-request-2-1-pm",
+                            }
+                        ],
+                    },
+                ],
+            }
+        },
+    }
+    runtime_store.upsert_json_document(tmp_path, "symphony_runs", run["runId"], run)
+    daemon_payload = build_symphony_live_runs(
+        {
+            "generated_at": "2026-06-24T19:43:00Z",
+            "running": [],
+            "retrying": [],
+            "blocked": [],
+            "completed": [
+                {
+                    "issue_id": "mini-orchestrator:request-2:1:pm",
+                    "issue_identifier": "MO-request-2-1-pm",
+                    "last_event": "turn_completed",
+                    "last_message": "turn completed (completed)",
+                    "started_at": "2026-06-24T19:35:42Z",
+                    "completed_at": "2026-06-24T19:42:55Z",
+                    "last_event_at": "2026-06-24T19:42:55Z",
+                    "session_id": "thread-pm",
+                    "turn_count": 1,
+                    "tokens": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12},
+                }
+            ],
+        },
+        "http://daemon/state",
+    )
+
+    payload = build_local_symphony_gateway_runs(tmp_path, daemon_payload)
+    reconciled = next(item for item in payload["runs"] if item["runId"] == "symphony-gateway-timeout")
+    persisted = runtime_store.get_json_document(tmp_path, "symphony_runs", run["runId"])
+
+    assert reconciled["status"] == "failed"
+    assert "completed later" in reconciled["lastEvent"]
+    assert reconciled["lastError"] == "Rerun the Mini-owned chain to continue the remaining pending stages."
+    assert reconciled["stages"][1]["status"] == "done"
+    assert reconciled["stages"][2]["status"] == "pending"
+    assert reconciled["symphony"]["miniOwnedChain"]["outputs"][1]["status"] == "done"
+    assert reconciled["symphony"]["miniOwnedChain"]["steps"][1]["status"] == "done"
+    assert reconciled["taskCard"]["status"] == "failed"
+    assert reconciled["eventTypes"]["symphony_late_timeout_reconciled"] == 1
+    assert persisted is not None
+    assert persisted["status"] == "failed"
 
 
 def test_symphony_run_http_endpoint_returns_gateway_run_without_http_error(tmp_path, monkeypatch):
@@ -646,9 +894,22 @@ def test_symphony_run_http_endpoint_can_run_mini_owned_chain(tmp_path, monkeypat
     )
 
     class FakeGateway:
-        def run_mini_owned_chain(self, payload, *, state_url, timeout_per_step_seconds, poll_interval_seconds):
+        def run_mini_owned_chain(
+            self,
+            payload,
+            *,
+            state_url,
+            timeout_per_step_seconds,
+            active_grace_seconds,
+            poll_interval_seconds,
+        ):
             assert payload["task"] == "Bridge task"
             assert state_url == "http://daemon/state"
+            assert timeout_per_step_seconds == 900
+            assert active_grace_seconds == 900
+            artifact_path = Path(payload["artifactContract"]["absolutePath"])
+            artifact_path.mkdir(parents=True, exist_ok=True)
+            (artifact_path / "README.md").write_text("Generated bridge artifact\n", encoding="utf-8")
             return SimpleNamespace(
                 status="done",
                 request_id="request-planner,request-executor",
@@ -709,9 +970,88 @@ def test_symphony_run_http_endpoint_can_run_mini_owned_chain(tmp_path, monkeypat
 
         assert response.status == 201
         assert body["status"] == "done"
+        assert body["artifacts"]["workspaceGenerated"] is True
+        assert body["artifacts"]["artifactStatus"]["status"] == "found"
         assert body["taskCard"]["chainOwner"] == "mini-orchestrator"
         assert body["taskCard"]["checklist"][0]["status"] == "done"
         assert body["symphony"]["miniOwnedChain"]["outputs"][1]["summary"] == "Build ready"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_symphony_run_http_endpoint_fails_done_chain_without_artifact(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        ui,
+        "build_symphony_live_runs_from_url",
+        lambda: build_symphony_live_runs(
+            {"generated_at": "2026-06-18T00:00:02Z", "running": [], "retrying": [], "blocked": []},
+            "http://daemon/state",
+        ),
+    )
+
+    class FakeGateway:
+        def run_mini_owned_chain(
+            self,
+            payload,
+            *,
+            state_url,
+            timeout_per_step_seconds,
+            active_grace_seconds,
+            poll_interval_seconds,
+        ):
+            return SimpleNamespace(
+                status="done",
+                request_id="request-executor",
+                checklist=[{"id": "item-1", "index": 0, "title": "Bridge task", "status": "done"}],
+                outputs=[{"agentId": "executor", "agentName": "Executor", "summary": "Claimed build ready"}],
+                steps=[
+                    {
+                        "agentIndex": 0,
+                        "agent": {"id": "executor", "name": "Executor"},
+                        "requestId": "request-executor",
+                        "status": "done",
+                        "message": "executor done",
+                    },
+                ],
+                message="Mini chain done",
+            )
+
+    monkeypatch.setattr(ui, "SymphonyGateway", FakeGateway)
+
+    handler = ui._OrchestratorUIHandler
+    handler.orchestrator = None
+    handler.dispatcher_service = None
+    handler.web_root = tmp_path
+    handler.service_id = "mini-orchestrator"
+    server = ui._ThreadedHttpServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        payload = {
+            "approved": True,
+            "task": "Bridge task",
+            "waitForCompletion": True,
+            "chainPreset": executable_chain(executable_agent("executor", "Executor", "Executor")),
+        }
+        request = urllib.request.Request(
+            f"{base_url}/api/symphony/runs",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 201
+        assert body["status"] == "failed"
+        assert body["approval"]["required"] is True
+        assert body["artifacts"]["workspaceGenerated"] is False
+        assert body["artifacts"]["artifactStatus"]["status"] == "empty"
+        assert body["taskCard"]["checklist"][0]["status"] == "failed"
     finally:
         server.shutdown()
         server.server_close()

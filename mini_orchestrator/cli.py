@@ -3,8 +3,11 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from pathlib import Path
 import json
+import sys
 
 from .config import parse_runtime_config
+from . import runtime_store
+from .evals import EvalError, list_eval_suites, read_eval_suite, run_eval_suite, upsert_eval_suite
 from .orchestrator import Orchestrator
 from .service_discovery import ConfigServiceBlocker, resolve_ui_runtime
 from .ui import UiConfig, run_ui_server
@@ -57,6 +60,10 @@ def _run_interactive_chat(orchestrator: Orchestrator) -> int:
 
 
 def run_from_args(argv=None) -> int:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv[:1] == ["eval"]:
+        return _run_eval_args(raw_argv[1:])
+
     parser = ArgumentParser(description="Mini orchestrator: plan -> execute -> validate")
     parser.add_argument(
         "goal",
@@ -126,6 +133,61 @@ def run_from_args(argv=None) -> int:
     state = orchestrator.run(args.goal)
     _print_state(state, orchestrator)
     return 0 if state.status == "done" else 1
+
+
+def _run_eval_args(argv: list[str]) -> int:
+    parser = ArgumentParser(description="Mini orchestrator software artifact evaluations")
+    parser.add_argument("command", choices=("list", "run", "report"), help="Evaluation command")
+    parser.add_argument("--workdir", default=".", help="Workspace root")
+    parser.add_argument("--suite", help="Suite id or path to a suite JSON file")
+    parser.add_argument("--case", dest="case_id", help="Run only one case id")
+    parser.add_argument("--artifact", dest="artifact_path", help="Artifact path override for run checks")
+    parser.add_argument("--run", dest="run_id", help="Eval run/report id")
+    args = parser.parse_args(argv)
+
+    root = Path(args.workdir).resolve()
+    try:
+        if args.command == "list":
+            print(json.dumps({"suites": list_eval_suites(root)}, ensure_ascii=False))
+            return 0
+
+        if args.command == "run":
+            if not args.suite:
+                parser.error("--suite is required for eval run")
+            suite = _load_eval_suite(root, str(args.suite))
+            suite = upsert_eval_suite(root, suite)
+            report = run_eval_suite(root, suite, case_id=args.case_id, artifact_path=args.artifact_path)
+            print(json.dumps(report, ensure_ascii=False))
+            return 0 if report["status"] == "passed" else 1
+
+        if args.command == "report":
+            if not args.run_id:
+                parser.error("--run is required for eval report")
+            report = runtime_store.get_json_document(root, "eval_reports", str(args.run_id))
+            if report is None:
+                raise EvalError("Eval report was not found.")
+            print(json.dumps(report, ensure_ascii=False))
+            return 0 if report.get("status") == "passed" else 1
+    except EvalError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        return 2
+    except Exception as exc:
+        print(json.dumps({"error": f"Eval command failed: {exc}"}, ensure_ascii=False))
+        return 1
+
+    return 1
+
+
+def _load_eval_suite(root: Path, suite_ref: str) -> dict:
+    path = Path(suite_ref)
+    if not path.is_absolute():
+        path = root / path
+    if path.exists():
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(payload, dict):
+            raise EvalError("Eval suite JSON must be an object.")
+        return payload
+    return read_eval_suite(root, suite_ref)
 
 
 if __name__ == "__main__":

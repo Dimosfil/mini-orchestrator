@@ -8,6 +8,8 @@ from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 import json
 import os
+import re
+import shutil
 import uuid
 
 from . import service_discovery
@@ -21,7 +23,76 @@ STATE_URL_ENV = "MINI_ORCHESTRATOR_DAEMON_STATE_URL"
 SERVICE_ID_ENV = "MINI_ORCHESTRATOR_SYMPHONY_SERVICE_ID"
 DEFAULT_SERVICE_ID = "symphony"
 LOCAL_SYMPHONY_RUN_DIR = ".mini_orchestrator/symphony-runs"
+ARTIFACT_STORAGE_ROOT = ".mini_orchestrator/test-runs"
+ARTIFACT_CONTRACT_MARKER = ".artifact-contract.json"
+ARTIFACT_CONTRACT_SCHEMA_VERSION = "mini-orchestrator.artifact-contract.v1"
+WORKSPACE_ARTIFACT_HINTS = {
+    "artifactManifest.json",
+    "backend",
+    "frontend",
+    "index.html",
+    "main.py",
+    "package.json",
+    "pyproject.toml",
+    "requirements.txt",
+    "src",
+}
+WORKSPACE_COPY_EXCLUDE_NAMES = {
+    ".env",
+    ".git",
+    ".next",
+    ".nuxt",
+    ".pytest_cache",
+    ".venv",
+    "__pycache__",
+    "codex-workpad.md",
+    "dist",
+    "node_modules",
+}
 INTAKE_ENDPOINT_KEYS = ("taskIntake", "task-intake", "agentIntake", "agent-intake", "intake")
+MINI_ORIGIN_EXTERNAL_TOOL_POLICY = (
+    "Mini Orchestrator owns this run locally. Do not use Linear, external task managers, "
+    "MCP authorization flows, OAuth browser approval, or SaaS tracker tools unless the "
+    "user explicitly requested that integration for this task. If such access appears "
+    "necessary, stop and report a blocker instead of opening an authorization request."
+)
+CYRILLIC_TRANSLITERATION = str.maketrans(
+    {
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "е": "e",
+        "ё": "e",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "й": "y",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "sch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "yu",
+        "я": "ya",
+    }
+)
 
 
 class SymphonyDaemonError(RuntimeError):
@@ -179,6 +250,306 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _append_policy_text(value: Any, policy: str) -> str:
+    text = _text(value).strip()
+    if policy in text:
+        return text
+    return f"{text}\n\n{policy}" if text else policy
+
+
+def _artifact_contract(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return payload.get("artifactContract") if isinstance(payload.get("artifactContract"), dict) else {}
+
+
+def _artifact_contract_policy(contract: Dict[str, Any]) -> str:
+    relative_path = _text(contract.get("relativePath") or contract.get("path")).strip()
+    absolute_path = _text(contract.get("absolutePath")).strip()
+    path_hint = relative_path or absolute_path or ARTIFACT_STORAGE_ROOT
+    return (
+        "Artifact storage contract: generated software/application output for this run must be written "
+        f"only under {path_hint}. Use the selected project slug and version folder, do not overwrite older "
+        "versions, and do not treat a Symphony workspace or launch-desk as the final artifact unless the "
+        "user explicitly named that folder. Return the artifact path, entry point, run commands, verification "
+        "performed, and remaining gaps. If the artifact cannot be created at that path, report a blocker."
+    )
+
+
+def _artifact_expected_output_policy(contract: Dict[str, Any]) -> str:
+    relative_path = _text(contract.get("relativePath") or contract.get("path")).strip()
+    path_hint = relative_path or ARTIFACT_STORAGE_ROOT
+    return (
+        f"Artifact report required: artifactPath={path_hint}; include entry point, run/build/test commands, "
+        "verification evidence, and known gaps."
+    )
+
+
+def ensure_artifact_contract(payload: Dict[str, Any], root: Path, *, reserve: bool = False) -> Dict[str, Any]:
+    """Return a payload with a concrete versioned artifact target inside the project root."""
+    existing = _artifact_contract(payload)
+    task_title, task_id, _sprint_id, raw_task = _task_parts(payload)
+    slug = _artifact_slug(
+        _text(existing.get("slug") or payload.get("artifactSlug")).strip()
+        or _derive_artifact_slug(raw_task or task_title)
+    )
+    version = _artifact_version(
+        _text(existing.get("version") or payload.get("artifactVersion")).strip()
+        or _next_artifact_version(root, slug)
+    )
+    relative_path = _artifact_relative_path(slug, version)
+    absolute_path = root / Path(relative_path)
+    contract = {
+        "schemaVersion": ARTIFACT_CONTRACT_SCHEMA_VERSION,
+        "required": True,
+        "storageRoot": ARTIFACT_STORAGE_ROOT,
+        "slug": slug,
+        "version": version,
+        "relativePath": relative_path,
+        "absolutePath": str(absolute_path),
+        "manifestPath": str(absolute_path / "artifactManifest.json"),
+        "readmePath": str(absolute_path / "README.md"),
+        "markerPath": str(absolute_path / ARTIFACT_CONTRACT_MARKER),
+        "taskId": task_id,
+        "taskTitle": task_title,
+    }
+    enriched = dict(payload)
+    enriched["artifactContract"] = {**existing, **contract}
+    if reserve:
+        _reserve_artifact_contract(root, enriched["artifactContract"])
+    return enriched
+
+
+def inspect_artifact_contract(root: Path, contract: Dict[str, Any]) -> Dict[str, Any]:
+    relative_path = _text(contract.get("relativePath") or contract.get("path")).strip()
+    if not relative_path:
+        return {
+            "status": "missing",
+            "message": "Artifact contract did not include a relative path.",
+            "contentFileCount": 0,
+        }
+    artifact_path = root / Path(relative_path)
+    try:
+        artifact_path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return {
+            "status": "invalid",
+            "path": str(artifact_path),
+            "relativePath": relative_path,
+            "message": "Artifact path escapes the project root.",
+            "contentFileCount": 0,
+        }
+    if not artifact_path.exists():
+        return {
+            "status": "missing",
+            "path": str(artifact_path),
+            "relativePath": relative_path,
+            "message": "Artifact version folder was not created.",
+            "contentFileCount": 0,
+        }
+    content_files = [
+        path
+        for path in artifact_path.rglob("*")
+        if path.is_file() and path.name != ARTIFACT_CONTRACT_MARKER
+    ]
+    if not content_files:
+        return {
+            "status": "empty",
+            "path": str(artifact_path),
+            "relativePath": relative_path,
+            "message": "Artifact version folder exists but contains no generated application files.",
+            "contentFileCount": 0,
+        }
+    return {
+        "status": "found",
+        "path": str(artifact_path),
+        "relativePath": relative_path,
+        "message": "Artifact version folder contains generated files.",
+        "contentFileCount": len(content_files),
+        "sampleFiles": [str(path.relative_to(artifact_path).as_posix()) for path in content_files[:12]],
+    }
+
+
+def materialize_artifact_from_issues(
+    root: Path,
+    contract: Dict[str, Any],
+    chain_outputs: list[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Copy generated workspace content into the versioned project artifact folder when possible."""
+    target_status = inspect_artifact_contract(root, contract)
+    if target_status.get("status") == "found":
+        return {"status": "skipped", "message": "Artifact folder already contains generated files."}
+
+    relative_path = _text(contract.get("relativePath")).strip()
+    if not relative_path:
+        return {"status": "missing_contract", "message": "Artifact contract does not include a relative path."}
+    target = root / Path(relative_path)
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError:
+        return {"status": "invalid_contract", "message": "Artifact target escapes the project root."}
+
+    workspaces = _workspace_paths_from_chain_outputs(chain_outputs)
+    for workspace_path in workspaces:
+        source_root = Path(workspace_path)
+        source = _workspace_artifact_source(source_root, contract)
+        if source is None:
+            continue
+        try:
+            if source.resolve() == target.resolve():
+                continue
+        except OSError:
+            continue
+        copied = _copy_workspace_artifact(source, target)
+        if copied:
+            return {
+                "status": "materialized",
+                "sourcePath": str(source),
+                "targetPath": str(target),
+                "copiedCount": len(copied),
+                "copiedSample": copied[:12],
+            }
+    return {
+        "status": "not_found",
+        "message": "No generated application content was found in Symphony workspaces.",
+        "workspaceCount": len(workspaces),
+    }
+
+
+def _workspace_paths_from_chain_outputs(chain_outputs: list[Dict[str, Any]]) -> list[str]:
+    paths: list[str] = []
+    preferred: list[str] = []
+    for output in chain_outputs:
+        if not isinstance(output, dict):
+            continue
+        issues = output.get("issues") if isinstance(output.get("issues"), list) else []
+        agent_text = _text(output.get("agentId") or output.get("agentName")).casefold()
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            path = _text(
+                issue.get("workspace_path")
+                or issue.get("workspacePath")
+                or issue.get("workspace")
+                or issue.get("workspace_dir")
+            ).strip()
+            if not path or path in paths or path in preferred:
+                continue
+            issue_text = _text(
+                issue.get("issue_id")
+                or issue.get("issue_identifier")
+                or issue.get("identifier")
+            ).casefold()
+            if "executor" in agent_text or "executor" in issue_text:
+                preferred.append(path)
+            else:
+                paths.append(path)
+    return [*preferred, *paths]
+
+
+def _workspace_artifact_source(workspace_path: Path, contract: Dict[str, Any]) -> Path | None:
+    if not workspace_path.exists() or not workspace_path.is_dir():
+        return None
+    relative_path = _text(contract.get("relativePath")).strip()
+    if relative_path:
+        nested_contract_target = workspace_path / Path(relative_path)
+        if nested_contract_target.exists() and nested_contract_target.is_dir() and _has_artifact_hints(nested_contract_target):
+            return nested_contract_target
+    if _has_artifact_hints(workspace_path):
+        return workspace_path
+    for child in workspace_path.iterdir():
+        if child.is_dir() and child.name not in WORKSPACE_COPY_EXCLUDE_NAMES and _has_artifact_hints(child):
+            return child
+    return None
+
+
+def _has_artifact_hints(path: Path) -> bool:
+    try:
+        names = {child.name for child in path.iterdir()}
+    except OSError:
+        return False
+    return bool(names & WORKSPACE_ARTIFACT_HINTS)
+
+
+def _copy_workspace_artifact(source: Path, target: Path) -> list[str]:
+    target.mkdir(parents=True, exist_ok=True)
+    copied: list[str] = []
+    for child in source.iterdir():
+        if child.name in WORKSPACE_COPY_EXCLUDE_NAMES:
+            continue
+        destination = target / child.name
+        if child.is_dir():
+            shutil.copytree(
+                child,
+                destination,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(*WORKSPACE_COPY_EXCLUDE_NAMES),
+            )
+            copied.append(child.name)
+        elif child.is_file():
+            shutil.copy2(child, destination)
+            copied.append(child.name)
+    return copied
+
+
+def _reserve_artifact_contract(root: Path, contract: Dict[str, Any]) -> None:
+    relative_path = _text(contract.get("relativePath")).strip()
+    if not relative_path:
+        return
+    artifact_path = root / Path(relative_path)
+    try:
+        artifact_path.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise SymphonyDaemonError("Artifact contract path must stay inside the project root.") from exc
+    artifact_path.mkdir(parents=True, exist_ok=True)
+    marker = artifact_path / ARTIFACT_CONTRACT_MARKER
+    marker.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _artifact_relative_path(slug: str, version: str) -> str:
+    return (Path(ARTIFACT_STORAGE_ROOT) / slug / version).as_posix()
+
+
+def _next_artifact_version(root: Path, slug: str) -> str:
+    slug_dir = root / Path(ARTIFACT_STORAGE_ROOT) / slug
+    highest = 0
+    if slug_dir.exists():
+        for child in slug_dir.iterdir():
+            match = re.fullmatch(r"v(\d{3,})", child.name)
+            if child.is_dir() and match:
+                highest = max(highest, int(match.group(1)))
+    return f"v{highest + 1:03d}"
+
+
+def _artifact_version(value: str) -> str:
+    text = value.strip().lower()
+    if re.fullmatch(r"v\d{3,}", text):
+        return text
+    digits = re.sub(r"\D", "", text)
+    if digits:
+        return f"v{int(digits):03d}"
+    return "v001"
+
+
+def _artifact_slug(value: str) -> str:
+    text = value.strip().lower()
+    text = text.translate(CYRILLIC_TRANSLITERATION)
+    text = text.replace("срм", "crm")
+    slug = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)
+    return slug[:80].strip("-") or "generated-app"
+
+
+def _derive_artifact_slug(task_text: str) -> str:
+    lower = task_text.casefold()
+    has_crm = "crm" in lower or "срм" in lower
+    if "стомат" in lower or "dental" in lower or "dentist" in lower:
+        return "dental-crm" if has_crm else "dental-app"
+    if "аптек" in lower or "pharmacy" in lower:
+        return "pharmacy-crm" if has_crm else "pharmacy-app"
+    if has_crm:
+        return "crm-app"
+    return _artifact_slug(task_text)[:80] or "generated-app"
+
+
 def _chain_stage_names(chain_preset: Dict[str, Any]) -> list[str]:
     flow = chain_preset.get("flow") if isinstance(chain_preset.get("flow"), dict) else {}
     agents = flow.get("agents") if isinstance(flow.get("agents"), list) else []
@@ -222,7 +593,28 @@ def _agent_task_from_preset_agent(
     checklist_item: Dict[str, Any] | None = None,
     previous_outputs: list[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    work_package = agent.get("workPackage") if isinstance(agent.get("workPackage"), dict) else {}
+    source_work_package = agent.get("workPackage") if isinstance(agent.get("workPackage"), dict) else {}
+    work_package = dict(source_work_package)
+    artifact_contract = (
+        global_task.get("artifactContract")
+        if isinstance(global_task.get("artifactContract"), dict)
+        else {}
+    )
+    if artifact_contract:
+        work_package["constraints"] = _append_policy_text(
+            work_package.get("constraints"),
+            _artifact_contract_policy(artifact_contract),
+        )
+        work_package["inputsArtifacts"] = _append_policy_text(
+            work_package.get("inputsArtifacts"),
+            f"Versioned artifact target: {_text(artifact_contract.get('relativePath'))}",
+        )
+        work_package["expectedOutput"] = _append_policy_text(
+            work_package.get("expectedOutput"),
+            _artifact_expected_output_policy(artifact_contract),
+        )
+    work_package["constraints"] = _append_policy_text(work_package.get("constraints"), MINI_ORIGIN_EXTERNAL_TOOL_POLICY)
+    work_package["allowedTools"] = _append_policy_text(work_package.get("allowedTools"), MINI_ORIGIN_EXTERNAL_TOOL_POLICY)
     translations = (
         agent.get("workPackageTranslations")
         if isinstance(agent.get("workPackageTranslations"), dict)
@@ -234,6 +626,7 @@ def _agent_task_from_preset_agent(
     previous_output_text = json.dumps(previous_outputs or [], ensure_ascii=False)
     task = {
         "global": global_task,
+        "artifactContract": artifact_contract,
         "currentObjective": _text(work_package.get("currentObjective") or global_task.get("title")),
         "instructions": _text(work_package.get("instructions")),
         "constraints": _text(work_package.get("constraints")),
@@ -286,13 +679,17 @@ def _task_parts(payload: Dict[str, Any]) -> tuple[str, str, str, str]:
 
 def _global_task(payload: Dict[str, Any]) -> Dict[str, Any]:
     task_title, task_id, sprint_id, raw_task = _task_parts(payload)
-    return {
+    global_task = {
         "taskId": task_id,
         "sprintId": sprint_id,
         "project": str(payload.get("project") or "mini-orchestrator").strip(),
         "title": task_title,
         "raw": raw_task,
     }
+    artifact_contract = _artifact_contract(payload)
+    if artifact_contract:
+        global_task["artifactContract"] = artifact_contract
+    return global_task
 
 
 def build_task_checklist(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -368,6 +765,7 @@ def build_symphony_intake_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "executionMode": "symphony",
         "dispatchStrategy": "one-symphony-agent-per-preset-stage",
         "task": global_task,
+        "artifactContract": _artifact_contract(payload),
         "chainPreset": _chain_summary(chain_preset),
         "symphonyWorkerMode": worker_mode,
         "symphonyWorkerPolicy": worker_policy,
@@ -406,6 +804,7 @@ def build_symphony_handoff_payload(
         "executionMode": "symphony",
         "dispatchStrategy": "mini-owned-single-agent-handoff",
         "task": global_task,
+        "artifactContract": _artifact_contract(payload),
         "taskCard": {
             "owner": "mini-orchestrator",
             "status": "running",
@@ -793,6 +1192,7 @@ def create_symphony_gateway_run(
     *,
     submit: bool = False,
 ) -> Dict[str, Any]:
+    payload = ensure_artifact_contract(payload, root, reserve=True)
     if payload.get("approved") is not True:
         raise ValueError("Field 'approved' must be true before creating a Symphony run.")
     task_value = payload.get("task")
@@ -864,6 +1264,8 @@ def create_symphony_gateway_run(
         "artifacts": {
             "eventLogPath": str((Path(LOCAL_SYMPHONY_RUN_DIR) / f"{run_id}.json").as_posix()),
             "workspaceGenerated": False,
+            "artifactContract": payload["artifactContract"],
+            "artifactPath": payload["artifactContract"]["relativePath"],
             "durableProjectMemory": False,
             "privateRuntimeData": True,
         },
@@ -976,6 +1378,38 @@ def _daemon_payload_identifiers(daemon_payload: Dict[str, Any] | None) -> set[st
     return identifiers
 
 
+def _issue_identifiers(issue: Dict[str, Any]) -> set[str]:
+    identifiers: set[str] = set()
+    for value in (issue.get("issue_identifier"), issue.get("issue_id"), issue.get("issue_url")):
+        text = _text(value).strip()
+        if text:
+            identifiers.add(text)
+    return identifiers
+
+
+def _daemon_runs_by_identifier(daemon_payload: Dict[str, Any] | None) -> dict[str, Dict[str, Any]]:
+    if not isinstance(daemon_payload, dict):
+        return {}
+    indexed: dict[str, Dict[str, Any]] = {}
+    runs = daemon_payload.get("runs") if isinstance(daemon_payload.get("runs"), list) else []
+    for run in runs:
+        if not isinstance(run, dict) or _text(run.get("mode")) == "symphony-daemon-summary":
+            continue
+        identifiers = set()
+        for value in (run.get("runId"), run.get("issue_identifier"), run.get("issue_id")):
+            text = _text(value).strip()
+            if text:
+                identifiers.add(text)
+        task = run.get("task") if isinstance(run.get("task"), dict) else {}
+        for value in (task.get("taskId"), task.get("raw"), task.get("title")):
+            text = _text(value).strip()
+            if text:
+                identifiers.add(text)
+        for identifier in identifiers:
+            indexed[identifier] = run
+    return indexed
+
+
 def _mark_gateway_run_stale(run: Dict[str, Any], *, reason: str, now: str) -> Dict[str, Any]:
     run["status"] = "stale"
     run["currentAgent"] = "Symphony intake"
@@ -1002,6 +1436,120 @@ def _mark_gateway_run_stale(run: Dict[str, Any], *, reason: str, now: str) -> Di
     return run
 
 
+def _reconcile_late_gateway_timeout(
+    run: Dict[str, Any],
+    daemon_by_identifier: dict[str, Dict[str, Any]],
+    *,
+    now: str,
+) -> tuple[Dict[str, Any], bool]:
+    if _text(run.get("status")) != "timeout":
+        return run, False
+    symphony = run.get("symphony") if isinstance(run.get("symphony"), dict) else {}
+    chain = symphony.get("miniOwnedChain") if isinstance(symphony.get("miniOwnedChain"), dict) else {}
+    outputs = chain.get("outputs") if isinstance(chain.get("outputs"), list) else []
+    steps = chain.get("steps") if isinstance(chain.get("steps"), list) else []
+    if not outputs or not daemon_by_identifier:
+        return run, False
+
+    changed = False
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        if _text(output.get("status")) in {"done", "completed"}:
+            continue
+        issues = output.get("issues") if isinstance(output.get("issues"), list) else []
+        matched_daemon_run = None
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            for identifier in _issue_identifiers(issue):
+                candidate = daemon_by_identifier.get(identifier)
+                if isinstance(candidate, dict) and _text(candidate.get("status")) == "done":
+                    matched_daemon_run = candidate
+                    break
+            if matched_daemon_run is not None:
+                break
+        if matched_daemon_run is None:
+            continue
+
+        output["status"] = "done"
+        output["summary"] = _text(matched_daemon_run.get("lastEvent")) or "turn completed after gateway timeout"
+        output["issues"] = [
+            {
+                "issue_id": matched_daemon_run.get("task", {}).get("taskId")
+                if isinstance(matched_daemon_run.get("task"), dict)
+                else matched_daemon_run.get("runId"),
+                "issue_identifier": matched_daemon_run.get("runId"),
+                "status": "completed",
+                "completed": {
+                    "last_event": matched_daemon_run.get("lastEvent"),
+                    "completed_at": matched_daemon_run.get("updatedAt"),
+                    "tokens": matched_daemon_run.get("tokens"),
+                    "thread_id": matched_daemon_run.get("thread", {}).get("threadId")
+                    if isinstance(matched_daemon_run.get("thread"), dict)
+                    else None,
+                },
+            }
+        ]
+        agent_index = _int(output.get("agentIndex"))
+        if agent_index < len(steps) and isinstance(steps[agent_index], dict):
+            steps[agent_index]["status"] = "done"
+            steps[agent_index]["message"] = "Symphony handoff completed after the gateway timeout."
+        stages = run.get("stages") if isinstance(run.get("stages"), list) else []
+        if agent_index < len(stages) and isinstance(stages[agent_index], dict):
+            stage = stages[agent_index]
+            stage["status"] = "done"
+            stage["statusLabel"] = "Done"
+            stage["lastEvent"] = "Symphony handoff completed after the gateway timeout."
+            stage["completedAt"] = matched_daemon_run.get("updatedAt") or now
+            daemon_stages = matched_daemon_run.get("stages") if isinstance(matched_daemon_run.get("stages"), list) else []
+            if daemon_stages and isinstance(daemon_stages[0], dict):
+                stage["threadId"] = daemon_stages[0].get("threadId") or stage.get("threadId")
+                stage["turnCount"] = daemon_stages[0].get("turnCount") or stage.get("turnCount")
+                stage["tokens"] = daemon_stages[0].get("tokens") or stage.get("tokens")
+                stage["model"] = daemon_stages[0].get("model") or stage.get("model")
+        changed = True
+
+    if not changed:
+        return run, False
+
+    stages = run.get("stages") if isinstance(run.get("stages"), list) else []
+    completed_count = sum(1 for stage in stages if isinstance(stage, dict) and _text(stage.get("status")) == "done")
+    full_chain_done = bool(stages) and completed_count == len(stages)
+    run["status"] = "done" if full_chain_done else "failed"
+    run["currentAgent"] = "Mini Orchestrator chain"
+    run["lastEvent"] = (
+        "All Symphony handoffs completed after the gateway timeout."
+        if full_chain_done
+        else "A timed-out Symphony handoff completed later, but the Mini-owned chain had already stopped."
+    )
+    run["lastError"] = "" if full_chain_done else "Rerun the Mini-owned chain to continue the remaining pending stages."
+    run["updatedAt"] = now
+    run["approval"] = {"required": not full_chain_done, "count": 0}
+    run["outputs"] = {
+        str(item.get("agentId") or item.get("agentName") or item.get("agentIndex")): item.get("summary")
+        for item in outputs
+        if isinstance(item, dict)
+    }
+    chain["status"] = run["status"]
+    chain["steps"] = steps
+    chain["outputs"] = outputs
+    task_card = run.get("taskCard") if isinstance(run.get("taskCard"), dict) else {}
+    task_card["owner"] = task_card.get("owner") or "mini-orchestrator"
+    task_card["status"] = run["status"]
+    task_card["chainOwner"] = task_card.get("chainOwner") or "mini-orchestrator"
+    checklist = task_card.get("checklist") if isinstance(task_card.get("checklist"), list) else []
+    for item in checklist:
+        if isinstance(item, dict):
+            item["status"] = "done" if full_chain_done else "failed"
+    task_card["checklist"] = checklist
+    run["taskCard"] = task_card
+    event_types = run.get("eventTypes") if isinstance(run.get("eventTypes"), dict) else {}
+    event_types["symphony_late_timeout_reconciled"] = int(event_types.get("symphony_late_timeout_reconciled") or 0) + 1
+    run["eventTypes"] = event_types
+    return run, True
+
+
 def _reconcile_gateway_runs_with_daemon(
     root: Path,
     runs: list[Dict[str, Any]],
@@ -1010,10 +1558,16 @@ def _reconcile_gateway_runs_with_daemon(
     daemon_identifiers = _daemon_payload_identifiers(daemon_payload)
     if not daemon_identifiers and not isinstance(daemon_payload, dict):
         return runs
+    daemon_by_identifier = _daemon_runs_by_identifier(daemon_payload)
     now_dt = datetime.now(timezone.utc)
     now_text = now_dt.isoformat()
     reconciled: list[Dict[str, Any]] = []
     for run in runs:
+        late_run, late_changed = _reconcile_late_gateway_timeout(run, daemon_by_identifier, now=now_text)
+        if late_changed:
+            runtime_store.upsert_json_document(root, "symphony_runs", _text(late_run.get("runId")), late_run)
+            reconciled.append(late_run)
+            continue
         if _text(run.get("status")) != "queued":
             reconciled.append(run)
             continue

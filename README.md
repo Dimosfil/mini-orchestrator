@@ -242,6 +242,11 @@ upstream Symphony operations without intake remain observability/control only:
 `GET /api/daemon/runs?source=symphony`, `POST /api/symphony/refresh`, and
 `GET /api/symphony/issues/{issueIdentifier}`.
 
+Mini-owned Symphony chains treat `timeoutPerStepSeconds` as a soft per-handoff
+timeout. If the accepted issue is still running, `lateCompletionGraceSeconds`
+keeps polling before cutting the chain so long executor stages can finish and
+the next QA/Risk/PM handoff can continue.
+
 Mini sends `symphonyWorkerMode` with Symphony runs. The dashboard default is
 `debug-new-worker`, which asks Symphony to create a fresh inspectable
 worker/agent monitor for each Mini-owned handoff. `optimal-reuse-idle` permits

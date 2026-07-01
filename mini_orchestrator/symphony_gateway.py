@@ -87,6 +87,7 @@ class SymphonyGateway:
         *,
         state_url: str,
         timeout_seconds: float = 300.0,
+        active_grace_seconds: float = 0.0,
         poll_interval_seconds: float = 5.0,
     ) -> SymphonyWaitResult:
         issue_refs = _accepted_issue_refs(submit_result.accepted)
@@ -101,6 +102,8 @@ class SymphonyGateway:
             )
 
         deadline = self._clock() + timeout_seconds
+        hard_deadline = deadline + max(0.0, active_grace_seconds)
+        soft_timeout_reached = False
         last_state: dict[str, Any] = {}
         while True:
             last_state = self._state_func(state_url)
@@ -145,16 +148,30 @@ class SymphonyGateway:
                     request_id=submit_result.request_id,
                     issues=issues,
                     state=last_state,
-                    message="Symphony no longer reports accepted issues as active.",
+                    message=(
+                        "Symphony completed after the soft timeout grace period."
+                        if soft_timeout_reached
+                        else "Symphony no longer reports accepted issues as active."
+                    ),
                 )
 
-            if self._clock() >= deadline:
+            now = self._clock()
+            if now >= deadline and now < hard_deadline:
+                soft_timeout_reached = True
+                self._sleep(poll_interval_seconds)
+                continue
+
+            if now >= hard_deadline:
                 return SymphonyWaitResult(
                     status="timeout",
                     request_id=submit_result.request_id,
                     issues=[_active_issue_snapshot(last_state, issue_id) for issue_id in issue_ids],
                     state=last_state,
-                    message="Timed out waiting for Symphony result.",
+                    message=(
+                        "Timed out waiting for Symphony result after the active grace period."
+                        if active_grace_seconds > 0
+                        else "Timed out waiting for Symphony result."
+                    ),
                 )
             self._sleep(poll_interval_seconds)
 
@@ -164,12 +181,14 @@ class SymphonyGateway:
         *,
         state_url: str,
         timeout_seconds: float = 300.0,
+        active_grace_seconds: float = 0.0,
         poll_interval_seconds: float = 5.0,
     ) -> SymphonyWaitResult:
         return self.wait_for_result(
             self.submit(payload),
             state_url=state_url,
             timeout_seconds=timeout_seconds,
+            active_grace_seconds=active_grace_seconds,
             poll_interval_seconds=poll_interval_seconds,
         )
 
@@ -179,6 +198,7 @@ class SymphonyGateway:
         *,
         state_url: str,
         timeout_per_step_seconds: float = 300.0,
+        active_grace_seconds: float = 0.0,
         poll_interval_seconds: float = 5.0,
     ) -> SymphonyChainResult:
         checklist = build_task_checklist(payload)
@@ -205,6 +225,7 @@ class SymphonyGateway:
                 submit_result,
                 state_url=state_url,
                 timeout_seconds=timeout_per_step_seconds,
+                active_grace_seconds=active_grace_seconds,
                 poll_interval_seconds=poll_interval_seconds,
             )
             output = {

@@ -45,6 +45,7 @@ from .agent_profiles import (
 )
 from .codex_dispatcher_service import PersistentCodexDispatcher
 from .daemon_runs import build_local_daemon_runs, set_run_review_decision
+from .evals import EvalError, list_eval_suites, read_eval_suite, run_eval_suite, upsert_eval_suite
 from .live_runs import build_dispatcher_live_runs
 from .orchestrator import Orchestrator
 from . import runtime_store
@@ -53,7 +54,10 @@ from .symphony_daemon import (
     build_local_symphony_gateway_runs,
     build_symphony_live_runs_from_url,
     create_symphony_gateway_run,
+    ensure_artifact_contract,
     fetch_symphony_issue,
+    inspect_artifact_contract,
+    materialize_artifact_from_issues,
     refresh_symphony_state,
 )
 from .symphony_gateway import SymphonyGateway
@@ -66,6 +70,8 @@ MAX_TECH_EVENTS = 80
 MAX_TECH_LOG_LINES = 5000
 LIVE_RUN_SOURCE_MODES = {"dispatcher", "symphony", "combined"}
 APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS = 300
+SYMPHONY_DEFAULT_STEP_TIMEOUT_SECONDS = 900
+SYMPHONY_DEFAULT_LATE_COMPLETION_GRACE_SECONDS = 900
 
 
 def _validate_executable_chain_preset(payload: Dict[str, Any]) -> None:
@@ -674,6 +680,37 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         runtime_store.store_dispatcher_chain_preset(ROOT, run_id, chain_preset)
         return ["--chain-preset-id", run_id]
 
+    def _run_eval_workflow(self, _suite: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
+        workflow = case.get("workflow") if isinstance(case.get("workflow"), dict) else {}
+        if workflow.get("approved") is not True and case.get("approved") is not True:
+            raise EvalError("Eval workflow execution requires workflow.approved=true.")
+        task = str(workflow.get("task") or case.get("task") or "").strip()
+        if not task:
+            raise EvalError("Eval workflow execution requires a case task.")
+        chain_preset = workflow.get("chainPreset") if isinstance(workflow.get("chainPreset"), dict) else case.get("chainPreset")
+        if not isinstance(chain_preset, dict):
+            raise EvalError("Eval workflow execution requires workflow.chainPreset.")
+        _validate_executable_chain_preset({"chainPreset": chain_preset})
+        run_id = "evalwf-" + uuid.uuid4().hex[:12]
+        task_args, _ = self._write_task_file(task, run_id)
+        turn_timeout_seconds = int(workflow.get("turnTimeoutSeconds") or APPROVED_WORKFLOW_TURN_TIMEOUT_SECONDS)
+        result = self._run_dispatcher(
+            [
+                *task_args,
+                *self._write_chain_preset_file(chain_preset, run_id),
+                "--run-id",
+                run_id,
+                "--chain",
+                "--turn-timeout-seconds",
+                str(turn_timeout_seconds),
+            ],
+            timeout_seconds=int(workflow.get("timeoutSeconds") or turn_timeout_seconds * 4),
+        )
+        self._write_run_metadata_event(run_id, "chain_selected", chainPreset=chain_preset)
+        result["chainPreset"] = chain_preset
+        result["evalWorkflowRunId"] = run_id
+        return result
+
     def _start_dispatcher_background(self, args: list[str], run_id: str) -> Dict[str, Any]:
         if not DISPATCHER.exists():
             raise RuntimeError(f"Dispatcher script is missing: {DISPATCHER}")
@@ -878,6 +915,13 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             return ""
         return path.removeprefix(prefix).strip("/")
 
+    def _eval_run_id(self) -> str:
+        prefix = "/api/evals/runs/"
+        path = self._path()
+        if not path.startswith(prefix):
+            return ""
+        return path.removeprefix(prefix).strip("/")
+
     def do_POST(self) -> None:
         path = self._path()
         if path not in {
@@ -895,6 +939,8 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             "/api/agent-chain-presets",
             "/api/agent-chain-presets/import",
             "/api/current-run-config",
+            "/api/evals/suites",
+            "/api/evals/run",
             "/api/daemon/run",
             "/api/daemon/review",
             "/api/symphony/refresh",
@@ -954,6 +1000,42 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                 self._http_error(500, str(exc))
             return
 
+        if path == "/api/evals/suites":
+            try:
+                suite = upsert_eval_suite(ROOT, payload.get("suite") if isinstance(payload.get("suite"), dict) else payload)
+                self._json_response(201, {"suite": suite})
+            except EvalError as exc:
+                self._http_error(400, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
+        if path == "/api/evals/run":
+            try:
+                suite_value = payload.get("suite")
+                if isinstance(suite_value, dict):
+                    suite = upsert_eval_suite(ROOT, suite_value)
+                else:
+                    suite_id = str(payload.get("suiteId") or payload.get("suite") or "").strip()
+                    if not suite_id:
+                        self._http_error(400, "Field 'suiteId' or object field 'suite' is required.")
+                        return
+                    suite = read_eval_suite(ROOT, suite_id)
+                report = run_eval_suite(
+                    ROOT,
+                    suite,
+                    case_id=str(payload.get("caseId") or "").strip() or None,
+                    artifact_path=str(payload.get("artifactPath") or "").strip() or None,
+                    workflow_runner=self._run_eval_workflow,
+                )
+                self._json_response(201, {"report": report})
+            except EvalError as exc:
+                status = 404 if "not found" in str(exc).lower() else 400
+                self._http_error(status, str(exc))
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+
         if path == "/api/daemon/run":
             self._http_error(410, "Manifest daemon dry-run is retired. Use approved Dispatcher or Symphony execution.")
             return
@@ -976,6 +1058,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
         if path == "/api/symphony/runs":
             try:
                 _validate_executable_chain_preset(payload)
+                payload = ensure_artifact_contract(payload, ROOT, reserve=True)
                 state_payload = build_symphony_live_runs_from_url()
                 orchestration_mode = str(payload.get("orchestrationMode") or "").strip()
                 wait_for_completion = payload.get("waitForCompletion") is True
@@ -987,17 +1070,47 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                     chain_result = SymphonyGateway().run_mini_owned_chain(
                         payload,
                         state_url=state_url,
-                        timeout_per_step_seconds=float(payload.get("timeoutPerStepSeconds") or 300),
+                        timeout_per_step_seconds=float(
+                            payload.get("timeoutPerStepSeconds") or SYMPHONY_DEFAULT_STEP_TIMEOUT_SECONDS
+                        ),
+                        active_grace_seconds=float(
+                            payload.get("lateCompletionGraceSeconds")
+                            or SYMPHONY_DEFAULT_LATE_COMPLETION_GRACE_SECONDS
+                        ),
                         poll_interval_seconds=float(payload.get("pollIntervalSeconds") or 5),
                     )
                     run = create_symphony_gateway_run(ROOT, payload, state_payload, submit=False)
+                    materialize_status = (
+                        materialize_artifact_from_issues(ROOT, payload["artifactContract"], chain_result.outputs)
+                        if chain_result.status == "done"
+                        else {"status": "skipped", "message": "Chain did not complete."}
+                    )
+                    artifact_status = inspect_artifact_contract(ROOT, payload["artifactContract"])
+                    artifact_status["materializeStatus"] = materialize_status
                     now = datetime.now(timezone.utc).isoformat()
-                    run["status"] = "done" if chain_result.status == "done" else chain_result.status
+                    artifact_ready = artifact_status.get("status") == "found"
+                    run["status"] = "done" if chain_result.status == "done" and artifact_ready else chain_result.status
+                    if chain_result.status == "done" and not artifact_ready:
+                        run["status"] = "failed"
                     run["currentAgent"] = "Mini Orchestrator chain"
-                    run["lastEvent"] = chain_result.message
-                    run["lastError"] = "" if chain_result.status == "done" else chain_result.message
+                    run["lastEvent"] = (
+                        chain_result.message
+                        if artifact_ready or chain_result.status != "done"
+                        else artifact_status.get("message") or "Required project artifact was not produced."
+                    )
+                    run["lastError"] = (
+                        ""
+                        if chain_result.status == "done" and artifact_ready
+                        else (
+                            artifact_status.get("message")
+                            if chain_result.status == "done"
+                            else chain_result.message
+                        )
+                    )
                     run["updatedAt"] = now
-                    run["approval"] = {"required": chain_result.status not in {"done"}, "count": 0}
+                    run["approval"] = {"required": run["status"] != "done", "count": 0}
+                    run["artifacts"]["workspaceGenerated"] = artifact_ready
+                    run["artifacts"]["artifactStatus"] = artifact_status
                     run["outputs"] = {
                         str(item.get("agentId") or item.get("agentName") or item.get("agentIndex")): item.get("summary")
                         for item in chain_result.outputs
@@ -1016,11 +1129,14 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "checklist": chain_result.checklist,
                         "chainOwner": "mini-orchestrator",
                     }
+                    if chain_result.status == "done" and not artifact_ready and run["taskCard"]["checklist"]:
+                        run["taskCard"]["checklist"][0]["status"] = "failed"
                     run["symphony"]["miniOwnedChain"] = {
                         "status": chain_result.status,
                         "requestId": chain_result.request_id,
                         "steps": chain_result.steps,
                         "outputs": chain_result.outputs,
+                        "artifactStatus": artifact_status,
                     }
                     runtime_store.upsert_json_document(ROOT, "symphony_runs", str(run["runId"]), run)
                     self._json_response(201, run)
@@ -1435,6 +1551,46 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._http_error(500, str(exc))
             return
+        if path == "/api/evals/suites":
+            try:
+                self._json_response(200, {"suites": list_eval_suites(ROOT)})
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+        if path == "/api/evals/runs":
+            try:
+                self._json_response(200, {"runs": runtime_store.list_json_documents(ROOT, "eval_runs")})
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
+        if path.startswith("/api/evals/runs/"):
+            run_id = self._eval_run_id()
+            if not run_id:
+                self._http_error(404, "Eval run id is required.")
+                return
+            try:
+                run = runtime_store.get_json_document(ROOT, "eval_runs", run_id)
+                if run is None:
+                    self._http_error(404, "Eval run was not found.")
+                    return
+                report = runtime_store.get_json_document(ROOT, "eval_reports", run_id)
+                artifacts = [
+                    item
+                    for item in runtime_store.list_json_documents(ROOT, "eval_artifacts")
+                    if str(item.get("runId") or "") == run_id
+                ]
+                self._json_response(
+                    200,
+                    {
+                        "run": run,
+                        "report": report,
+                        "results": runtime_store.list_eval_results(ROOT, run_id),
+                        "artifacts": artifacts,
+                    },
+                )
+            except Exception as exc:
+                self._http_error(500, str(exc))
+            return
         if path == "/api/agent-chain-presets":
             try:
                 self._json_response(200, {"presets": list_agent_chain_presets(ROOT)})
@@ -1524,6 +1680,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "Compile visual agent cards through /api/agents/compile.",
                         "Persist visual agent flows through /api/agent-flows.",
                         "Persist project-owned agent chain presets through /api/agent-chain-presets.",
+                        "Persist and run software artifact evaluation suites through /api/evals/suites and /api/evals/run.",
                         "Translate edited work-package helper text through the Codex dispatcher at /api/agents/translate-work-package.",
                         "Read Symphony daemon run-state records through /api/daemon/runs.",
                         "Refresh Symphony daemon observability through /api/symphony/refresh.",
@@ -1640,6 +1797,31 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "DELETE",
                             "path": "/api/agent-chain-presets/{id}",
                         },
+                        "evalSuitesList": {
+                            "method": "GET",
+                            "path": "/api/evals/suites",
+                        },
+                        "evalSuitesUpsert": {
+                            "method": "POST",
+                            "path": "/api/evals/suites",
+                            "required": ["id", "cases"],
+                            "policy": "stores software artifact acceptance suites; no direct model-provider calls",
+                        },
+                        "evalRun": {
+                            "method": "POST",
+                            "path": "/api/evals/run",
+                            "required": ["suiteId or suite"],
+                            "optional": ["caseId", "artifactPath"],
+                            "policy": "runs bounded artifact checks against an existing or discovered generated project directory",
+                        },
+                        "evalRunsList": {
+                            "method": "GET",
+                            "path": "/api/evals/runs",
+                        },
+                        "evalRunRead": {
+                            "method": "GET",
+                            "path": "/api/evals/runs/{id}",
+                        },
                         "daemonRun": {
                             "method": "POST",
                             "path": "/api/daemon/run",
@@ -1666,6 +1848,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                                 "orchestrationMode",
                                 "waitForCompletion",
                                 "timeoutPerStepSeconds",
+                                "lateCompletionGraceSeconds",
                                 "pollIntervalSeconds",
                                 "symphonyWorkerMode",
                             ],
@@ -1734,6 +1917,7 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                         "agent-flow-persistence",
                         "agent-flow-validation",
                         "agent-flow-compile",
+                        "software-artifact-evaluations",
                         "worknest-lifecycle-bridge",
                         "agent-work-package-translation",
                         "symphony-daemon-dashboard",

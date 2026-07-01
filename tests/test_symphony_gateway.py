@@ -219,6 +219,42 @@ def test_gateway_times_out_while_issue_remains_active():
     assert result.issues[0]["last_event"] == "still working"
 
 
+def test_gateway_waits_through_active_grace_and_returns_late_completion():
+    states = [
+        {"running": [{"issue_id": "issue-1", "last_event": "still working"}], "retrying": [], "blocked": []},
+        {"running": [], "retrying": [], "blocked": []},
+    ]
+    clock_values = [0.0, 2.0]
+    issues = []
+
+    def clock():
+        return clock_values.pop(0) if clock_values else 2.0
+
+    gateway = SymphonyGateway(
+        state_func=lambda _url: states.pop(0),
+        issue_func=lambda issue_id: issues.append(issue_id) or {"issue_id": issue_id, "state": "Completed"},
+        sleeper=lambda _seconds: None,
+        clock=clock,
+    )
+
+    result = gateway.wait_for_result(
+        SymphonySubmitResult(
+            request_id="request-1",
+            accepted=[{"issue_id": "issue-1", "identifier": "MO-1"}],
+            blocked=[],
+            raw={},
+        ),
+        state_url="http://symphony.test/api/v1/state",
+        timeout_seconds=1,
+        active_grace_seconds=10,
+        poll_interval_seconds=0,
+    )
+
+    assert result.status == "done"
+    assert result.message == "Symphony completed after the soft timeout grace period."
+    assert issues == ["MO-1"]
+
+
 def test_gateway_reports_completed_without_result_when_issue_endpoint_drops_terminal_issue():
     gateway = SymphonyGateway(
         state_func=lambda _url: {"running": [], "retrying": [], "blocked": []},

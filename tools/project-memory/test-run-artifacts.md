@@ -40,3 +40,18 @@ Each version folder should contain a short `README.md` or manifest that records:
 
 - Agent instruction rule: `AGENTS.md`
 - Default artifact root: `.mini_orchestrator/test-runs/`
+- Symphony artifact contract enforcement:
+  - `mini_orchestrator/symphony_daemon.py` allocates
+    `.mini_orchestrator/test-runs/<slug>/<version>/` and injects the contract
+    into Symphony intake and handoff payloads.
+  - If a Symphony executor writes the app in its worker workspace,
+    `mini_orchestrator/symphony_daemon.py` may materialize app-shaped workspace
+    content into the allocated version folder while excluding service files such
+    as `.env`, `.git`, `node_modules`, and `codex-workpad.md`.
+  - `mini_orchestrator/ui.py` marks Mini-owned Symphony chains as failed when a
+    completed chain does not produce generated files in the allocated version
+    folder.
+  - Mini-owned Symphony handoffs use `timeoutPerStepSeconds` as a soft timeout
+    and `lateCompletionGraceSeconds` as an active-run grace window, so a long
+    executor that is still running can complete and continue to QA/Risk/PM
+    instead of cutting the chain immediately.

@@ -22,6 +22,14 @@ def main() -> int:
     parser.add_argument("--task", help="Release/full-system test task text.")
     parser.add_argument("--task-file", type=Path, help="File containing release/full-system test task text.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Mini Orchestrator UI/API base URL.")
+    parser.add_argument("--request-timeout-seconds", type=float, default=7200.0, help="HTTP wait timeout for full-chain runs.")
+    parser.add_argument("--timeout-per-step-seconds", type=float, default=900.0, help="Soft timeout for each Symphony handoff.")
+    parser.add_argument(
+        "--late-completion-grace-seconds",
+        type=float,
+        default=900.0,
+        help="Extra wait for still-running Symphony handoffs before cutting the chain.",
+    )
     args = parser.parse_args()
 
     task = _task_text(args.task, args.task_file)
@@ -69,6 +77,8 @@ def main() -> int:
                 "orchestrationMode": "mini-owned-chain",
                 "waitForCompletion": True,
                 "symphonyWorkerMode": worker_mode,
+                "timeoutPerStepSeconds": args.timeout_per_step_seconds,
+                "lateCompletionGraceSeconds": args.late_completion_grace_seconds,
             }
         )
     elif execution == "dispatcher":
@@ -77,7 +87,7 @@ def main() -> int:
     else:
         raise SystemExit(f"Unsupported execution mode: {execution}")
 
-    result = _post_json(f"{base_url}{endpoint}", payload)
+    result = _post_json(f"{base_url}{endpoint}", payload, timeout=args.request_timeout_seconds)
     print(
         json.dumps(
             {
@@ -131,7 +141,7 @@ def _get_json(url: str) -> dict[str, Any]:
     return _read_json(request)
 
 
-def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _post_json(url: str, payload: dict[str, Any], *, timeout: float) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -139,12 +149,12 @@ def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         headers={"Accept": "application/json", "Content-Type": "application/json; charset=utf-8"},
         method="POST",
     )
-    return _read_json(request)
+    return _read_json(request, timeout=timeout)
 
 
-def _read_json(request: urllib.request.Request) -> dict[str, Any]:
+def _read_json(request: urllib.request.Request, *, timeout: float = 1800.0) -> dict[str, Any]:
     try:
-        with urllib.request.urlopen(request, timeout=1800) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")

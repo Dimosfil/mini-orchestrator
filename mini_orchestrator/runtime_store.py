@@ -23,9 +23,13 @@ TEMPORARY_TASK_STATE_TABLES = (
     "dispatcher_tasks",
     "dispatcher_chain_presets",
     "dispatcher_process_outputs",
+    "eval_runs",
+    "eval_results",
+    "eval_artifacts",
+    "eval_reports",
     "migration_runs",
 )
-PRESERVED_RUNTIME_TABLES = ("runtime_meta", "agent_chain_presets")
+PRESERVED_RUNTIME_TABLES = ("runtime_meta", "agent_chain_presets", "eval_suites")
 RUNTIME_FILE_KEEP_NAMES = {
     "runtime.sqlite3",
     "runtime.sqlite3-shm",
@@ -41,6 +45,10 @@ JSON_THEMES = {
     "daemon_runs": ("daemon_runs", "run_id"),
     "symphony_runs": ("symphony_runs", "run_id"),
     "dispatcher_chain_presets": ("dispatcher_chain_presets", "run_id"),
+    "eval_suites": ("eval_suites", "suite_id"),
+    "eval_runs": ("eval_runs", "run_id"),
+    "eval_artifacts": ("eval_artifacts", "artifact_id"),
+    "eval_reports": ("eval_reports", "report_id"),
 }
 
 CURRENT_RUN_CONFIG_META_KEY = "current_run_config"
@@ -196,6 +204,58 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL,
             source_path TEXT,
             PRIMARY KEY (run_id, stream)
+        );
+
+        CREATE TABLE IF NOT EXISTS eval_suites (
+            suite_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT NOT NULL,
+            source_path TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS eval_runs (
+            run_id TEXT PRIMARY KEY,
+            suite_id TEXT NOT NULL,
+            case_id TEXT,
+            status TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT NOT NULL,
+            source_path TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS eval_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            check_id TEXT NOT NULL,
+            evaluator_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_eval_results_run_id ON eval_results(run_id, id);
+
+        CREATE TABLE IF NOT EXISTS eval_artifacts (
+            artifact_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            artifact_path TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT NOT NULL,
+            source_path TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS eval_reports (
+            report_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT NOT NULL,
+            source_path TEXT
         );
 
         CREATE TABLE IF NOT EXISTS migration_runs (
@@ -408,6 +468,98 @@ def upsert_json_document(
                     source_path,
                 ),
             )
+        elif theme == "eval_suites":
+            conn.execute(
+                """
+                INSERT INTO eval_suites(suite_id, name, payload_json, created_at, updated_at, source_path)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(suite_id) DO UPDATE SET
+                    name = excluded.name,
+                    payload_json = excluded.payload_json,
+                    created_at = COALESCE(NULLIF(eval_suites.created_at, ''), excluded.created_at),
+                    updated_at = excluded.updated_at,
+                    source_path = excluded.source_path
+                """,
+                (
+                    key,
+                    str(payload.get("name") or ""),
+                    payload_json,
+                    str(payload.get("createdAt") or now),
+                    str(payload.get("updatedAt") or now),
+                    source_path,
+                ),
+            )
+        elif theme == "eval_runs":
+            conn.execute(
+                """
+                INSERT INTO eval_runs(run_id, suite_id, case_id, status, payload_json, created_at, updated_at, source_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    suite_id = excluded.suite_id,
+                    case_id = excluded.case_id,
+                    status = excluded.status,
+                    payload_json = excluded.payload_json,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at,
+                    source_path = excluded.source_path
+                """,
+                (
+                    key,
+                    str(payload.get("suiteId") or ""),
+                    str(payload.get("caseId") or ""),
+                    str(payload.get("status") or ""),
+                    payload_json,
+                    str(payload.get("createdAt") or ""),
+                    str(payload.get("updatedAt") or now),
+                    source_path,
+                ),
+            )
+        elif theme == "eval_artifacts":
+            conn.execute(
+                """
+                INSERT INTO eval_artifacts(artifact_id, run_id, artifact_path, payload_json, created_at, updated_at, source_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(artifact_id) DO UPDATE SET
+                    run_id = excluded.run_id,
+                    artifact_path = excluded.artifact_path,
+                    payload_json = excluded.payload_json,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at,
+                    source_path = excluded.source_path
+                """,
+                (
+                    key,
+                    str(payload.get("runId") or ""),
+                    str(payload.get("path") or ""),
+                    payload_json,
+                    str(payload.get("createdAt") or ""),
+                    str(payload.get("updatedAt") or now),
+                    source_path,
+                ),
+            )
+        elif theme == "eval_reports":
+            conn.execute(
+                """
+                INSERT INTO eval_reports(report_id, run_id, status, payload_json, created_at, updated_at, source_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(report_id) DO UPDATE SET
+                    run_id = excluded.run_id,
+                    status = excluded.status,
+                    payload_json = excluded.payload_json,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at,
+                    source_path = excluded.source_path
+                """,
+                (
+                    key,
+                    str(payload.get("runId") or ""),
+                    str(payload.get("status") or ""),
+                    payload_json,
+                    str(payload.get("createdAt") or ""),
+                    str(payload.get("updatedAt") or now),
+                    source_path,
+                ),
+            )
         elif theme == "agent_cards":
             conn.execute(
                 f"""
@@ -600,6 +752,44 @@ def store_dispatcher_process_output(root: Path, run_id: str, stream: str, conten
         )
 
 
+def replace_eval_results(root: Path, run_id: str, results: list[dict[str, Any]]) -> None:
+    now = utc_now()
+    rows = [
+        (
+            run_id,
+            str(result.get("checkId") or ""),
+            str(result.get("type") or result.get("evaluatorType") or ""),
+            str(result.get("status") or ""),
+            json.dumps(result, ensure_ascii=False, sort_keys=True),
+            now,
+        )
+        for result in results
+    ]
+    with connect(root) as conn:
+        conn.execute("DELETE FROM eval_results WHERE run_id = ?", (run_id,))
+        conn.executemany(
+            """
+            INSERT INTO eval_results(run_id, check_id, evaluator_type, status, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+
+
+def list_eval_results(root: Path, run_id: str) -> list[dict[str, Any]]:
+    with connect(root) as conn:
+        rows = conn.execute(
+            "SELECT payload_json FROM eval_results WHERE run_id = ? ORDER BY id",
+            (run_id,),
+        ).fetchall()
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        payload = json.loads(str(row["payload_json"]))
+        if isinstance(payload, dict):
+            results.append(payload)
+    return results
+
+
 def import_runtime_file(root: Path, path: Path, *, theme: str, topic: str) -> None:
     relative = path.resolve().relative_to(root.resolve()).as_posix()
     data = path.read_bytes()
@@ -671,6 +861,11 @@ def table_counts(root: Path) -> dict[str, int]:
         "dispatcher_tasks",
         "dispatcher_chain_presets",
         "dispatcher_process_outputs",
+        "eval_suites",
+        "eval_runs",
+        "eval_results",
+        "eval_artifacts",
+        "eval_reports",
     ]
     with connect(root) as conn:
         return {table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]) for table in tables}
