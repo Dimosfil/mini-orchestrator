@@ -27,15 +27,25 @@ startup flow:
 ## Loading Contract
 
 - Start with this file.
+- On the first concrete task in a new chat/session, before task-specific work,
+  run a quiet GI update check: read local instruction-kit metadata and accepted
+  source `VERSION.md`/`migrations/`, apply pending accepted migrations when the
+  project update contract allows it, and report only a compact result or
+  blocker. Do not read `updates/` for this startup check.
 - If the request contains a GI chat command such as `gi ...`, `ги ...`, or a
   known mojibake form such as `РіРё ...`, treat it as a concrete task even when
   the message is short. First read `COMMANDS.md` when present, then read every
   runtime module routed to the requested command before acting.
-- For state-changing GI commands that start, stop, restart, rebuild, deploy,
+- For state-changing GI commands that start, stop, restart, build, rebuild, deploy,
   test, install, reset, update, commit, push, or manage task-manager state, do
   not execute from memory, old chat examples, or the command name alone. If the
   command's routed module is unavailable, stop and report the missing path.
 - Read only the module(s) needed for the current request.
+- For `gi restart`, `gi reboot`, `gi docker`, `РіРё СЂРµСЃС‚Р°СЂС‚`,
+  `РіРё СЂРµР±СѓС‚`, `РіРё РґРѕРєРµСЂ`, and equivalent aliases,
+  `patterns/AGENTS_RUNTIME/09-project-operation-commands.md` is mandatory
+  context before any process inspection, Docker build, stop, start, or success
+  report.
 - For broad or unclear work, read these shared modules before acting:
   - `patterns/AGENTS_RUNTIME/01-purpose.md`
   - `patterns/AGENTS_RUNTIME/03-rule-precedence.md`
@@ -58,10 +68,12 @@ startup flow:
   `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
 - Startup, restoration, and scope boundaries:
   `patterns/AGENTS_RUNTIME/07-startup-and-scope.md`
-- Config-service/task-manager flows:
+- Config-service, service guide/contract lookup, task manager commands,
+  manager-backed and local sprint commands, and web-service port registration:
   `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- Commands for dev/prod publication, FTP, reboot, summarize, update, tooling,
-  rebuild, install, and full test:
+- Commands for dev/prod publication, FTP/deploy gateways, project build/rebuild,
+  reboot/restart, Docker/Compose restart, summarize, update, tooling, install,
+  and full test:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
 - Private-scope and missing context handling:
   `patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md`
@@ -87,8 +99,21 @@ startup flow:
   model outputs, build artifacts, export bundles, or run datasets under
   `tools/project-memory/`; keep only compact summaries, manifests, checksums,
   or links there when needed.
+- Use `tools/` for durable development and agent tooling such as scripts,
+  adapters, bootstrap commands, deployment helpers, and redacted examples or
+  manifests. Do not use `tools/` as the default destination for generated
+  product output, selected-run artifacts, uploaded site contents, screenshots,
+  raw exports, build bundles, downloaded datasets, or one-off work results.
 - Prefer project-memory specs when implementing behavior changes and keep runtime
   behavior in one canonical stack and contracts path.
+
+## Local Rules
+
+- Treat this project root as the filesystem boundary for normal work unless the
+  user gives an explicit concrete path and action.
+- Before filesystem writes, verify that the active working directory, local
+  project identity, and target path match the user's current request. If those
+  signals point to another project, stop and report the mismatch before editing.
 
 ## Library Entrypoints
 

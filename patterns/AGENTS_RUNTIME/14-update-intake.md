@@ -8,6 +8,27 @@
 - When another project reveals a reusable improvement to shared instructions,
   write a dated recommendation to this repository's `updates/` folder if it is
   available.
+- When the user reports an agent-rule failure, repeated behavior bug, or asks to
+  keep a log of such bugs, append a compact entry to
+  `updates/USER_REPORTED_AGENT_BUG_LOG.md` in this repository when available.
+  Create the file if missing. Record the date, symptom, likely violated rule or
+  rule gap, evidence summary, privacy review, status, and any accepted
+  migration or follow-up. Keep the log maintenance-only and do not require
+  consuming projects to read it during startup.
+- Treat `gi ошибка`, `ги ошибка`, `gi error`, and equivalent wording as an
+  evidence intake command for a suspected GI rule bug. Collect only evidence
+  already present in the current chat, attached files/screenshots, accessible
+  tool output, and explicitly authorized local paths; summarize the context,
+  privacy-review it, and append or prepare a compact bug-log entry. Do not fix
+  rules, inspect unrelated projects, or run broad searches from this command.
+- Treat `gi ошибка фикс`, `ги ошибка фикс`, `gi error fix`, and equivalent
+  wording as approval to repair the logged or currently supplied GI rule bug.
+  Read the newest relevant unresolved bug-log entry plus current evidence,
+  identify the portable rule gap, update the relevant live instructions,
+  templates, accepted migration, version, and changelog, verify the scoped
+  change, and close or update the bug-log entry with the migration/follow-up.
+  Do not include secrets, private screenshots, raw logs, or project-specific
+  data in shared rules or migrations.
 - If this repository is unavailable, use a project-local intake folder such as
   `tools/instruction-updates/` or `tools/project-memory/instruction-updates/`
   with the same dated filename pattern.

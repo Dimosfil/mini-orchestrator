@@ -28,6 +28,12 @@ artifact, evidence, output, data, or docs-asset location and keep only compact
 summaries, manifests, checksums, or links here when they are needed for a
 decision, behavior contract, failure, or verification result.
 
+Likewise, do not put those raw outputs in `tools/` by default. `tools/` is for
+durable development and agent tooling such as scripts, adapters, bootstrap
+commands, deployment helpers, and redacted examples or manifests. Product
+outputs and selected-run artifacts need a documented project-local output,
+evidence, data, build, release, or docs-asset location.
+
 ## Documentation Versus Summary Versus Project Memory
 
 `README.md`, `docs/`, and runbooks are the project documentation layer.
@@ -111,6 +117,11 @@ service splits, and routing changes in `architecture-migrations.md`.
 When this project reveals a reusable workflow, failure pattern, token-saving
 tactic, or agent-instruction improvement, write a concise recommendation for the
 shared instruction kit.
+
+When the user reports a recurring agent-rule failure or asks for such bugs to be
+logged, add a compact entry to the shared library's
+`updates/USER_REPORTED_AGENT_BUG_LOG.md` when available, or to the local
+instruction-updates folder as intake when it is not.
 
 Prefer the `updates/` folder in an available checkout/cache of the canonical
 shared-instruction source repo when this repository is being maintained:

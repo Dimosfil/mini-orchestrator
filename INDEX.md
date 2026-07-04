@@ -54,6 +54,11 @@ Reusable instructions in this repository are grouped by job.
 - `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`: architecture and code-quality
   baseline for OOP, SOLID, DRY, clean-code, separation of concerns,
   interfaces/adapters/contracts, abstraction discipline, and verification.
+- `patterns/API_KEY_SECRET_SAFETY.md`: API-key and secret-safety rules for
+  keeping credentials out of code, client bundles, logs, generated artifacts,
+  and project memory; separating dev/staging/prod credentials; using managed
+  production secret stores; rotating leaks; monitoring usage; and applying
+  provider-supported scoping and network restrictions.
 - `patterns/COHERENT_BATCH_VERIFICATION.md`: batch-completion rules for
   source-of-truth consistency, durable memory writeback, scoped diffs, and
   evidence-backed checks.
@@ -65,9 +70,10 @@ Reusable instructions in this repository are grouped by job.
   keeping deploy, user, runtime, machine, service, credential, path,
   feature-flag, and operational values out of application logic.
 - `patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md`: rules for keeping
-  orchestrators, task managers, agent harnesses, generators, workflow logs, and
-  scaffolding tools product-agnostic, free of demo hard-code, and architected
-  with clear SOLID/module boundaries.
+  orchestrators, task managers, agent harnesses, generators, workflow logs,
+  scaffolding tools, and tooling folders product-agnostic, free of demo
+  hard-code, separate from generated outputs, and architected with clear
+  SOLID/module boundaries.
 - `patterns/EXTERNAL_DOCUMENTATION_RETRIEVAL.md`: rules for using Context7 or
   similar external current-docs retrieval tools without leaking private project
   data or replacing project memory and official sources.
@@ -113,6 +119,10 @@ Reusable instructions in this repository are grouped by job.
   for chunk export, model metadata, hybrid search, evals, and safety.
 - `patterns/SERVICE_DISCOVERY_CONFIG.md`: config-service bootstrap,
   service-identity verification, mismatch handling, and local override rules.
+- `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md`: compact senior-engineering
+  execution standard that connects context loading, architecture boundaries,
+  configuration discipline, coherent batches, verification, project-memory
+  updates, and runtime enforcement.
 - `patterns/SHARED_INSTRUCTIONS_BOOTSTRAP.md`: how to deploy local project
   instruction files from this shared library when the user provides its path.
 - `patterns/SKILL_MODULES.md`: when to use rules, patterns, templates, or
@@ -183,6 +193,8 @@ Reusable instructions in this repository are grouped by job.
 - `updates/`: maintenance-only dated recommendations for this
   `general-instructions` repository. External projects must not read this folder
   during startup or bootstrap.
+- `updates/USER_REPORTED_AGENT_BUG_LOG.md`: maintenance-only rolling log for
+  recurring user-reported agent-rule failures and their follow-up status.
 
 ## Migrations
 

@@ -36,6 +36,14 @@
   selected or active workflow state as data, show debug/progress logs only for
   the selected run, and keep completed runs compact. Follow
   `patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md`.
+- Treat `tools/` as a place for project-owned development and agent tooling:
+  scripts, adapters, bootstrap commands, deployment helpers, and redacted
+  examples or manifests. Do not use `tools/` as the default destination for
+  generated product output, selected-run artifacts, uploaded site contents,
+  screenshots, raw exports, build bundles, downloaded datasets, or one-off work
+  results. Put those in project-local artifact, evidence, output, data,
+  docs-asset, build, or release locations documented by the project, and keep
+  only small manifests or references in tooling or project memory when needed.
 - Do not hard-code values that can change by deployment, user choice, runtime
   environment, host machine, service discovery, credentials, filesystem layout,
   feature flags, product names, demo data, workflow labels, generated artifact
@@ -58,12 +66,26 @@
   source of truth or temporary compatibility layer is genuinely undocumented.
   Follow
   `patterns/CONFIGURATION_BOUNDARIES.md`.
+- Treat API keys and external-service tokens as secret boundaries, not ordinary
+  config values. Keep them out of source, client bundles, public frontend env
+  vars, logs, traces, chat, generated artifacts, and project memory; prefer
+  per-person or per-service credentials, separate dev/staging/prod secrets,
+  managed production secret stores, scoped permissions, usage monitoring,
+  rotation, and network restrictions where supported. Follow
+  `patterns/API_KEY_SECRET_SAFETY.md`.
 - Build applications with clear architecture and code-quality boundaries. Apply
   OOP, SOLID, DRY, clean-code, maintainability, and extensibility principles
   where they fit the stack. Keep domain/product logic, orchestration, UI,
   persistence, filesystem, external services, and configuration in separate
   layers with explicit contracts. Follow
   `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`.
+- Treat senior agent behavior as a compact engineering execution standard, not
+  as a separate personality label. Before code changes, agents should load
+  relevant local context, preserve intended behavior, keep architecture and
+  configuration boundaries clear, work in coherent verified batches, update
+  durable project memory when behavior or architecture changes, and escalate
+  high-risk actions through the documented approval path. Follow
+  `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md`.
 - Keep the current technology stack visible in durable project memory. For
   GI-enabled projects, maintain `tools/project-memory/specs/technology-stack.md`
   or an equivalent linked stack inventory with verified languages, runtimes,

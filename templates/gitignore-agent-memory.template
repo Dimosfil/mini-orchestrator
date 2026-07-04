@@ -10,4 +10,5 @@ tools/project-memory/semantic-corpus*.jsonl
 tools/summary/*.tmp
 tools/deploy/ftp.local.json
 tools/deploy/prod.local.json
+tools/deploy/deploy-gateway.local.json
 *.log

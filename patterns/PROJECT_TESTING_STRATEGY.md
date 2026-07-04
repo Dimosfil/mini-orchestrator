@@ -57,6 +57,18 @@ Build verification from narrow to broad:
 - Full test suite, build, or release checks only when justified by risk or
   requested by the user.
 
+For refactors and behavior changes:
+
+- For pure mechanical moves or responsibility splits with existing coverage,
+  first run or identify the focused current checks that protect the behavior,
+  then move the code, then rerun the same checks.
+- For behavior or contract changes, first add or identify a focused guarding
+  test for the intended behavior when practical, then implement the change, then
+  rerun the focused test and the wider checks justified by risk.
+- Tests that preserve existing behavior support a refactor. Tests that define
+  new behavior, validation, observability, data shape, or workflow semantics are
+  development work and should be planned as such.
+
 For documentation-only changes, prefer `git diff --check`, targeted rereads,
 link/path sanity checks, and index consistency.
 

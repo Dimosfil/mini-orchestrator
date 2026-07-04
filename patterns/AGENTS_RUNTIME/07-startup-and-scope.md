@@ -4,6 +4,18 @@
   as no-ops unless they include an explicit task, path, command, error, or
   project question. Do not run startup restore or read project files for those
   messages; reply briefly and ask what the user wants to do next.
+- On the first concrete task in a new chat/session, before task-specific
+  startup restore, planning, implementation, or command execution, perform a
+  quiet GI instruction update check. Use the current project's
+  `tools/project-memory/instruction-kit.json` when present, resolve the accepted
+  shared-instruction source, and read only `VERSION.md`, `CHANGELOG.md`,
+  `INDEX.md`, and pending files under `migrations/`. Apply pending accepted
+  migrations when the local update contract allows it; otherwise report the
+  compact blocker and continue with current local instructions unless the user
+  explicitly requested `gi обновить`. Do not read `updates/`, old chat examples,
+  broad project files, or unrelated source repositories for this startup check.
+  Keep the user-facing output to one compact status line or include it in the
+  first substantive reply.
 - For each new project session, require a clear, measurable project goal before
   implementation begins.
   - If no explicit project goal exists in startup artifacts or user text,
@@ -23,6 +35,12 @@
 - Treat `gi start sprint`, `gi sprint start`, and equivalent active-sprint
   wording as more specific than plain `gi start`: route them through the
   configured task-manager workflow, not generic startup restore.
+- Treat `gi local sprint`, `gi sprint local`, `gi локальный спринт`,
+  `gi спринт локально`, and equivalent explicitly local sprint wording as a
+  local execution workflow, not as a request to resolve or mutate task-manager
+  state. Read the routed sprint/task-manager module before acting, then use
+  only the supplied chat context or project-local checklist location documented
+  by local instructions.
 - Do not treat remembered plans, old refactoring phases, stale task notes, or
   local commits ahead of a remote as the next action during `gi start` or
   `gi restore`. Mention them only as compact context when relevant, then ask for
@@ -68,6 +86,20 @@
   printing full private documents by default.
 - Ask before expanding into unrelated scope. Proceed without asking only when
   the expansion is required for the stated goal and remains low-risk.
+- Before filesystem writes, verify that the active working directory, local
+  project identity, and target path match the user's current request. Use local
+  identity signals such as `AGENTS.md`, README title, package or app manifests,
+  service id, git remote, project-memory orientation, and documented working
+  areas. If those signals point to a different project than the request, or the
+  request names a different product/repository while the active root is
+  unchanged, stop and report the mismatch before editing. A path or product
+  name from old chat, a screenshot, task-manager metadata, a summary, or a
+  stale plan is not permission to edit that other project.
+- When the current user message explicitly names an absolute path outside the
+  active project root and an action, state the active root and the external
+  target before acting. If the named path looks like another project root,
+  proceed only when the user clearly asked to work in that external project for
+  this task; otherwise ask one short confirmation question.
 - When preparing a project for a repository, publishing to GitHub, or removing
   "unneeded" files, do not classify `AGENTS.md`, `tools/`,
   `tools/project-memory/`, `skills/`, bootstrap scripts, update scripts, deploy

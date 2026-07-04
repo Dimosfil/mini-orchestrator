@@ -2,7 +2,123 @@
 
 Accepted changes for the shared instruction library.
 
+## 2026.07.04
+
+- Added GI rule-error intake and fix commands. `gi ошибка` records available
+  evidence for suspected GI rule bugs without changing rules, while
+  `gi ошибка фикс` repairs the logged or supplied rule gap through live rules,
+  templates, migrations, version, changelog, verification, and bug-log status.
+
+- Added a first-concrete-message GI update check for new chats/sessions. Agents
+  should quietly inspect accepted instruction-kit version and migrations before
+  task-specific work, apply pending accepted migrations when allowed, avoid
+  `updates/` and broad reads, and report only a compact status or blocker.
+
+- Added automatic project registration rules for `gi ftp <deploy-hub-path>` when
+  a deploy gateway defines deterministic target naming. Unmapped projects should
+  use the current project folder name as the default id, let the gateway derive
+  the destination, register gateway-owned deploy/index metadata, and stop on
+  registration or artifact blockers instead of falling back to a root target.
+
+- Added saved project deploy gateway behavior. After the user runs a command
+  such as `gi deploy <path>` or `gi ftp <path>`, agents should record that
+  deploy gateway in ignored project-local config and let later short commands
+  such as `gi deploy`, `ги деплой`, `gi ftp`, or `ги фтп` reuse it.
+
+- Added `gi deploy <method-or-path>` / `ги деплой <способ-или-путь>` as an
+  explicit deploy-through-method-or-gateway command. When the argument is a
+  deploy hub path, agents now read the hub's own instructions and run only its
+  documented entrypoint, passing the current project as the source while keeping
+  hub secrets and local config private.
+
+- Added a maintenance-only user-reported agent bug log at
+  `updates/USER_REPORTED_AGENT_BUG_LOG.md`. Recurring agent-rule failures should
+  now be logged with symptom, evidence summary, privacy review, status, and any
+  accepted migration. Also clarified that `tools/` is for durable development
+  and agent tooling, not the default destination for generated product outputs,
+  selected-run artifacts, uploaded site contents, raw exports, build bundles, or
+  one-off work results.
+
+- Added `gi build` / `gi собрать` / `ги билд` / `ги собрать` as project build
+  command aliases for producing a release/upload-ready project artifact such as
+  `dist/`, a bundle, package, executable, or other documented output. The
+  command reads project-local build contracts and stays distinct from FTP/SFTP
+  upload, production publication, installer packaging, and GI/RAG rebuilds.
+
+- Tightened FTP deploy fallback behavior. Agents must treat upload stalls,
+  stream-open failures, and repeated timeouts as failed FTP/FTPS transfers,
+  immediately check for an authorized SFTP-over-SSH route to the same remote
+  deploy folder, switch to it when complete SFTP details exist, and otherwise
+  report the missing SFTP details instead of retrying the same failing FTP path
+  or bypassing invalid FTPS certificates as a routine fallback.
+
+## 2026.07.03
+
+- Added `gi docker` / `ги докер` as a Docker/Compose runtime command. Agents
+  must read the current project's Docker contract, report when Docker is not
+  configured or unavailable, decide whether a rebuild is needed before restart,
+  avoid touching unrelated containers or destructive Docker state, and verify
+  container health before reporting success.
+
+## 2026.07.02
+
+- Added a project-identity write guard. Before filesystem writes, agents must
+  verify the active project root and target identity from local instructions,
+  README, manifests, service id, git remote, or project memory. If the request
+  appears to target a different product, repository, or external path, agents
+  must stop and warn unless the current user message explicitly authorizes that
+  exact external path and action.
+
+## 2026.07.01
+
+- Clarified development versus refactor classification. Agents must treat
+  refactoring as structural work that preserves user-visible and documented
+  contracts, classify new behavior, validation, observability, integrations,
+  runtime flows, and new public contracts as development, and keep verification
+  or service operations labeled separately. Refactor batches now need explicit
+  contract boundaries, appropriate before/after checks for mechanical moves, and
+  clear rollback scope.
+
+## 2026.06.30
+
+- Added `patterns/API_KEY_SECRET_SAFETY.md` as a reusable API-key and
+  credential safety pattern. The rule keeps long-lived credentials out of
+  source, client bundles, public frontend environment variables, logs, traces,
+  generated artifacts, chat, and project memory; recommends separate
+  per-person/per-service and dev/staging/prod credentials; prefers managed
+  production secret stores; and calls out scoped permissions, monitoring,
+  rotation, and provider-supported network restrictions.
+
+- Added `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md` as a compact senior
+  engineering execution standard for agents writing, reviewing, or refactoring
+  code. The standard connects existing GI rules for context loading,
+  architecture boundaries, configuration discipline, coherent batches,
+  verification, durable project-memory updates, risk escalation, and runtime
+  enforcement without replacing the detailed patterns.
+
 ## 2026.06.24
+
+- Added `gi local sprint` / `gi sprint local` / `gi локальный спринт` as the
+  explicit local checklist alternative for sprint-shaped work without task
+  manager or config-service sync. `gi start sprint` remains manager-backed and
+  must still stop with a manager/config-service blocker when that setup is
+  missing.
+
+- Tightened config-service port ownership rules. Agents and apps must treat a
+  recorded local service port as an exclusive runtime contract, verify the
+  current port owner before reuse or restart, and stop with a port-conflict
+  blocker instead of silently choosing a neighboring port, overwriting the
+  service record, or stopping an unverified process.
+
+- Added platform-folder discipline for `gi install`: platform-specific build
+  instructions, packaging configs, signing notes, verification notes, and
+  produced installer artifacts must live in separate per-platform folders or be
+  referenced from a per-platform artifact manifest.
+
+- Clarified `gi install` target-platform selection. Agents now default to a
+  Windows installer when no platform is named, keep Inno Setup as the default
+  Windows installer tool, and follow project-local packaging contracts when the
+  user or project names macOS, iOS, Android, Linux, or another target.
 
 - Clarified that `gi info` / `ги инфо` is idempotent. If verified project facts
   already match current documentation and the canonical stack inventory, agents

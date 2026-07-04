@@ -25,6 +25,64 @@
   check and report exactly what was synced, what production-local state was
   preserved, whether the live service was restarted or left running, and any
   unverified risk. Follow `patterns/PROJECT_DEV_PROD_SERVICES.md`.
+- Treat `gi deploy`, `ги деплой`, `gi deploy <method-or-path>`, and
+  `ги деплой <способ-или-путь>` as requests to deploy the current project or site
+  through the explicitly named method, service, saved deploy gateway, or deploy
+  gateway path. If the argument is an absolute or clearly project-local path,
+  treat that path as a user-authorized external deploy gateway and record it as
+  the current project's selected deploy gateway in an ignored local file such as
+  `tools/deploy/deploy-gateway.local.json`; it does not become the active
+  editable source project. Future short deploy commands without a method or path
+  should reuse the saved gateway. Store only local selection metadata there, such
+  as gateway path, entrypoint, source-path parameter, project id, deploy mode,
+  and target name; keep credentials and private remote paths in the gateway's
+  own ignored config or secret store. Before running anything from that gateway,
+  read its local `AGENTS.md`, `COMMANDS.md`, and deploy runbook such as
+  `docs/deploy.md` when present. Prefer the gateway's single documented
+  entrypoint, for example `tools/deploy/deploy.ps1`, and pass the current project
+  root as `-SourcePath` or the gateway's documented source parameter. Pass
+  project id, deploy mode, target name, or hosting-project mapping only when the
+  gateway contract defines them. Do not infer credentials, print secrets, edit
+  the gateway's private local config, run arbitrary helper commands from the
+  gateway, or switch to treating the gateway as the product being deployed. If no
+  argument is supplied and no selected gateway exists, stop and ask the user to
+  make the full first call, for example `gi deploy <method-or-path>` /
+  `ги деплой <способ-или-путь>`. Do not reinterpret a bare first `gi deploy` as
+  `gi prod`, direct FTP upload, a build, or another deployment workflow. If the
+  gateway contract, required entrypoint, source-path parameter, target mapping,
+  or deploy mode is missing, ask one short clarification question instead of
+  guessing.
+- When the user's task explicitly targets preparing or repairing the deploy
+  gateway itself, work in that gateway project and create or update the reusable
+  deploy contract there: `AGENTS.md`, `COMMANDS.md`, a deploy runbook such as
+  `docs/deploy.md`, one documented entrypoint such as
+  `tools/deploy/deploy.ps1`, redacted config examples, and verification or
+  rollback notes. Keep real secrets and private target paths in the gateway's
+  ignored local config or secret store, not in shared instructions or consuming
+  projects.
+- Treat `gi ftp <deploy-hub-path>` and `ги фтп <путь-к-deploy-хабу>` as the
+  FTP/SFTP gateway variant: deploy the current project's configured build output
+  through the user-provided deploy gateway path, using the gateway's documented
+  entrypoint and passing the current project root as the source. Record the path
+  as the current project's selected deploy gateway so later `gi ftp` / `ги фтп`
+  can use it without repeating the path. The gateway owns FTP/SFTP
+  configuration, destination selection, and secret references. Read its local
+  instructions first, do not bypass the gateway by rewriting its private local
+  JSON files, and do not upload directly unless the gateway contract explicitly
+  delegates that operation back to the current project.
+- When a deploy gateway accepts project registration, a `gi ftp <deploy-hub-path>`
+  run for an unmapped current project should use the current project folder name
+  as the default project id, derive the destination from the gateway's documented
+  naming convention, register or update that project in the gateway-owned
+  deploy registry, and continue through the gateway entrypoint. The project
+  agent should not ask the user to choose a remote folder when the gateway
+  contract defines deterministic registration. The gateway must also record
+  enough non-secret metadata for later hub or index maintenance, such as project
+  id, public URL or target name, source identity, deploy artifact path, deploy
+  time/status, and whether a visible project card is pending. If registration,
+  target provisioning, or artifact selection fails, stop with that gateway
+  blocker instead of falling back to a root/default remote path or uploading the
+  whole repository.
 - Treat `gi ftp`, `ги фтп`, `gi ftp push`, `ги фтп пуш`, `gi upload ftp`,
   `gi deploy ftp`, and `gi залей на фтп` as requests to upload the current
   project's configured build output to FTP, FTPS, or SFTP. Treat
@@ -44,6 +102,17 @@
   store only discovery metadata and secret references such as environment
   variable names. Keep project-specific deploy settings in the separate
   project-local config file rather than shared instructions or chat history.
+  Treat upload stalls, hangs, repeated timeouts, and failed stream opens as
+  failed FTP/FTPS transfers. When FTP/FTPS upload fails or is unreliable,
+  immediately check the selected service contract, project-local config, and
+  user-provided details for an authorized SSH-based SFTP route to the same
+  remote deploy folder. If the needed SSH host, port, user, and credential
+  reference are available, switch to SFTP over SSH before more FTP/FTPS upload
+  variants and report that fallback. If they are missing, report the exact
+  missing SFTP details instead of inventing credentials or retrying the same
+  failing FTP path. Do not disable TLS certificate validation or accept invalid
+  FTPS certificates as a routine fallback unless the deploy contract or current
+  user message explicitly authorizes that degraded security path.
   Prefer `tools/deploy/ftp.local.example.json` only as a redacted shape. Do not
   commit hostnames, usernames, passwords, tokens, private keys, or private
   remote paths unless project policy explicitly marks them non-secret. Follow
@@ -56,7 +125,14 @@
   start covers the project. For local web/API services, resolve the service id,
   port, URL, and neighboring endpoints through config-service before running a
   start command; fixed ports in local runbooks or examples do not authorize a
-  fallback bind. If a config-service record is missing, use only the documented
+  fallback bind. If the resolved port is occupied, verify whether the owner is
+  the same documented service instance using project-local identity signals
+  such as service id, command, cwd, health endpoint, or process metadata. If the
+  port belongs to another service or ownership is unclear, stop and report the
+  port-conflict blocker; do not stop the owner without explicit user approval
+  and do not move the requested app to another port. If the owner is the same
+  service, restart or reuse it only through the documented run contract. If a
+  config-service record is missing, use only the documented
   config-service registration workflow from `08-config-service-and-task-manager`
   to create or update it before startup, or stop with the exact missing
   contract. If local instructions define a preferred start/restart command that
@@ -80,6 +156,28 @@
   their hosting or production deploy contract and are not restarted by local
   `gi reboot` unless project-local production instructions explicitly define
   that behavior.
+- Treat `gi docker`, `ги докер`, and equivalent Docker restart wording as a
+  request to restart the current project's documented Docker or Docker Compose
+  runtime, rebuilding first only when local Docker state requires it. Read
+  project-local Docker/run instructions, Dockerfile or Containerfile,
+  `compose.yaml`, `compose.yml`, `docker-compose*.yml`, container scripts,
+  manifests, service records, and project memory before touching containers. If
+  the project has no Docker/Compose config and no documented Docker run
+  contract, report that Docker is not configured for this project and stop
+  instead of inventing commands. If Docker CLI, Docker Compose, or the Docker
+  engine is unavailable or not running, report that blocker and do not claim a
+  restart. Rebuild before restart when the image is missing, the local Docker
+  contract says to rebuild, Dockerfile/Compose/build-context/dependency
+  manifests changed since the known running image, or freshness cannot be
+  confidently proven. Prefer project-documented commands; otherwise use the
+  narrow project Compose operation, such as `docker compose up -d --build` when
+  rebuilding is needed and `docker compose up -d` or the documented restart
+  command when the existing image is current. Scope all operations to the
+  current project only: do not prune Docker system state, remove volumes, delete
+  images, or stop unrelated containers. After the operation, verify documented
+  container status, health checks, mapped service URLs, and recent logs when
+  failures appear, then report rebuilt/restarted/not-configured/blocked status
+  with evidence.
 - Treat `gi first test`, `gi первый тест`, and `ги первый тест` as requests to
   verify the current application's first-launch experience by resetting only
   documented project-owned app cache, generated state, temporary first-run
@@ -106,18 +204,27 @@
   active test task. Do not confuse this with `gi test plan`, which remains a
   plan-only command by default. First load the active test task from the current
   message or project-local memory; if none exists, ask one short question for
-  the test task before running. Before starting the fresh run, clear documented
-  runtime database state, dispatcher run logs, local logs, and generated runtime
-  artifacts while preserving saved chain presets; for this project use
-  `python tools\run_gi_test.py --task "<task>"`, which performs the cleanup and
-  then runs the saved current dashboard chain/execution settings. Do not call
-  `tools\codex-dispatcher\dispatcher.py --chain` directly for `gi test`; that
-  bypasses the selected chain preset and execution mode and is only a
-  low-level diagnostic path.
-  Then read project-local instructions, README,
+  the test task before running. Then read project-local instructions, README,
   manifests, runbooks, test configs, and source entry points needed to identify
   exact current commands, services, app set, ports, routes, payloads,
   environment variables, storage, auth, queues, workers, and health checks.
+  Before executing the verification ladder, restore the project-owned runtime
+  state to the documented default/factory baseline using the same reset contract
+  as `gi default`, while preserving only project-local exclusions that are
+  explicitly documented for the current project. Examples of exclusions may
+  include secrets, production-local state, user data, configured external
+  service credentials, or named persistent fixtures; browser `localStorage`,
+  cookies, IndexedDB, generated test databases, runtime logs, queues, temporary
+  worker state, and app caches are not exclusions unless the current project's
+  reset contract says so. If the project has no documented reset targets or the
+  reset would touch ambiguous user-owned data, stop with that blocker instead
+  of running a dirty-state test. After reset, read back the effective runtime
+  configuration from the project-local source of truth, such as config files,
+  backend state, service discovery, or database metadata. UI-only browser state
+  is not a valid source of truth for selected chain, preset, execution mode,
+  ports, task, or service endpoints; if the live test depends on such a value,
+  persist it through the documented backend or project-local config first, or
+  report the missing contract as the blocker.
   Start or restart documented apps when needed, run the verification ladder
   through the broadest documented suite justified by the command, and report
   the task used, commands run, results, blockers, and unverified areas. For
@@ -141,26 +248,45 @@
   reset, cleanup, first-run, run, backup, and test instructions first. Use only
   documented reset scripts, paths, keys, or contracts for project-owned app
   state, generated caches, local settings, onboarding flags, temporary profiles,
-  and other rebuildable state. Do not delete source files, project-memory
-  specifications, instruction-kit files, user documents, production data,
-  secrets, credentials, external service data, shared system caches, sibling
-  projects, or arbitrary user-home folders. If reset targets are not documented,
-  ask one short clarification question instead of guessing. If a reset could be
-  irreversible or remove user-owned data, stop for explicit confirmation and
-  prefer a backup or rename step when local rules allow it. After reset, start
-  the project through documented run instructions, verify the default or
-  first-launch success signals, and report what was reset, what was left
+  runtime logs, queues, worker state, generated test databases, browser storage
+  for the app origin, and other rebuildable state. Preserve only exclusions
+  explicitly documented by the current project; do not infer exclusions from old
+  chat, screenshots, stale run artifacts, or browser state. Do not delete source
+  files, project-memory specifications, instruction-kit files, user documents,
+  production data, secrets, credentials, external service data, shared system
+  caches, sibling projects, or arbitrary user-home folders. If reset targets are
+  not documented, ask one short clarification question instead of guessing. If a
+  reset could be irreversible or remove user-owned data, stop for explicit
+  confirmation and prefer a backup or rename step when local rules allow it.
+  After reset, start the project through documented run instructions, verify the
+  default or first-launch success signals, and report what was reset, what was left
   untouched, what passed, and any blocker.
 - Treat `gi install`, `gi инсталл`, `ги инсталл`, and obvious typo variants
   such as `gi иснтлл` as requests to build the current project and produce an
-  installer. Use Inno Setup by default when no installer tool is named. If the
+  installer. Use Windows as the default target platform when the user and the
+  project-local packaging contract do not name a different platform. For
+  Windows, use Inno Setup by default when no installer tool is named. If the
   user writes a program after `gi install` / `gi инсталл`, use that program as
-  the preferred packaging tool. Read project-local build and packaging
-  instructions, scripts, manifests, and installer configs first. Resolve the
-  application version from project-local metadata such as manifests, package
-  files, assembly attributes, release files, or installer configs before
-  packaging; update the version in build output, installer metadata, and the
-  installer filename or artifact name when the local tooling supports it.
+  the preferred packaging tool. If the user names macOS, iOS, Android, Linux,
+  or another platform, or the project-local packaging contract selects one,
+  follow that platform's local build, signing, packaging, and artifact
+  verification contract instead of falling back to Windows. Ask a short
+  clarification question if the named platform is supported by the project but
+  its packaging contract is missing or ambiguous. Read project-local build and
+  packaging instructions, scripts, manifests, and installer configs first.
+  Keep build instructions, packaging configs, signing/notarization/provisioning
+  notes, verification notes, and produced installer artifacts separated by
+  target platform in project-local folders or per-platform artifact manifests.
+  Follow the project's existing packaging layout when it has one; when creating
+  or repairing a layout, use platform-specific folders such as
+  `packaging/windows/`, `packaging/macos/`, `packaging/ios/`,
+  `packaging/android/`, `packaging/linux/`, or equivalent project-local names.
+  Do not mix artifacts for different platforms in one unscoped output folder.
+  Resolve the application version from project-local metadata such as
+  manifests, package files, assembly attributes, release files, or installer
+  configs before packaging; update the version in build output, installer
+  metadata, and the installer filename or artifact name when the local tooling
+  supports it.
   `restore`, dependency install, build, and test checks are prerequisites only:
   they do not complete `gi install` unless the packaging command also runs and
   a current installer artifact is produced or explicitly verified. Do not report
@@ -181,17 +307,21 @@
   These are inspection commands by default; do not create external services,
   install heavy dependencies, upload data, or index private sources unless the
   user explicitly asks and project-local rules allow it.
-- Treat `gi rebuild` and `ги ребилд` as requests to rebuild the current project
-  or application only, producing the documented build output such as an
-  executable, package, or other artifact. Read project-local build or rebuild
-  instructions, manifests, scripts, and packaging metadata before running the
+- Treat `gi build`, `gi собрать`, `ги билд`, `ги собрать`, `gi rebuild`, and
+  `ги ребилд` as requests to build or rebuild the current project or
+  application only, producing the documented release/upload-ready output such
+  as a static `dist/`, bundle, executable, package, or other artifact. Read
+  project-local build or rebuild instructions, manifests, scripts, hosting
+  base-path/public-path config, and packaging metadata before running the
   documented command.
-  Do not treat `gi rebuild` as dependency restore, tests-only verification, or
-  any RAG/GI tooling rebuild, and do not combine it with a RAG rebuild unless
-  the user explicitly asks for both. If no project rebuild contract exists, ask
-  one short clarification question instead of inventing a command. Use
-  `gi tools rebuild` or `gi rag rebuild` when the GI/RAG layer itself must be
-  rebuilt.
+  Do not treat these project build commands as dependency restore, tests-only
+  verification, FTP/SFTP upload, production publication, installer packaging,
+  or any RAG/GI tooling rebuild, and do not combine them with a RAG rebuild
+  unless the user explicitly asks for both. If no project build/rebuild
+  contract exists, ask one short clarification question instead of inventing a
+  command. Use `gi ftp` for upload, `gi prod` for documented production
+  publication, `gi install` for installer packaging, and `gi tools rebuild` or
+  `gi rag rebuild` when the GI/RAG layer itself must be rebuilt.
 - Treat `gi tools rebuild`, `gi rag rebuild`, `ги тулс ребилд`,
   `ги раг ребилд`, and equivalent full GI/RAG rebuild wording as requests to
   rebuild the current project's entire configured GI/RAG project-memory

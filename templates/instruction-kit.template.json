@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.06.24.5",
+  "instruction_kit_version": "2026.07.04.7",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "TODO",
   "update_check": {
@@ -133,7 +133,19 @@
     "2026.06.24.2__add_gi_prod_online_service_publication",
     "2026.06.24.3__add_gi_info_command",
     "2026.06.24.4__gi_info_uses_project_languages",
-    "2026.06.24.5__make_gi_info_idempotent"
+    "2026.06.24.5__make_gi_info_idempotent",
+    "2026.06.30.1__add_senior_agent_engineering_standard",
+    "2026.06.30.2__add_api_key_secret_safety",
+    "2026.07.01.1__classify_development_vs_refactor",
+    "2026.07.02.1__require_project_identity_before_writes",
+    "2026.07.03.1__add_gi_docker_command",
+    "2026.07.04.1__prefer_sftp_fallback_for_ftp_upload_failures",
+    "2026.07.04.2__add_gi_build_command",
+    "2026.07.04.3__log_user_reported_agent_bugs_and_tools_artifact_boundary",
+    "2026.07.04.4__add_deploy_gateway_command",
+    "2026.07.04.5__save_selected_deploy_gateway",
+    "2026.07.04.6__auto_register_gateway_ftp_projects",
+    "2026.07.04.7__add_gi_error_intake_and_startup_update_check"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -155,6 +167,7 @@
     "tools/project-memory/specs/technology-stack.md",
     "patterns/EXTERNAL_DOCUMENTATION_RETRIEVAL.md",
     "patterns/ARCHITECTURE_AND_CODE_QUALITY.md",
+    "patterns/API_KEY_SECRET_SAFETY.md",
     "patterns/COHERENT_BATCH_VERIFICATION.md",
     "patterns/TECHNOLOGY_STACK_INVENTORY.md",
     "patterns/PROJECT_DOCUMENTATION_LAYERS.md",
