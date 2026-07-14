@@ -38,13 +38,18 @@
     }
 
     button,
+    .button-link,
     input,
     select,
     textarea {
       font: inherit;
     }
 
-    button {
+    button,
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 36px;
       border: 1px solid transparent;
       border-radius: 6px;
@@ -52,6 +57,7 @@
       cursor: pointer;
       font-weight: 700;
       white-space: nowrap;
+      text-decoration: none;
     }
 
     button:disabled {
@@ -439,33 +445,32 @@
       position: absolute;
       z-index: 2;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      width: 340px;
-      min-height: 240px;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      width: 286px;
+      min-height: 226px;
       max-height: min(720px, calc(100vh - 96px));
       resize: vertical;
       overflow: hidden;
-      border: 1px solid var(--line-strong);
+      border: 1px solid #dfe5eb;
       border-radius: 8px;
       background: var(--surface);
-      box-shadow: var(--shadow);
+      box-shadow: 0 10px 22px rgba(26, 39, 52, 0.08);
       user-select: none;
     }
 
     .agent-card.selected {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+      box-shadow: 0 0 0 3px var(--accent-soft), 0 14px 30px rgba(26, 39, 52, 0.12);
     }
 
     .card-head {
       display: grid;
-      grid-template-columns: 18px minmax(120px, 1fr) auto auto;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
       align-items: center;
-      gap: 10px;
-      min-height: 44px;
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(180deg, #ffffff, #fbfcfd);
+      gap: 8px;
+      min-height: 38px;
+      padding: 9px 10px 7px;
+      background: #ffffff;
       cursor: grab;
     }
 
@@ -476,11 +481,13 @@
     .card-drag-handle {
       display: inline-grid;
       place-items: center;
-      width: 18px;
-      height: 26px;
-      color: var(--muted);
+      width: 20px;
+      height: 20px;
+      border: 1px solid #d9e1e8;
+      border-radius: 5px;
+      color: #6a7785;
       cursor: grab;
-      font-size: 15px;
+      font-size: 12px;
       font-weight: 900;
       line-height: 1;
       user-select: none;
@@ -510,45 +517,95 @@
       min-width: 0;
       border: 0;
       border-radius: 4px;
-      min-height: 28px;
-      padding: 4px 6px;
+      min-height: 24px;
+      padding: 2px 3px;
       background: transparent;
+      color: #182230;
+      font-size: 13px;
       font-weight: 800;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
+    .agent-name:focus {
+      box-shadow: none;
+      background: #f7f9fb;
+    }
+
     .agent-role {
-      max-width: 96px;
       min-width: 0;
-      color: var(--muted);
-      font-size: 12px;
+      color: #566474;
+      font-size: 11px;
       font-weight: 700;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      line-height: 1.35;
     }
 
     .agent-card-actions {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
       flex: 0 0 auto;
+    }
+
+    .agent-summary {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .agent-card-description {
+      margin: 0;
+      padding: 0 10px 8px 40px;
+      color: #5d6a79;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .agent-node-section {
+      display: grid;
+      gap: 7px;
+      padding: 9px 10px;
+      border-top: 1px solid #edf1f5;
+    }
+
+    .agent-node-section:first-child {
+      border-top: 0;
+      padding-top: 2px;
+    }
+
+    .agent-section-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #364253;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .agent-section-title::after {
+      content: "";
+      width: 4px;
+      height: 4px;
+      border: 1px solid #b9c3cf;
+      border-radius: 50%;
     }
 
     .runtime-pill {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      min-height: 28px;
+      min-height: 30px;
       max-width: 100%;
       width: 100%;
-      padding: 5px 8px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #f8fafb;
+      padding: 6px 8px;
+      border: 1px solid #dfe5eb;
+      border-radius: 6px;
+      background: #fbfcfd;
       color: var(--text);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 800;
       line-height: 1.2;
       overflow: hidden;
@@ -572,15 +629,16 @@
       justify-content: space-between;
       gap: 8px;
       width: 100%;
-      min-height: 32px;
-      border: 1px solid var(--line);
+      min-height: 30px;
+      border: 1px solid #e4e9ee;
       border-radius: 6px;
-      padding: 6px 8px;
-      background: #f8fafb;
+      padding: 6px 7px;
+      background: #f6f7f9;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 800;
       text-align: left;
+      text-transform: uppercase;
     }
 
     .work-package-pill:hover {
@@ -590,13 +648,13 @@
 
     .card-body {
       display: grid;
-      gap: 8px;
+      gap: 0;
       align-content: start;
       min-height: 0;
       min-width: 0;
       overflow-x: hidden;
       overflow-y: auto;
-      padding: 10px 12px 12px;
+      padding: 0;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
     }
@@ -606,19 +664,22 @@
     }
 
     .card-body label {
-      font-size: 11px;
+      font-size: 10px;
     }
 
     .card-body select {
-      min-height: 34px;
-      padding: 6px 9px;
+      min-height: 30px;
+      border-color: #e1e7ed;
+      background: #ffffff;
+      padding: 5px 8px;
+      font-size: 11px;
     }
 
     .mini-chat {
       display: grid;
-      gap: 8px;
-      padding-top: 10px;
-      border-top: 1px solid var(--line);
+      gap: 7px;
+      padding: 9px 10px;
+      border-top: 1px solid #edf1f5;
     }
 
     .mini-chat-toggle {
@@ -741,14 +802,15 @@
 
     .agent-toolbar {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 9px;
-      min-height: 34px;
-      padding-top: 2px;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 12px;
+      gap: 7px;
+      min-height: 28px;
+      padding: 6px 10px;
+      border-top: 0;
+      background: #050505;
+      color: #ffffff;
+      font-size: 11px;
     }
 
     .agent-menu-button {
@@ -761,15 +823,15 @@
       border-radius: 6px;
       padding: 4px 6px;
       background: transparent;
-      color: var(--muted);
-      font-size: 12px;
+      color: #ffffff;
+      font-size: 11px;
       font-weight: 700;
     }
 
     .agent-menu-button:hover,
     .agent-menu-button.active {
-      background: #eef3f6;
-      color: var(--text);
+      background: #1a1a1a;
+      color: #ffffff;
     }
 
     .agent-menu-button .truncate {
@@ -779,15 +841,29 @@
     }
 
     .toolbar-icon {
-      width: 24px;
-      min-height: 28px;
+      width: 22px;
+      min-height: 24px;
       padding: 0;
       border: 0;
-      border-radius: 6px;
+      border-radius: 5px;
       background: transparent;
-      color: var(--muted);
-      font-size: 15px;
+      color: #697787;
+      font-size: 13px;
       font-weight: 800;
+    }
+
+    .agent-toolbar .toolbar-icon {
+      color: #ffffff;
+    }
+
+    .toolbar-icon:hover {
+      background: #eef3f6;
+      color: var(--text);
+    }
+
+    .agent-toolbar .toolbar-icon:hover {
+      background: #1a1a1a;
+      color: #ffffff;
     }
 
     .agent-popover {
@@ -860,11 +936,11 @@
       width: 18px;
       height: 18px;
       min-height: 18px;
-      border: 2px solid #ffffff;
+      border: 3px solid #ffffff;
       border-radius: 50%;
       padding: 0;
-      background: var(--accent);
-      box-shadow: 0 0 0 1px rgba(24, 79, 77, 0.58), 0 4px 10px rgba(26, 39, 52, 0.16);
+      background: #13abc1;
+      box-shadow: 0 0 0 1px rgba(19, 171, 193, 0.68), 0 5px 12px rgba(26, 39, 52, 0.18);
       transform: translateY(-50%);
       cursor: crosshair;
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
@@ -873,8 +949,8 @@
 
     .port.input {
       left: -9px;
-      background: var(--blue);
-      box-shadow: 0 0 0 1px rgba(47, 102, 144, 0.62), 0 4px 10px rgba(26, 39, 52, 0.16);
+      background: #5b5cf6;
+      box-shadow: 0 0 0 1px rgba(91, 92, 246, 0.62), 0 5px 12px rgba(26, 39, 52, 0.18);
     }
 
     .port.output {
@@ -882,20 +958,20 @@
     }
 
     .port.output.success {
-      top: 38%;
-      background: var(--accent);
+      top: 47%;
+      background: #13abc1;
     }
 
     .port.output.failure {
-      top: 62%;
-      background: var(--danger);
+      top: 73%;
+      background: #5b5cf6;
       box-shadow: 0 0 0 1px rgba(125, 41, 41, 0.64), 0 4px 10px rgba(26, 39, 52, 0.16);
     }
 
     .port-label {
       position: absolute;
       right: 16px;
-      color: var(--muted);
+      color: #657282;
       font-size: 10px;
       font-weight: 800;
       opacity: 0;
@@ -906,11 +982,11 @@
     }
 
     .port-label.success {
-      top: calc(38% - 7px);
+      top: calc(47% - 7px);
     }
 
     .port-label.failure {
-      top: calc(62% - 7px);
+      top: calc(73% - 7px);
     }
 
     .port.active {
@@ -1238,6 +1314,7 @@
         <div class="subtitle">Соберите флоу из карточек агентов, настройте LLM и соедините шаги стрелками.</div>
       </div>
       <div class="actions">
+        <a class="button-link btn-secondary" href="/" title="Перейти на основную страницу">Основная</a>
         <button id="undo-flow" class="btn-secondary" type="button" disabled>Undo</button>
         <button id="save-flow" class="btn-primary" type="button">Сохранить</button>
         <button id="reset-flow" class="btn-danger" type="button">Очистить</button>
@@ -1329,13 +1406,13 @@
           <svg id="connections" class="connections" aria-hidden="true">
             <defs>
               <marker id="arrow-head" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="#256f6c"></path>
+                <path d="M0,0 L0,6 L9,3 z" fill="#4d5560"></path>
               </marker>
               <marker id="arrow-head-failure" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="#b13b3b"></path>
+                <path d="M0,0 L0,6 L9,3 z" fill="#4d5560"></path>
               </marker>
               <marker id="arrow-head-selected" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="#184f4d"></path>
+                <path d="M0,0 L0,6 L9,3 z" fill="#5b5cf6"></path>
               </marker>
               <marker id="arrow-head-preview" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L0,6 L9,3 z" fill="#617183"></path>
@@ -1629,6 +1706,7 @@
     const CONNECTION_STUB = 36;
     const CONNECTION_CLEARANCE = 46;
     const CONNECTION_CORNER_RADIUS = 14;
+    const CONNECTION_OBSTACLE_MARGIN = 28;
     const UNDO_LIMIT = 60;
     let dragState = null;
     let linkState = null;
@@ -1789,6 +1867,67 @@
 
     function saveChainPresets() {
       localStorage.setItem(CHAIN_PRESETS_STORAGE_KEY, JSON.stringify(chainPresets));
+    }
+
+    async function fetchBackendChainPresets() {
+      const response = await fetch("/api/agent-chain-presets");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Chain presets load failed with HTTP ${response.status}.`);
+      }
+      return Array.isArray(payload.presets)
+        ? payload.presets.map(normalizeChainPreset).filter(Boolean)
+        : [];
+    }
+
+    async function importLocalChainPresetsToBackend() {
+      const localPresets = loadChainPresets().filter((preset) => preset.id !== DEFAULT_CHAIN_PRESET_ID);
+      if (!localPresets.length) {
+        return;
+      }
+      const response = await fetch("/api/agent-chain-presets/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presets: localPresets }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Chain presets import failed with HTTP ${response.status}.`);
+      }
+    }
+
+    async function refreshChainPresetsFromBackend() {
+      await importLocalChainPresetsToBackend();
+      const backendPresets = await fetchBackendChainPresets();
+      if (backendPresets.length) {
+        chainPresets = backendPresets;
+        saveChainPresets();
+        renderChainPresetSelect();
+        statusLine.textContent = "Пресеты цепочек загружены из БД проекта.";
+      }
+    }
+
+    async function saveChainPresetToBackend(preset) {
+      const response = await fetch(`/api/agent-chain-presets/${encodeURIComponent(preset.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preset),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Chain preset save failed with HTTP ${response.status}.`);
+      }
+      return payload.preset || preset;
+    }
+
+    async function deleteChainPresetFromBackend(presetId) {
+      const response = await fetch(`/api/agent-chain-presets/${encodeURIComponent(presetId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && response.status !== 404) {
+        throw new Error(payload.error || `Chain preset delete failed with HTTP ${response.status}.`);
+      }
     }
 
     function loadFlow() {
@@ -2913,7 +3052,7 @@
       card.dataset.agentId = agent.id;
       card.style.left = `${agent.x}px`;
       card.style.top = `${agent.y}px`;
-      card.style.borderTop = `4px solid ${cardColor(agent.role)}`;
+      card.style.setProperty("--agent-accent", cardColor(agent.role));
 
       const inputPort = document.createElement("button");
       inputPort.className = "port input";
@@ -2949,7 +3088,7 @@
       const dragHandle = document.createElement("span");
       dragHandle.className = "card-drag-handle";
       dragHandle.title = "Перетащить карточку";
-      dragHandle.textContent = "::";
+      dragHandle.textContent = "AI";
       const name = document.createElement("input");
       name.className = "agent-name";
       name.value = agent.name;
@@ -2958,6 +3097,9 @@
       const role = document.createElement("span");
       role.className = "agent-role";
       role.textContent = optionLabel(AGENT_PRESET_OPTIONS, agent.preset);
+      const summary = document.createElement("div");
+      summary.className = "agent-summary";
+      summary.append(name, role);
       const runtime = document.createElement("span");
       runtime.className = "runtime-pill";
       runtime.title = "Модель / скорость / размышление";
@@ -2995,28 +3137,77 @@
       const cardActions = document.createElement("div");
       cardActions.className = "agent-card-actions";
       cardActions.append(settingsButton, deleteButton);
-      head.append(dragHandle, name, role, cardActions);
+      head.append(dragHandle, summary, cardActions);
+
+      const description = document.createElement("p");
+      description.className = "agent-card-description";
+      description.textContent = "Define the agent instructions, then pass work through the chain.";
+
+      const modelSection = document.createElement("section");
+      modelSection.className = "agent-node-section";
+      const modelTitle = document.createElement("div");
+      modelTitle.className = "agent-section-title";
+      modelTitle.textContent = "Model";
+      modelSection.append(
+        modelTitle,
+        runtime,
+        selectField("Language Model", agent.llm, MODEL_OPTIONS, (value) => updateAgent(agent.id, { llm: value })),
+      );
+
+      const instructionsSection = document.createElement("section");
+      instructionsSection.className = "agent-node-section";
+      const instructionsTitle = document.createElement("div");
+      instructionsTitle.className = "agent-section-title";
+      instructionsTitle.textContent = "Agent Instructions";
+      instructionsSection.append(
+        instructionsTitle,
+        selectField("Preset", agent.preset || "agent", AGENT_PRESET_OPTIONS, (value) => applyAgentPreset(agent.id, value)),
+      );
+
+      const toolsSection = document.createElement("section");
+      toolsSection.className = "agent-node-section";
+      const toolsTitle = document.createElement("div");
+      toolsTitle.className = "agent-section-title";
+      toolsTitle.textContent = "Tools";
+
+      const inputSection = document.createElement("section");
+      inputSection.className = "agent-node-section";
+      const inputTitle = document.createElement("div");
+      inputTitle.className = "agent-section-title";
+      inputTitle.textContent = "Input";
+      inputSection.append(
+        inputTitle,
+        selectField("Speed", agent.speed, SPEED_OPTIONS, (value) => updateAgent(agent.id, { speed: value })),
+        selectField("Reasoning", agent.reasoning, REASONING_OPTIONS, (value) => updateAgent(agent.id, { reasoning: value })),
+        selectField("Access", normalizeAccessMode(agent.accessMode), ACCESS_MODE_OPTIONS, (value) => updateAgent(agent.id, { accessMode: value })),
+      );
 
       const body = document.createElement("div");
       body.className = "card-body";
       const workPackageButton = document.createElement("button");
       workPackageButton.className = "work-package-pill";
       workPackageButton.type = "button";
-      workPackageButton.textContent = "Рабочий пакет";
       workPackageButton.title = "Открыть role/instructions, objective, inputs, constraints и output format";
       workPackageButton.addEventListener("click", () => openAgentSettings(agent.id));
-      body.append(
-        runtime,
-        selectField("Пресет агента", agent.preset || "agent", AGENT_PRESET_OPTIONS, (value) => applyAgentPreset(agent.id, value)),
-        selectField("LLM", agent.llm, MODEL_OPTIONS, (value) => updateAgent(agent.id, { llm: value })),
-        selectField("Скорость LLM", agent.speed, SPEED_OPTIONS, (value) => updateAgent(agent.id, { speed: value })),
-        selectField("Размышление", agent.reasoning, REASONING_OPTIONS, (value) => updateAgent(agent.id, { reasoning: value })),
-        selectField("Доступ", normalizeAccessMode(agent.accessMode), ACCESS_MODE_OPTIONS, (value) => updateAgent(agent.id, { accessMode: value })),
-        workPackageButton,
-        renderMiniChat(agent),
-      );
-
-      card.append(inputPort, successPort, failurePort, successLabel, failureLabel, head, body);
+      workPackageButton.textContent = "Work package";
+      toolsSection.append(toolsTitle, workPackageButton);
+      body.append(modelSection, instructionsSection, toolsSection, inputSection, renderMiniChat(agent));
+      const footer = document.createElement("footer");
+      footer.className = "agent-toolbar";
+      const footerLabel = document.createElement("button");
+      footerLabel.className = "agent-menu-button";
+      footerLabel.type = "button";
+      footerLabel.title = "Open agent settings";
+      footerLabel.addEventListener("click", () => openAgentSettings(agent.id));
+      const footerText = document.createElement("span");
+      footerText.className = "truncate";
+      footerText.textContent = "Toolset";
+      footerLabel.append(footerText);
+      const footerModel = document.createElement("span");
+      footerModel.className = "truncate";
+      footerModel.textContent = modelLabel(agent.llm);
+      footer.append(footerLabel, footerModel);
+      card.append(inputPort, successPort, failurePort, successLabel, failureLabel, head, description, body, footer);
       card.addEventListener("pointerdown", () => {
         selectedAgentId = agent.id;
         selectedConnectionId = "";
@@ -3701,20 +3892,21 @@
       const isOutput = port === "success" || port === "failure";
       const cardX = Number(agent?.x) || 0;
       const cardY = Number(agent?.y) || 0;
-      const cardWidth = card.offsetWidth || 340;
-      const cardHeight = card.offsetHeight || 260;
+      const cardWidth = card.offsetWidth || 286;
+      const cardHeight = card.offsetHeight || 226;
       const x = isOutput ? cardX + cardWidth : cardX;
       let y = cardY + cardHeight / 2;
       if (port === "success") {
-        y = cardY + cardHeight * 0.38;
+        y = cardY + cardHeight * 0.47;
       }
       if (port === "failure") {
-        y = cardY + cardHeight * 0.62;
+        y = cardY + cardHeight * 0.73;
       }
       y += offsetY;
       return {
         x,
         y,
+        agentId,
         side: isOutput ? "right" : "left",
         bounds: {
           left: cardX,
@@ -3730,6 +3922,15 @@
     }
 
     function connectionRoutePoints(from, to) {
+      const route = directConnectionRoutePoints(from, to);
+      const obstacles = connectionObstacles(from, to);
+      if (!routeIntersectsObstacles(route, obstacles)) {
+        return route;
+      }
+      return obstacleAvoidingRoutePoints(from, to, obstacles);
+    }
+
+    function directConnectionRoutePoints(from, to) {
       const start = { x: from.x, y: from.y };
       const end = { x: to.x, y: to.y };
       const exitX = from.x + CONNECTION_STUB;
@@ -3779,6 +3980,98 @@
         { x: entryX, y: to.y },
         end,
       ];
+    }
+
+    function obstacleAvoidingRoutePoints(from, to, obstacles) {
+      const start = { x: from.x, y: from.y };
+      const end = { x: to.x, y: to.y };
+      const exitX = from.x + CONNECTION_STUB;
+      const entryX = to.x - CONNECTION_STUB;
+      const routeBounds = [from.bounds, to.bounds, ...obstacles].filter(Boolean);
+      const minX = Math.min(from.x, to.x, exitX, entryX);
+      const maxX = Math.max(from.x, to.x, exitX, entryX);
+      const relevantBounds = routeBounds.filter((bounds) => rangesOverlap(bounds.left, bounds.right, minX, maxX));
+      const candidates = [];
+      for (const bounds of relevantBounds.length ? relevantBounds : routeBounds) {
+        candidates.push(bounds.top - CONNECTION_OBSTACLE_MARGIN);
+        candidates.push(bounds.bottom + CONNECTION_OBSTACLE_MARGIN);
+      }
+      const preferredY = (from.y + to.y) / 2;
+      candidates.sort((first, second) => Math.abs(first - preferredY) - Math.abs(second - preferredY));
+      for (const laneY of candidates) {
+        const route = [
+          start,
+          { x: exitX, y: from.y },
+          { x: exitX, y: laneY },
+          { x: entryX, y: laneY },
+          { x: entryX, y: to.y },
+          end,
+        ];
+        if (!routeIntersectsObstacles(route, obstacles)) {
+          return route;
+        }
+      }
+      const topLane = Math.min(...routeBounds.map((bounds) => bounds.top)) - CONNECTION_OBSTACLE_MARGIN;
+      const bottomLane = Math.max(...routeBounds.map((bounds) => bounds.bottom)) + CONNECTION_OBSTACLE_MARGIN;
+      const laneY = Math.abs(topLane - preferredY) <= Math.abs(bottomLane - preferredY) ? topLane : bottomLane;
+      return [
+        start,
+        { x: exitX, y: from.y },
+        { x: exitX, y: laneY },
+        { x: entryX, y: laneY },
+        { x: entryX, y: to.y },
+        end,
+      ];
+    }
+
+    function connectionObstacles(from, to) {
+      return flow.agents
+        .filter((agent) => agent.id !== from.agentId && agent.id !== to.agentId)
+        .map((agent) => {
+          const card = canvas.querySelector(`.agent-card[data-agent-id="${agent.id}"]`);
+          if (!card) {
+            return null;
+          }
+          const cardX = Number(agent.x) || 0;
+          const cardY = Number(agent.y) || 0;
+          const cardWidth = card.offsetWidth || 286;
+          const cardHeight = card.offsetHeight || 226;
+          return {
+            left: cardX - CONNECTION_OBSTACLE_MARGIN,
+            right: cardX + cardWidth + CONNECTION_OBSTACLE_MARGIN,
+            top: cardY - CONNECTION_OBSTACLE_MARGIN,
+            bottom: cardY + cardHeight + CONNECTION_OBSTACLE_MARGIN,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function routeIntersectsObstacles(points, obstacles) {
+      const route = compactRoutePoints(points);
+      for (let index = 1; index < route.length; index += 1) {
+        if (obstacles.some((bounds) => segmentIntersectsBounds(route[index - 1], route[index], bounds))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function segmentIntersectsBounds(first, second, bounds) {
+      if (first.y === second.y) {
+        return bounds.top <= first.y && first.y <= bounds.bottom && rangesOverlap(first.x, second.x, bounds.left, bounds.right);
+      }
+      if (first.x === second.x) {
+        return bounds.left <= first.x && first.x <= bounds.right && rangesOverlap(first.y, second.y, bounds.top, bounds.bottom);
+      }
+      return false;
+    }
+
+    function rangesOverlap(firstStart, firstEnd, secondStart, secondEnd) {
+      const firstMin = Math.min(firstStart, firstEnd);
+      const firstMax = Math.max(firstStart, firstEnd);
+      const secondMin = Math.min(secondStart, secondEnd);
+      const secondMax = Math.max(secondStart, secondEnd);
+      return firstMin <= secondMax && secondMin <= firstMax;
     }
 
     function roundedOrthogonalPath(points) {
@@ -3873,8 +4166,8 @@
         path.setAttribute("class", `connection ${selectedConnectionId === connection.id ? "selected" : ""}`);
         path.setAttribute("d", connectionPath(from, to));
         path.setAttribute("fill", "none");
-        path.setAttribute("stroke", selectedConnectionId === connection.id ? "#184f4d" : (normalized.fromPort === "failure" ? "#b13b3b" : "#256f6c"));
-        path.setAttribute("stroke-width", selectedConnectionId === connection.id ? "4" : "2.5");
+        path.setAttribute("stroke", selectedConnectionId === connection.id ? "#5b5cf6" : "#4d5560");
+        path.setAttribute("stroke-width", selectedConnectionId === connection.id ? "3" : "2");
         path.setAttribute("stroke-linecap", "round");
         path.setAttribute("stroke-linejoin", "round");
         path.setAttribute(
@@ -4064,13 +4357,16 @@
       persistFlow(`Цепочка "${flow.name}" сохранена как пресет.`);
       renderChainPresetSelect();
       try {
+        const savedPreset = await saveChainPresetToBackend(preset);
+        chainPresets = chainPresets.map((item) => item.id === savedPreset.id ? normalizeChainPreset(savedPreset) || item : item);
+        saveChainPresets();
         await saveFlowToBackend(buildFlowSnapshotFromCanvas());
       } catch (error) {
         statusLine.textContent = `Saved locally; backend save failed: ${error.message}`;
       }
     }
 
-    function deleteSelectedChainPreset() {
+    async function deleteSelectedChainPreset() {
       const preset = chainPresets.find((item) => item.id === chainPresetSelect.value);
       if (!preset) {
         statusLine.textContent = "Выберите пресет для удаления.";
@@ -4082,6 +4378,12 @@
       }
       if (!window.confirm(`Удалить пресет "${preset.name}"? Текущая цепочка останется на поле.`)) {
         statusLine.textContent = "Удаление пресета отменено.";
+        return;
+      }
+      try {
+        await deleteChainPresetFromBackend(preset.id);
+      } catch (error) {
+        statusLine.textContent = `Backend delete failed: ${error.message}`;
         return;
       }
       chainPresets = chainPresets.filter((item) => item.id !== preset.id);
@@ -4180,6 +4482,9 @@
     renderChainPresetSelect();
     renderPresetPreview();
     render();
+    refreshChainPresetsFromBackend().catch((error) => {
+      statusLine.textContent = `Пресеты из БД недоступны, используется локальный кеш: ${error.message}`;
+    });
   </script>
 </body>
 </html>

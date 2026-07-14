@@ -87,8 +87,10 @@ def test_agent_builder_connection_ports_are_compact_and_modern() -> None:
     assert 'node.matches(".port.input")' in html
     assert "finishLinkAtPointer(event);" in html
     assert 'window.removeEventListener("pointerup", cancelLink);' in html
-    assert "if (to.x >= from.x)" in html
-    assert "const midX = from.x + (to.x - from.x) / 2;" in html
+    assert "const CONNECTION_OBSTACLE_MARGIN = 28;" in html
+    assert "function obstacleAvoidingRoutePoints(from, to, obstacles)" in html
+    assert "function connectionObstacles(from, to)" in html
+    assert "function routeIntersectsObstacles(points, obstacles)" in html
     assert "if (Math.abs(to.y - from.y) >= CONNECTION_CLEARANCE)" in html
 
 

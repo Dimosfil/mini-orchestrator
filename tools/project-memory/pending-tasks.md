@@ -14,6 +14,31 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
+### PM Dispatcher Chain Preset
+
+Goal: add a saved chain preset that keeps PM as the task dispatcher while using
+separate planner, executor, QA, reviewer, and PM acceptance stages.
+
+Planned changes:
+
+- [x] Create a new SQLite-backed chain preset alongside `test-chain-1`.
+- [x] Set the new preset as the current dashboard run config.
+- [x] Verify the preset is valid and visible through the runtime listing.
+- [!] Start the Mini Orchestrator UI through the documented startup path.
+
+Risks or dependencies:
+
+- Preserve the existing `test-chain-1` preset and saved runtime state.
+- Startup still depends on GI config-service and the Symphony service record.
+
+Result, 2026-06-30:
+
+- Added `pm-dispatcher-delivery-chain` and selected it in `current_run_config`
+  with `executionMode=symphony` and `symphonyWorkerMode=debug-new-worker`.
+- Runtime validation reports `valid`; start node is `pm-dispatcher`.
+- UI startup is blocked because GI config-service at `http://127.0.0.1:4100`
+  is unreachable, so Mini correctly refuses to bind a fallback port.
+
 ### Retire Dispatcher Dry-Run From Product Verification
 
 Status, 2026-06-23:
@@ -1680,6 +1705,10 @@ Planned changes:
 - [x] Mark missing old `queued` gateway runs as `stale` with clear evidence
   instead of counting them as active.
 - [x] Add focused regression coverage and run the affected tests.
+- [x] Reconcile Mini-owned gateway `timeout` records when Symphony reports the
+  timed-out handoff as completed later: mark that handoff `done`, keep any
+  unstarted stages `pending`, and move the aggregate gateway card to `failed`
+  with a rerun-required message instead of leaving a misleading timeout.
 
 Risks and dependencies:
 - Do not delete historical gateway run records.

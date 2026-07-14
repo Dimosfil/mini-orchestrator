@@ -142,6 +142,50 @@ project scope, privacy rules, and explicit user request.
 - Reason this dependency still exists: provides the likely task-manager and
   durable planning reference for GI-style project workflows.
 
+## langflow-ai/langflow
+
+- Purpose: open-source visual builder and runtime for AI agents, RAG workflows,
+  MCP tools/servers, and API-callable AI flows.
+- Business or architectural role: researched on 2026-06-30 as a possible
+  external visual-flow/runtime layer for Mini Orchestrator. It is a candidate
+  for building individual worker tools, agent flows, or MCP-exposed capabilities,
+  not a replacement for Mini Orchestrator task ownership.
+- Local folder: none recorded.
+- Canonical Git/package/docs URLs:
+  `https://github.com/langflow-ai/langflow`,
+  `https://docs.langflow.org/`,
+  `https://www.langflow.org/`.
+- Service ID or runtime endpoints: none configured locally. Typical standalone
+  runtime defaults to `http://127.0.0.1:7860` when installed separately; do not
+  assume that port is active for this project without a config-service record or
+  an explicit user request.
+- Owner or source of truth: upstream `langflow-ai/langflow` repository and
+  official documentation.
+- Data/API contract: flows are visual DAGs serialized as JSON and can be run
+  through the Langflow HTTP API, commonly `POST /api/v1/run/{FLOW_ID}`, with
+  inputs such as `input_value`, `input_type`, `output_type`, and `tweaks`.
+  Langflow can also expose flows through MCP server mode and consume external
+  MCP servers as a client.
+- Setup, sync, build, test, or update commands: no local setup is approved yet.
+  Upstream-documented options include Desktop, Docker, Python/uv installation,
+  and LFX flow-devops tooling; verify current official docs before installing
+  or starting it.
+- Version, branch, or update cadence: research snapshot checked against GitHub
+  releases on 2026-06-30; latest observed release was `1.10.1` from
+  2026-06-23. Recheck before implementation because this project moves quickly.
+- Privacy, secret, license, and access boundaries: treat any future Langflow
+  instance as an external AI runtime. Do not send project secrets, private task
+  data, local memory contents, or arbitrary source code into Langflow flows
+  unless a specific integration contract and data boundary are approved.
+- Status and caveats: researched only; not an active dependency, service, or
+  required startup component. Security and deployment guidance matter if it is
+  introduced: require auth/API keys, avoid exposing the local port directly, and
+  prefer adapter-based calls through Mini Orchestrator.
+- Reason this dependency still exists: preserves the research conclusion that
+  Langflow may be useful as a visual flow authoring/runtime layer, while Mini
+  Orchestrator remains the owner of task cards, approval manifests, chain preset
+  order, Dispatcher/Symphony routing, and human review.
+
 ## D:\AI\AiAnalytics\token-lens
 
 - Purpose: local analytics application for token-usage inspection across agent
