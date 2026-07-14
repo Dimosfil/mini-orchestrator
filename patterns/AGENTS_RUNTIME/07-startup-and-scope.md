@@ -10,12 +10,20 @@
   `tools/project-memory/instruction-kit.json` when present, resolve the accepted
   shared-instruction source, and read only `VERSION.md`, `CHANGELOG.md`,
   `INDEX.md`, and pending files under `migrations/`. Apply pending accepted
-  migrations when the local update contract allows it; otherwise report the
-  compact blocker and continue with current local instructions unless the user
+  migrations before continuing with task-specific work. In instruction-kit
+  metadata, `update_check.enabled: true` authorizes both checking and applying;
+  a missing `auto_apply_pending_migrations` field defaults to `true` for
+  backward compatibility. Finding a newer version is not a completed startup
+  check: do not merely report it or tell the user to run a later update command.
+  Skip application only when metadata explicitly sets the update check or
+  automatic application to `false`, or when a concrete source-access,
+  filesystem, repository-scope, safety, or merge-conflict blocker exists.
+  Name the blocker and continue with current local instructions unless the user
   explicitly requested `gi обновить`. Do not read `updates/`, old chat examples,
   broad project files, or unrelated source repositories for this startup check.
   Keep the user-facing output to one compact status line or include it in the
-  first substantive reply.
+  first substantive reply. That compact status must explicitly include the
+  pending migration count, including `0` when no migrations are pending.
 - For each new project session, require a clear, measurable project goal before
   implementation begins.
   - If no explicit project goal exists in startup artifacts or user text,
@@ -28,9 +36,13 @@
   - In final output, report completion status against each goal criterion and
     list any remaining gap as a clear blocker.
 - For `gi start`, `gi restore`, and title-only first messages, restore only the
-  minimum orientation needed for the next turn: local instructions, latest
-  summary metadata or relevant sections, and compact git state. Do not read full
-  summaries, runbooks, memory notes, logs, or diffs unless a concrete task needs
+  minimum orientation needed for the next turn: local instructions, the latest
+  handoff summary, and compact git state. The latest handoff summary is the
+  primary continuation artifact for a new chat: read it enough to recover the
+  current topic, key theses or decisions, blockers, and next useful direction.
+  Do not treat seeing only its filename, timestamp, or metadata as successful
+  restore. Keep the response compact and do not read unrelated full runbooks,
+  memory notes, logs, diffs, or older summaries unless a concrete task needs
   them.
 - Treat `gi start sprint`, `gi sprint start`, and equivalent active-sprint
   wording as more specific than plain `gi start`: route them through the
@@ -46,12 +58,13 @@
   `gi restore`. Mention them only as compact context when relevant, then ask for
   the user's current task instead of offering to continue, run, push, or finish
   them.
-- Treat `init <source>`, `инит <source>`, and `инициализируй <source>` that
-  point to the canonical shared-instruction Git repository
-  `https://github.com/Dimosfil/general-instructions.git`, the current
+- Treat `gi init <source>`, `init <source>`, `инит <source>`, and
+  `инициализируй <source>` that point to the canonical shared-instruction Git
+  repository `https://github.com/Dimosfil/general-instructions.git`, the
+  shorter GitHub repo form `Dimosfil/general-instructions.git`, the current
   shared-instruction checkout/cache, `GENERAL_INSTRUCTIONS_HOME`, or another
   known shared-instruction source as a shared-instruction bootstrap/startup
-  request, even without the `gi` prefix.
+  request, even when the user supplies the source as a Markdown link.
   Read the repository's local instructions and follow the documented `gi`
   bootstrap rules. Do not reinterpret that form as Git initialization, OpenCode
   setup, project creation, or skill creation unless the user explicitly names

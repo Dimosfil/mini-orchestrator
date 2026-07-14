@@ -50,6 +50,10 @@
   normal successful updates. Apply the update, then report a compact summary
   with versions, migration counts/IDs, changed files, checks, commit/push
   result, and blockers if any.
+- After a successful `gi РѕР±РЅРѕРІРёС‚СЊ`, treat the updated local instructions as
+  active immediately. Before the next concrete task in the same chat/session,
+  reread the updated local `AGENTS.md` and every routed runtime module needed
+  for that task instead of continuing from pre-update context.
 - Keep `gi обновить` scoped to accepted instruction-kit updates and migrations.
   Do not reinterpret it as a request to push pre-existing local commits, sync a
   feature branch, resume a remembered plan, or perform general Git maintenance.

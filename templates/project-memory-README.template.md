@@ -28,11 +28,20 @@ artifact, evidence, output, data, or docs-asset location and keep only compact
 summaries, manifests, checksums, or links here when they are needed for a
 decision, behavior contract, failure, or verification result.
 
-Likewise, do not put those raw outputs in `tools/` by default. `tools/` is for
+Likewise, do not put product material in `tools/` by default. `tools/` is for
 durable development and agent tooling such as scripts, adapters, bootstrap
-commands, deployment helpers, and redacted examples or manifests. Product
-outputs and selected-run artifacts need a documented project-local output,
-evidence, data, build, release, or docs-asset location.
+commands, deployment helpers, verification helpers, agent-memory tooling, and
+redacted examples or manifests. Product runtime/source packages, product plugin
+implementations, product tests, full product documentation, product outputs,
+and selected-run artifacts need the project's normal source, test,
+documentation, output, evidence, data, build, release, or docs-asset locations.
+
+Executable file type does not make a script durable tooling. Keep single-task
+research probes, exploratory scripts, ad hoc collectors, and throwaway
+diagnostics out of `tools/`, `tools/research/`, `tools/probes/`, and similar
+subtrees. Prefer inline execution or the project's documented ignored
+scratch/temp location outside `tools/`; remove the temporary script after use
+and preserve only required evidence in its normal artifact location.
 
 ## Documentation Versus Summary Versus Project Memory
 

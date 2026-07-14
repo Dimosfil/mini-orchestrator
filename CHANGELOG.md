@@ -2,7 +2,162 @@
 
 Accepted changes for the shared instruction library.
 
+## 2026.07.14
+
+- Made first-task GI migration application explicit: an enabled update check
+  authorizes applying pending accepted migrations, missing auto-apply metadata
+  defaults to enabled for older installations, and agents may not stop at an
+  “update available” notice without applying or naming a concrete blocker.
+
+## 2026.07.13
+
+- Clarified that executable file type does not make a script durable tooling.
+  Single-task research probes, exploratory scripts, ad hoc collectors, scrapers,
+  and throwaway diagnostics must stay out of `tools/` and its convenient-looking
+  research/probe/scratch subtrees; agents should prefer inline execution or a
+  documented ignored temporary location outside `tools/`.
+
+- Added a Git finalization boundary: agents must complete task-scoped tracked
+  writes before staging, recheck the worktree after the last mutation and
+  commit/push, and must not infer a clean finish from matching local and remote
+  HEAD values while an uncommitted task diff remains.
+
+## 2026.07.10
+
+- Hardened the GI bootstrap entrypoint for canonical GitHub URLs, Markdown
+  links, short repository names, and local checkouts. The root README and new
+  `BOOTSTRAP.md` now expose the contract before Git classification, and a
+  portable PowerShell installer plus regression checks create the local kit
+  without changing Git configuration or requiring a machine-specific drive.
+
+## 2026.07.08
+
+- Added `gi mod` / `ги мод` game-modding path handling. Agents must distinguish
+  the mod project root, selected game install root, mod install folder, and
+  logs folder; record machine-local game paths only in ignored local config; and
+  ask for the game install root with a concrete save location when it cannot be
+  proven locally.
+
+- Added development role suggestion behavior. After initial project context
+  loading for a development effort, agents should infer and briefly propose the
+  most useful lead role or smallest role set from the project goal, stack,
+  docs, memory, manifests, and requested work, while continuing on obvious
+  low-risk assumptions and revisiting roles only after meaningful pivots.
+
+- Expanded startup product engineering expectations for senior backend/product
+  work. Agents should treat C#/.NET concurrency, LLM/RAG integration,
+  PostgreSQL persistence, GoF/GRASP design-pattern use, and GitLab-style CI/CD
+  as architecture-sensitive areas that require current project context,
+  explicit contracts, proportional design, and focused verification.
+
+- Added answer-first response style. Agents should start final answers and
+  direct user-facing explanations with the concrete answer, decision, main
+  conclusion, or requested status before caveats, evidence, and detailed
+  context, so users can see the actionable answer immediately.
+
+## 2026.07.07
+
+- Added `gi logic` / `ги логика` for project-logic recovery and adoption. With
+  no source, agents build or update the current project's durable logic map; with
+  an explicit URL, repository, or local folder plus optional focus term, agents
+  narrowly inspect that source, extract portable behavior contracts, adapt them
+  into the current project only, update project memory, and avoid secrets,
+  private runtime data, generated artifacts, and blind source copying.
+
+- Clarified `gi init` from GitHub source links. Agents must treat
+  `gi init https://github.com/Dimosfil/general-instructions.git`,
+  `gi init Dimosfil/general-instructions.git`, and Markdown links to that repo
+  as shared-instruction bootstrap requests, not as ordinary `git init` or
+  current-project remote replacement.
+
+## 2026.07.06
+
+- Tightened `gi start` / `gi restore` summary restoration. Agents must read the
+  latest handoff summary as the primary continuation artifact for a new chat
+  and recover the current topic, key theses or decisions, blockers, and next
+  useful direction; seeing only the summary filename, timestamp, or metadata is
+  no longer sufficient.
+
+- Made the `tools/` boundary strict. Agents must classify any file before
+  writing under `tools/`: durable development and agent tooling may live there,
+  but product runtime/source packages, product plugin implementations, product
+  tests, full product documentation, generated outputs, selected-run artifacts,
+  and one-off work results must use source, test, docs, artifact, evidence,
+  output, data, build, release, or docs-asset locations. `tools/project-memory/`
+  remains limited to compact implementation-driving specifications, decisions,
+  contracts, implementation maps, and evidence references.
+
+- Added strict GI compliance wording. User phrases such as "do by GI" now mean
+  loaded GI rules are mandatory execution constraints unless the user explicitly
+  overrides a specific rule, and strict GI work treats project-memory writeback
+  plus verification as completion gates for meaningful behavior, workflow,
+  data-model, integration, observability, or architecture changes.
+
+- Clarified post-update instruction activation. After a successful
+  `gi обновить`, updated local instructions are active immediately, and the
+  current chat/session must reread the updated local `AGENTS.md` plus routed
+  runtime modules before the next concrete task.
+
+- Added startup product engineering guidance. Agents should deliver working
+  product outcomes in startup-style environments by prioritizing business
+  requirements, deadlines, pragmatic design, C#/.NET async and concurrency
+  correctness, frontend framework discipline, professional English
+  communication, and risk-focused review.
+
+## 2026.07.05
+
+- Added the agent role office pattern. Agents can now route broad or
+  specialist-heavy work through narrow professional lenses such as product
+  owner, tech lead, C#/.NET backend engineer, frontend engineer, UI/UX designer,
+  visual artist, QA/test engineer, DevOps/release engineer, security reviewer,
+  and documentation writer while keeping one accountable response.
+
+- Clarified first-concrete-message GI update check reporting. The compact
+  startup status must now explicitly include the pending migration count,
+  including `0` when there are no pending migrations, so users can distinguish a
+  completed check from an omitted one.
+
 ## 2026.07.04
+
+- Clarified deploy-gateway subdomain targeting for unmapped projects. Automatic
+  registration should derive a project-scoped hostname, normally from a
+  sanitized project id under the gateway base domain, and must not target the
+  apex/root domain, shared hub hostname, or another project's hostname unless an
+  explicit existing mapping says so.
+
+- Clarified deploy-gateway provisioning attempts after stale host-limit or
+  errored inbox evidence. Agents should warn that provisioning may fail, then
+  run the gateway's documented safe create/refresh/provisioning attempt instead
+  of stopping on old screenshots, cached quota checks, or indirect host-limit
+  claims. They stop only on a fresh current rejection or when no documented
+  attempt path exists.
+
+- Clarified pending deploy-gateway inbox behavior. A pending domain/hosting
+  request no longer stops artifact upload by itself: when the gateway provides a
+  documented pending, staging, queue, or handoff upload target, the project agent
+  should build and upload the artifact there while devops/hosting completes
+  publication. Only errored/rejected requests or missing documented handoff
+  targets stop the flow, and they must be reported as explicit deploy errors.
+
+- Replaced vague deploy-gateway blocker outcomes with a pending-or-error
+  contract. New domain/site deploy requests now either remain in a documented
+  pending/provisioning state, or return an explicit deploy error with failed
+  step, evidence, responsible system or owner, next required action, and the
+  artifact/source state already recorded.
+
+- Tightened deploy-gateway pending-state handling. Before reporting an unknown
+  deploy project or missing target mapping, agents now check the gateway
+  registry plus documented inbox, pending queue, hub-card queue, or
+  domain/hosting request list. Existing pending or blocked entries become the
+  active deploy state: agents refresh allowed metadata, report the concrete
+  hosting/domain blocker, and wait for the gateway/devops/hosting follow-up
+  instead of creating duplicate mappings or uploading to a gateway root.
+
+- Added `gi set devops` / `gi devops` / `ги девопс` to mark the current project
+  as the deploy-infrastructure owner. Ordinary projects now route deploy/FTP
+  through a selected gateway and remove or stop relying on personal direct
+  deploy scripts/config, while devops-marked gateway projects keep that
+  infrastructure.
 
 - Added GI rule-error intake and fix commands. `gi ошибка` records available
   evidence for suspected GI rule bugs without changing rules, while

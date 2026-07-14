@@ -1,12 +1,13 @@
 {
-  "instruction_kit_version": "2026.07.04.7",
+  "instruction_kit_version": "2026.07.14.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "TODO",
   "update_check": {
     "source_repo": "https://github.com/Dimosfil/general-instructions.git",
     "source_cache_path": "",
     "shared_library_path": "",
-    "enabled": true
+    "enabled": true,
+    "auto_apply_pending_migrations": true
   },
   "applied_migrations": [
     "2026.05.16.1__add_skill_modules",
@@ -134,6 +135,7 @@
     "2026.06.24.3__add_gi_info_command",
     "2026.06.24.4__gi_info_uses_project_languages",
     "2026.06.24.5__make_gi_info_idempotent",
+    "2026.06.24.6__add_local_sprint_command",
     "2026.06.30.1__add_senior_agent_engineering_standard",
     "2026.06.30.2__add_api_key_secret_safety",
     "2026.07.01.1__classify_development_vs_refactor",
@@ -145,7 +147,30 @@
     "2026.07.04.4__add_deploy_gateway_command",
     "2026.07.04.5__save_selected_deploy_gateway",
     "2026.07.04.6__auto_register_gateway_ftp_projects",
-    "2026.07.04.7__add_gi_error_intake_and_startup_update_check"
+    "2026.07.04.7__add_gi_error_intake_and_startup_update_check",
+    "2026.07.04.8__centralize_deploy_in_devops_gateway",
+    "2026.07.04.9__check_deploy_gateway_inbox_before_mapping_block",
+    "2026.07.04.10__report_deploy_pending_or_explicit_error",
+    "2026.07.04.11__continue_artifact_upload_for_pending_gateway_entry",
+    "2026.07.04.12__attempt_gateway_provisioning_after_stale_error",
+    "2026.07.04.13__derive_project_scoped_gateway_subdomain",
+    "2026.07.05.1__report_zero_pending_startup_migrations",
+    "2026.07.05.2__add_agent_role_office",
+    "2026.07.06.1__add_startup_product_engineering",
+    "2026.07.06.2__add_strict_gi_compliance",
+    "2026.07.06.3__activate_updated_gi_rules_immediately",
+    "2026.07.06.4__strict_tools_product_boundary",
+    "2026.07.06.5__require_latest_summary_for_gi_start",
+    "2026.07.07.1__clarify_gi_init_github_source",
+    "2026.07.07.2__add_gi_logic_command",
+    "2026.07.08.1__add_answer_first_response_style",
+    "2026.07.08.2__expand_startup_engineering_stack_expectations",
+    "2026.07.08.3__suggest_development_roles_from_project_context",
+    "2026.07.08.4__add_gi_mod_game_path_command",
+    "2026.07.10.1__harden_gi_init_bootstrap_entrypoint",
+    "2026.07.13.1__enforce_git_finalization_boundary",
+    "2026.07.13.2__keep_one_off_probes_out_of_tools",
+    "2026.07.14.1__require_startup_migration_auto_apply"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -167,6 +192,8 @@
     "tools/project-memory/specs/technology-stack.md",
     "patterns/EXTERNAL_DOCUMENTATION_RETRIEVAL.md",
     "patterns/ARCHITECTURE_AND_CODE_QUALITY.md",
+    "patterns/AGENT_ROLE_OFFICE.md",
+    "patterns/STARTUP_PRODUCT_ENGINEERING.md",
     "patterns/API_KEY_SECRET_SAFETY.md",
     "patterns/COHERENT_BATCH_VERIFICATION.md",
     "patterns/TECHNOLOGY_STACK_INVENTORY.md",
@@ -197,6 +224,9 @@
     "patterns/AGENTS_RUNTIME/13-progress-updates.md",
     "patterns/AGENTS_RUNTIME/14-update-intake.md",
     "patterns/AGENTS_RUNTIME/15-verification.md",
-    "patterns/AGENTS_RUNTIME/16-git-policy.md"
+    "patterns/AGENTS_RUNTIME/16-git-policy.md",
+    "patterns/AGENTS_RUNTIME/17-agent-role-office.md",
+    "patterns/AGENTS_RUNTIME/18-startup-product-engineering.md",
+    "patterns/AGENTS_RUNTIME/19-game-modding.md"
   ]
 }

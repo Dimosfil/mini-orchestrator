@@ -43,6 +43,7 @@ gi ошибка фикс
 ги команды
 gi обновись
 gi init https://github.com/Dimosfil/general-instructions.git
+gi init Dimosfil/general-instructions.git
 инит https://github.com/Dimosfil/general-instructions.git
 init https://github.com/Dimosfil/general-instructions.git
 инит <path-to-general-instructions>
@@ -72,6 +73,14 @@ gi info
 ги инфо
 gi stack
 ги стек
+gi logic
+ги логика
+gi logic <source> [focus]
+ги логика <ссылка-или-путь> [фокус]
+gi mod
+ги мод
+gi mod path <game-install-path>
+ги мод путь <путь-игры>
 gi build
 gi собрать
 gi rebuild
@@ -115,6 +124,9 @@ gi prod
 gi production
 gi прод
 ги прод
+gi set devops
+gi devops
+ги девопс
 gi deploy <method-or-path>
 ги деплой <способ-или-путь>
 gi ftp config
@@ -206,6 +218,8 @@ the listed commands.
 | `gi vector` | Inspect semantic/vector retrieval readiness and metrics. |
 | `gi info`, `ги инфо` | Find or build the current project's purpose, visible functionality, and stack overview. |
 | `gi stack`, `ги стек` | Find or build the current project's verified technology stack inventory. |
+| `gi logic`, `ги логика`, `gi logic <source> [focus]` | Find, document, or adapt core project logic; with a source path/URL, study that explicit external project narrowly and map portable logic into the current project. |
+| `gi mod`, `ги мод`, `gi mod path <game-install-path>`, `ги мод путь <путь-игры>` | Prepare a game modding project by verifying and recording the selected local game install path separately from mod and log folders. |
 | `gi build`, `gi собрать`, `ги билд`, `ги собрать`, `gi rebuild`, `ги ребилд` | Build/rebuild the current project/application only, producing a release/upload-ready artifact such as a static `dist/`, package, executable, or other documented build output. |
 | `gi tools rebuild`, `gi rag rebuild`, `ги тулс ребилд`, `ги раг ребилд` | Rebuild the full configured GI/project-memory/RAG system after confirmation. |
 | `gi tools rebuild sql`, `gi rag rebuild sql` | Rebuild only the SQL/FTS structured-memory node. |
@@ -218,6 +232,7 @@ the listed commands.
 | `gi config service url=<url>` | Set the config-service URL after validation. |
 | `gi config service on`, `gi config service off` | Toggle current app self-registration with config-service. |
 | `gi prod`, `gi production`, `gi прод`, `ги прод` | Publish the current development version into the documented production service folder for a live online service. |
+| `gi set devops`, `gi devops`, `ги девопс` | Mark the current project as the deploy-infrastructure owner so GI deploy-cleanup migrations keep gateway-owned deploy scripts/config there only. |
 | `gi reboot`, `gi restart`, `ги ребут`, `ги рестарт` | Start or restart all documented project apps using local run instructions. |
 | `gi docker`, `ги докер` | Restart the current project's documented Docker/Compose runtime, rebuilding first when local Docker state requires it. |
 | `gi first test`, `gi первый тест` | Reset documented first-run state and verify first-launch experience. |
@@ -264,10 +279,11 @@ the listed commands.
 тихо выполняет проверку `gi обновить`: читает локальную metadata instruction kit
 и accepted source `VERSION.md`/`migrations/`, применяет pending accepted
 migrations по локальному update contract, и сообщает только короткий статус или
-blocker. Эта авто-проверка не читает `updates/`, старые chat examples, широкие
-деревья файлов или чужие проекты. Если source недоступен, агент кратко сообщает
-blocker и продолжает по текущим локальным правилам, кроме явной команды
-`gi обновить`.
+blocker. Короткий статус должен явно назвать количество pending migrations,
+включая `0`, если новых миграций нет. Эта авто-проверка не читает `updates/`,
+старые chat examples, широкие деревья файлов или чужие проекты. Если source
+недоступен, агент кратко сообщает blocker и продолжает по текущим локальным
+правилам, кроме явной команды `gi обновить`.
 
 `apps.txt`, планы, summary и записи task manager не дают разрешение читать
 приватные локальные источники вне project root. Для анализаторов логов агент
@@ -323,13 +339,23 @@ rule gap, обновляет live rules, copied-project templates, accepted migr
 
 ```text
 Connect shared instructions: https://github.com/Dimosfil/general-instructions.git
+инит [Dimosfil/general-instructions.git](https://github.com/Dimosfil/general-instructions.git)
 ```
 
 Агент:
+- сначала разрешает URL Markdown-ссылки и читает корневой `BOOTSTRAP.md`
 - читает общие правила и нужные шаблоны
 - создаёт локальные `AGENTS.md`, `tools/AGENT_WORKING_AGREEMENTS.md`,
   `tools/AGENT_RUNBOOK.md`, `tools/agent-start.ps1` и project memory files
 - не добавляет shared library как dependency, submodule или symlink
+- treats `gi init https://github.com/Dimosfil/general-instructions.git`,
+  `gi init Dimosfil/general-instructions.git`, and Markdown links to that repo
+  as GI instruction bootstrap, not as ordinary git repository initialization or
+  remote replacement
+- uses the active project root as the default target without requiring a
+  machine-specific drive or local shared-library path
+- prefers `tools/install-instruction-kit.ps1` from the resolved source checkout
+  for deterministic fresh-project setup and preserves existing local files
 - не трактует `инит <path-to-general-instructions>` или
   `инит правила <path-to-general-instructions>` как `git init`; не создаёт
   папки, `.git`, `npm init` или `python -m venv` для этой формы
@@ -342,6 +368,14 @@ Connect shared instructions: https://github.com/Dimosfil/general-instructions.gi
 gi старт
 gi restore
 ```
+
+For `gi start` / `gi restore`, the agent reads the latest handoff summary as
+the primary continuation artifact for a new chat. Reading only the summary
+filename, timestamp, or metadata is not enough: the agent must recover the
+current topic, key theses or decisions, blockers, and next useful direction,
+then report that context compactly and ask what to do next. It still avoids
+older summaries, full runbooks, logs, memory dumps, and diffs unless a concrete
+task needs them.
 
 Также: `gi start`, `gi восстанови`, `gi восстановить контекст`.
 
@@ -457,6 +491,120 @@ This command is an inventory/documentation command. It must not install
 dependencies, start services, rebuild indexes, call external APIs, read secrets,
 or inspect private paths outside the project root unless the user explicitly
 approves that scope.
+
+### Project Logic Adoption
+
+```text
+gi logic
+ги логика
+gi logic <source> [focus]
+ги логика <ссылка-или-путь> [фокус]
+```
+
+`gi logic` / `ги логика` asks the agent to recover the current project's core
+logic and make it durable for future GI work. With no source argument, the
+agent inspects only the current project and builds or updates a logic map in
+project memory: core domain modules, workflow contracts, invariants, data
+flows, integration boundaries, evidence paths, and verification gaps.
+
+`gi logic <source> [focus]` / `ги логика <ссылка-или-путь> [фокус]` asks the
+agent to study an explicitly named URL, repository, or local folder as a logic
+source and adapt the relevant portable behavior into the current project. The
+current project remains the write target unless the user explicitly says to
+modify the source project. The source argument is permission for this scoped
+logic-adoption task only; it is not permission to read secrets, local app data,
+logs, databases, generated artifacts, unrelated sibling repositories, or broad
+private folders.
+
+The agent first states the active project root and external source, then reads
+only task-relevant source instructions, README/docs, manifests, project-memory
+specs, entry points, and focused source modules. If a focus term is supplied,
+such as `client`, bot, worker, API, parser, billing, or another component or
+workflow name, the agent searches for that focus before broad scans. It extracts
+portable behavior contracts and module responsibilities before editing code;
+it does not blindly copy another project's source or machine-specific config.
+
+When implementation is requested or clearly implied, the agent adapts the
+logic into the current project's architecture and configuration boundaries,
+updates durable project memory with source/evidence mapping, and runs the
+smallest documented checks that cover the adopted behavior. If the source is a
+web URL, prefer official repository/docs pages and avoid crawling unrelated
+pages or downloading large assets unless the user asks for that scope.
+
+### GI Mod / Game Path
+
+```text
+gi mod
+ги мод
+gi mod path <game-install-path>
+ги мод путь <путь-игры>
+gi game path <game-install-path>
+ги путь игры <путь-игры>
+```
+
+`gi mod` / `ги мод` asks the agent to prepare or inspect the current project as
+a game modding project. Before editing, installing, building, or debugging a
+mod, the agent must distinguish the current mod project root, the selected game
+install root, the user/game documents mod folder, and the logs or crash-report
+folder. The agent must not present a known mod folder or log folder as the game
+install folder.
+
+`gi mod path <game-install-path>` / `ги мод путь <путь-игры>` records the
+selected local game install root for the current mod project. The supplied path
+is user authorization for this scoped modding configuration task only. The
+agent resolves the path to an absolute path, verifies it exists, and checks for
+game-specific evidence such as an executable, launcher manifest, app manifest,
+modding SDK folder, data/content folder, or project runbook match.
+
+The selected game install path is machine-local configuration. Store it in an
+ignored local file, preferably `tools/project-memory/game-modding.local.json`,
+with non-secret fields such as `game_name`, `game_install_path`,
+`mod_install_path`, `logs_path`, `launcher`, `detected_from`, `verified_at`,
+and evidence notes. Do not commit absolute local game paths to shared
+instructions, migrations, templates, source code defaults, or normal project
+docs. Durable project memory may keep the portable modding workflow and the
+roles of each folder, but not the user's machine-specific game path.
+
+If the game path is not recorded, the agent first checks project-local
+instructions, README, runbooks, manifests, existing ignored modding config, and
+project memory. If still missing, the agent may inspect only safe common
+launcher library metadata when local policy and user scope allow it. It must
+not scan arbitrary user-home folders, sibling projects, or whole drives unless
+the user explicitly asks to find the game on that scope.
+
+If the game install root remains unknown, the agent asks one concise question
+instead of merely saying it does not know. The question names the missing path
+role and the exact save target, for example:
+
+```text
+I found the mod project and local mod/log folders, but not the game install root.
+Please send the game install folder, and I will save it in
+tools/project-memory/game-modding.local.json for this project.
+```
+
+Russian response shape:
+
+```text
+Я нашел проект мода и локальные папки мода/логов, но не доказал путь установки
+игры. Пришли папку установки игры, и я сохраню ее в
+tools/project-memory/game-modding.local.json для этого проекта.
+```
+
+When a path is supplied, the response should be concrete:
+
+```text
+I will record this as the selected game install path for this mod project,
+verify it exists, keep it in ignored local config, and use it for future
+build/install/debug commands.
+```
+
+Russian response shape:
+
+```text
+Запишу это как выбранный путь установки игры для этого мод-проекта, проверю что
+папка существует, сохраню в ignored local config и буду использовать для будущих
+build/install/debug команд.
+```
 
 ### Build/Rebuild Project
 
@@ -946,6 +1094,12 @@ changes, remote и ветку. Коммитит только изменения 
 предыдущего terminal push или push-only действием; если scoped изменений для
 commit нет, агент сообщает это вместо push-only fallback. Push без нового
 commit выполняется только по `gi только пуш`. При блокерах — кратко объясняет.
+Все task-scoped записи, включая handoff и generated metadata, завершаются до
+staging. После последнего commit/push и последней записи агент снова
+проверяет `git status --short`, а для push — и совпадение с upstream. Совпадение HEAD
+не доказывает чистое working tree: при новом task-scoped diff нельзя сообщать о
+полном успехе. После final status check tracked task-файлы не меняются без повтора
+разрешённого finish workflow и проверки.
 
 Для `gi пул` агент проверяет состояние рабочей копии, текущую ветку и upstream,
 затем делает `git fetch` и подтягивает текущую ветку. Если появляются
@@ -1251,6 +1405,9 @@ gi prod
 gi production
 gi прод
 ги прод
+gi set devops
+gi devops
+ги девопс
 gi deploy <method-or-path>
 ги деплой <способ-или-путь>
 gi ftp config
@@ -1296,6 +1453,17 @@ include/exclude rules, restart/switchover command, health check, or rollback
 path is undocumented, ask one concise clarification question instead of
 guessing. Follow `patterns/PROJECT_DEV_PROD_SERVICES.md`.
 
+`gi set devops` / `gi devops` / `ги девопс` marks the current project as the
+deploy-infrastructure owner for GI migrations and deploy commands. The agent
+verifies the active project identity first, then creates or updates an ignored
+local marker such as `tools/project-memory/devops.local.json` with non-secret
+metadata: role `deploy-owner`, timestamp, reason, and optional deploy entrypoint
+or gateway contract pointer. This marker tells future GI updates not to remove
+gateway-owned direct deploy scripts or FTP/SFTP config from this project. It
+does not authorize reading unrelated projects, exposing secrets, editing
+private gateway config from a consuming project, or treating any unmarked
+project as deploy infrastructure.
+
 `gi deploy <method-or-path>` / `ги деплой <способ-или-путь>` deploys the current
 project or site through the explicitly named method, service, saved deploy
 gateway, or deploy hub path. If the argument is an absolute or clearly
@@ -1330,6 +1498,16 @@ examples, and verification/rollback notes. Keep real secrets and private target
 paths in the gateway's ignored local config or secret store, not in shared
 instructions or consuming projects.
 
+During GI update migrations that retire project-owned direct deployment,
+non-devops projects remove, disable, or stop relying on their own direct
+deploy/upload scripts, FTP/SFTP configs, and private deploy helpers. They keep
+only ignored selected-gateway metadata such as
+`tools/deploy/deploy-gateway.local.json`, redacted examples, and documented
+build artifact contracts needed by the gateway. If no selected deploy gateway
+exists, the agent asks for the gateway path instead of uploading directly or
+creating a new personal deploy path. Projects marked with `gi set devops` keep
+and maintain deploy scripts/configuration as gateway-owned infrastructure.
+
 `gi ftp <deploy-hub-path>` / `ги фтп <путь-к-deploy-хабу>` is the FTP/SFTP
 variant of the same gateway flow: the current project is the upload source, and
 the path names the deploy gateway that owns FTP/SFTP configuration, destination
@@ -1343,40 +1521,78 @@ When the deploy gateway supports automatic project registration, an unmapped
 current project uses its root folder name as the default project id. The gateway
 derives the remote destination from its documented naming convention, records or
 updates the project in its deploy registry, and leaves non-secret metadata for
-later hub/card/index updates. The project agent should not ask the user to pick
-a remote folder when the gateway contract defines deterministic registration.
-If registration, provisioning, or artifact selection cannot be completed, stop
-with that gateway blocker instead of falling back to a root/default remote path
-or uploading the whole repository.
+later hub/card/index updates. Unless the gateway contract explicitly names an
+existing target hostname, the public target must be project-scoped, normally
+from the sanitized project id under the configured base domain; the agent must
+not target the apex/root domain, shared hub hostname, or another project's
+hostname for an unmapped project. The project agent should not ask the user to
+pick a remote folder, project id, or subdomain when the gateway contract defines
+deterministic registration; it should use the documented project-id-to-hostname
+rule or report the missing gateway contract.
+Before reporting an unknown deploy project or missing target mapping, the agent
+checks the gateway registry and any documented project inbox, pending queue,
+hub-card queue, or domain/hosting request list. A pending or errored inbox entry
+is the active deploy state. For a pending entry, the agent refreshes allowed
+non-secret metadata, uploads the artifact to the gateway's documented
+pending/staging/handoff target when one exists, and reports that devops/hosting
+publication is still pending instead of creating a duplicate mapping or
+uploading to the gateway root. For an errored entry or rejected request, the
+agent first checks whether the evidence is fresh from the current attempt or
+stale/indirect, such as an old inbox status, cached host-limit check, screenshot,
+or external quota claim. Stale evidence is warning context: the agent says that
+provisioning may fail, then runs the gateway's documented safe create, refresh,
+or provisioning attempt when available. It stops only when the current attempt
+returns an explicit rejection or the gateway has no documented attempt/refresh
+path. If the gateway has a documented new-domain/request workflow, create or
+refresh that request before deciding whether to continue artifact upload, leave
+the request pending, or return an explicit error.
+If registration, provisioning, or artifact selection cannot continue, the agent
+does not report a vague blocker. A pending domain/hosting request should still
+upload to the gateway's documented pending/staging/handoff target when
+available. Otherwise the agent returns an explicit deploy error with the failed
+step, evidence, responsible system or owner, next required action, and the
+artifact/source state already recorded. It must not fall back to a root/default
+remote path, apex/root domain, shared hub hostname, another project's hostname,
+or upload the whole repository.
 
-`gi ftp config` / `ги фтп конфиг` creates, inspects, or updates the current
-project's FTP/SFTP config without uploading. Use a separate project-local file:
-`tools/deploy/ftp.local.json`. Prefer secrets through environment variables or
-private keys; do not commit real hostnames, usernames, passwords, tokens,
-private keys, or private remote paths unless project policy explicitly marks
-them non-secret.
+`gi ftp config` / `ги фтп конфиг` creates, inspects, or updates FTP/SFTP config
+without uploading. In ordinary non-devops projects, this must select or use a
+deploy gateway; it must not create a project-owned direct FTP/SFTP deploy path.
+Direct project-local FTP/SFTP config belongs only in a project marked devops, or
+behind a documented deploy-gateway delegation. Use a separate ignored local file
+such as `tools/deploy/ftp.local.json`. Prefer secrets through environment
+variables or private keys; do not commit real hostnames, usernames, passwords,
+tokens, private keys, or private remote paths unless project policy explicitly
+marks them non-secret.
 
 `gi ftp service` / `ги фтп сервис` manually registers, inspects, or selects an
-FTP/FTPS/SFTP service record in config-service without uploading. When a project
-needs FTP and no local `serviceId` is selected, agents query config-service for
-FTP-capable services first. If one exists, they verify its contract and use it;
-if several exist, they ask the user to choose with the same plain inline
-numbered checkbox marker style used by language selection. Store only non-secret discovery
-metadata and secret reference names in config-service, never raw credentials or
-private remote paths.
+FTP/FTPS/SFTP service record in config-service without uploading. In ordinary
+non-devops projects, service selection belongs to the saved or supplied deploy
+gateway. Only a devops project or documented gateway delegation should query
+config-service for FTP-capable services for direct upload. If one exists, the
+agent verifies its contract and uses it; if several exist, it asks the user to
+choose with the same plain inline numbered checkbox marker style used by
+language selection. Store only non-secret discovery metadata and secret
+reference names in config-service, never raw credentials or private remote
+paths.
 
 `gi ftp folder` / `ги фтп папка` inspects, chooses, or updates the remote upload
-folder (`remotePath`) without uploading. If credentials and a selected FTP
-service are available, the agent may list remote directories and ask the user to
-choose with plain inline numbered checkbox markers; otherwise it asks for the destination
-path and saves it in `tools/deploy/ftp.local.json`.
+folder (`remotePath`) without uploading. In ordinary non-devops projects, this
+is resolved through the deploy gateway and must not create a project-owned
+direct remote path. In a devops project or documented gateway delegation, if
+credentials and a selected FTP service are available, the agent may list remote
+directories and ask the user to choose with plain inline numbered checkbox
+markers; otherwise it asks for the destination path and saves it in the
+gateway-owned or devops `tools/deploy/ftp.local.json`.
 
 `gi ftp push` / `ги фтп пуш` is the explicit upload command. `gi ftp` /
-`ги фтп` remains a shorter alias. The agent first reads project-local deploy
-instructions and
-`tools/deploy/ftp.local.json`, builds the configured `localPath` when needed,
-then uploads to `remotePath`. If the config is missing, use the redacted
-template shape from `templates/ftp.local.template.json` or
+`ги фтп` remains a shorter alias. In ordinary non-devops projects, the agent
+uses the selected deploy gateway; if none is selected, it asks for the gateway
+path. In a devops project or documented gateway delegation, the agent reads
+project-local deploy instructions and `tools/deploy/ftp.local.json`, builds the
+configured `localPath` when needed, then uploads to `remotePath`. If the direct
+config is missing in an allowed direct-upload context, use the redacted template
+shape from `templates/ftp.local.template.json` or
 `tools/deploy/ftp.local.example.json` and ask only for missing required values.
 Treat upload stalls, hangs, repeated timeouts, and failed stream opens as failed
 FTP/FTPS transfers. If FTP/FTPS connects but upload fails or is unreliable,

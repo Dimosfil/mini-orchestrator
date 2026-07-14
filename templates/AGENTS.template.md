@@ -29,11 +29,21 @@ implemented against each goal criterion and list remaining gaps as blockers.
 - Read only the modules needed for the current request.
 - Before acting on a concrete task, select and read the matching module(s);
   this entrypoint alone is enough only for greetings or status-neutral replies.
+- Treat user wording such as "do by GI", "follow GI", "strictly by GI", and
+  equivalent local-language forms as a request for strict compliance with all
+  loaded GI rules. If an applicable rule cannot be followed, stop and report the
+  concrete blocker or explicit deferral instead of silently continuing.
 - On the first concrete task in a new chat/session, before task-specific work,
   run a quiet GI update check: read local instruction-kit metadata and accepted
-  source `VERSION.md`/`migrations/`, apply pending accepted migrations when the
-  project update contract allows it, and report only a compact result or
-  blocker. Do not read `updates/` for this startup check.
+  source `VERSION.md`/`migrations/`, and apply pending accepted migrations.
+  Treat `update_check.enabled: true` as authorization to check and apply; when
+  `auto_apply_pending_migrations` is absent, default it to `true` for backward
+  compatibility. Do not stop at “update available” or defer to `gi update`.
+  Skip application only for an explicit `false` setting or a concrete blocker
+  such as unavailable source, read-only files, unsafe scope, or merge conflict,
+  and name that blocker. The compact result must explicitly include the pending
+  migration count, including `0` when none are pending. Do not read `updates/`
+  for this startup check.
 - If the request contains a GI chat command such as `gi ...`, `ги ...`, or a
   known mojibake form such as `РіРё ...`, treat it as a concrete task even when
   the message is short. First read `COMMANDS.md` when present, then read every
@@ -71,7 +81,9 @@ Start here when a concrete restore/start task exists:
 If the startup script is unavailable, read only the smallest useful slices of:
 
 - `AGENTS.md`
-- latest relevant file in `tools/summary/`
+- latest handoff summary in `tools/summary/`; read its substantive sections
+  enough to recover the current topic, key theses or decisions, blockers, and
+  next useful direction, not only its filename or timestamp
 - `tools/AGENT_WORKING_AGREEMENTS.md`
 - `tools/AGENT_RUNBOOK.md`
 - relevant notes in `tools/project-memory/`
@@ -89,7 +101,7 @@ Use the RAG startup flow and retrieve only task-relevant context.
   `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
 - Windows shell and networking policy: `patterns/AGENTS_RUNTIME/05-windows-command-policy.md`
 - Token economy, verification command lookup, `gi info`, `gi stack`,
-  `gi refactor`, feature contracts, and large-output handling:
+  `gi logic`, `gi refactor`, feature contracts, and large-output handling:
   `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
 - Startup, restore, project goal, bug evidence, PDF inspection, repository
   cleanup, filesystem boundaries, and first-message handling:
@@ -102,8 +114,8 @@ Use the RAG startup flow and retrieve only task-relevant context.
   Docker/Compose restart, first test, full test, default reset, installer
   packaging, SQL/vector inspection, and project/RAG rebuild commands:
   `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
-- Nested repositories, private local app data, product-plan intent signals, and
-  missing required entities:
+- Nested repositories, private local app data, `gi logic` external sources,
+  product-plan intent signals, and missing required entities:
   `patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md`
 - Project, commit, task, and response language preferences:
   `patterns/AGENTS_RUNTIME/11-language-preferences.md`
@@ -113,6 +125,13 @@ Use the RAG startup flow and retrieve only task-relevant context.
 - Update intake and `updates/` handling: `patterns/AGENTS_RUNTIME/14-update-intake.md`
 - Verification policy: `patterns/AGENTS_RUNTIME/15-verification.md`
 - Git policy: `patterns/AGENTS_RUNTIME/16-git-policy.md`
+- Agent role office, specialist role routing, and narrow professional scopes:
+  `patterns/AGENTS_RUNTIME/17-agent-role-office.md`
+- Startup product engineering, business-first delivery, .NET/frontend
+  expectations, and professional communication:
+  `patterns/AGENTS_RUNTIME/18-startup-product-engineering.md`
+- Game modding projects, `gi mod`, and selected game install path handling:
+  `patterns/AGENTS_RUNTIME/19-game-modding.md`
 
 ## Durable Memory
 
@@ -127,13 +146,30 @@ bundles, or run datasets in `tools/project-memory/`. Use a project-local
 artifact/evidence/output/data/docs-asset location and keep only compact
 manifests, summaries, checksums, or links in project memory when needed.
 
-Use `tools/` for durable development and agent tooling such as scripts,
-adapters, bootstrap commands, deployment helpers, and redacted examples or
-manifests. Do not use `tools/` as the default destination for generated product
-output, selected-run artifacts, uploaded site contents, screenshots, raw
-exports, build bundles, downloaded datasets, or one-off work results. Document
-the project's output, evidence, data, build, release, or docs-asset locations
-instead.
+Use `tools/` for durable development and agent tooling only, such as scripts,
+adapters, bootstrap commands, deployment helpers, verification helpers,
+agent-memory tooling, and redacted examples or manifests. Before writing under
+`tools/`, classify the file as tooling or product material. Do not put product
+runtime/source packages, product plugin implementations, product tests, full
+product documentation, generated product output, selected-run artifacts,
+uploaded site contents, screenshots, raw exports, build bundles, downloaded
+datasets, or one-off work results there. Product code belongs in source/package
+locations, tests in the test tree, product docs in `README.md`, `docs/`, or
+runbooks, and artifacts in documented output, evidence, data, build, release,
+or docs-asset locations. `tools/project-memory/` may contain compact
+implementation-driving specifications and evidence references, but it is not a
+replacement for source, tests, docs, or artifact folders.
+
+Do not classify a script as durable tooling merely because it is Python,
+PowerShell, shell, or another executable. Single-task research probes,
+exploratory scripts, ad hoc collectors, scrapers, and throwaway diagnostics do
+not belong in `tools/`, including new `tools/research`, `tools/probes`, or
+`tools/scratch` subtrees. Prefer an inline command. If a file is required, use
+the documented ignored scratch/temp location outside `tools/`, remove it after
+use, and retain only necessary results in the documented evidence or artifact
+location. Promote a script into `tools/` only when it has a reusable
+project-owned purpose, stable invocation contract, documentation, and an
+expected future caller.
 
 General project documentation lives in `README.md`, `docs/`, and the runbook.
 Keep overview, visible functionality, stack, commands, operations, and

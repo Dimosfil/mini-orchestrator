@@ -36,12 +36,19 @@ If the first user message is the canonical shared-instruction Git repository
 URL, a path to a shared instruction checkout/cache, or a request to connect
 shared instructions, treat it as an instruction bootstrap.
 
-Also treat `init <source>`, `инит <source>`, and `инициализируй <source>` as an
-instruction bootstrap when the source points to the canonical repo
-`https://github.com/Dimosfil/general-instructions.git`, the current
+If the source repository exposes a root `BOOTSTRAP.md`, read it before
+classifying or proposing any Git or project operation. Resolve the target URL
+inside a Markdown link before deciding what the request means. Do not require a
+specific local drive, checkout folder, or `GENERAL_INSTRUCTIONS_HOME` value when
+the canonical GitHub source is available.
+
+Also treat `gi init <source>`, `init <source>`, `инит <source>`, and
+`инициализируй <source>` as an instruction bootstrap when the source points to
+the canonical repo `https://github.com/Dimosfil/general-instructions.git`, the
+shorter GitHub repo form `Dimosfil/general-instructions.git`, the current
 shared-instruction checkout/cache, `GENERAL_INSTRUCTIONS_HOME`, or another known
-shared-instruction source, even when the message does not include the `gi`
-prefix.
+shared-instruction source, even when the source is provided as a Markdown link
+and even when the message does not include the `gi` prefix.
 
 Treat `инит правила <source>` the same way when `<source>` points to
 `general-instructions`. This means "load or initialize instruction rules from
@@ -50,6 +57,10 @@ the existing shared-instruction source," not "create a Git repository."
 In that case:
 
 - Read the shared rules needed for bootstrapping.
+- Prefer the source checkout's `tools/install-instruction-kit.ps1` for
+  deterministic fresh-project setup when it is available. Treat existing local
+  instruction files as project-owned and merge them deliberately instead of
+  overwriting them.
 - Deploy a local instruction kit into the current project from the shared
   templates and checklist.
 - When the target path is the active `general-instructions` repository itself,
@@ -83,6 +94,9 @@ Examples:
 - `gi обновись`: check or apply accepted instruction-kit updates.
 - `gi init https://github.com/Dimosfil/general-instructions.git`:
   bootstrap/init from the canonical shared-instruction source repo.
+- `gi init Dimosfil/general-instructions.git` or a Markdown link to that repo:
+  same bootstrap/init behavior; never replace the current project's git remote
+  or run ordinary `git init`.
 - `инит https://github.com/Dimosfil/general-instructions.git` or
   `init https://github.com/Dimosfil/general-instructions.git`: same
   bootstrap/startup behavior for the shared instruction source, without

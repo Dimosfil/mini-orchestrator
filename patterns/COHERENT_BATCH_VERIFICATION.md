@@ -30,6 +30,10 @@ state and make the next batch obvious without hiding unfinished risks.
 - Update durable project-memory specifications for meaningful behavior,
   workflow, data-model, integration, or architecture changes. Active checklists
   and handoff summaries are status aids, not durable specifications.
+- When the user says to work "by GI", "strictly by GI", or an equivalent
+  local-language phrase, treat this writeback as a completion gate. Do not
+  finish with known drift between implementation and durable specifications
+  unless the user explicitly defers the spec update for the current task.
 - Keep the diff scope clean: include only files required for the batch, plus
   directly related tests, docs, migration notes, and project-memory updates.
 - Before finishing, inspect the changed-file list and remove or explain
@@ -76,6 +80,8 @@ At the end of the batch, the agent should be able to answer:
 - Which layers consume that source, and how was drift checked?
 - Which durable specification changed, or why no durable spec update was
   needed?
+- If strict GI wording was used, was project-memory/spec writeback required and
+  completed, or what explicit blocker/deferral remains?
 - Which checks prove the batch, and what do their warnings mean?
 - What is the smallest safe rollback scope?
 - Which follow-up batch remains, if any?

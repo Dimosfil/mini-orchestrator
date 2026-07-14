@@ -82,6 +82,13 @@
   Inspect status, keep unrelated/user changes out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
+- Complete every task-scoped tracked write, including handoff and generated
+  metadata updates, before staging. After the last commit or push and the last
+  filesystem mutation, recheck `git status --short`; for pushes also verify the
+  local branch matches its configured upstream. HEAD equality alone does not
+  prove a clean worktree. Never report a complete clean finish while a new
+  task-scoped diff remains, and do not modify tracked task files after the final
+  check without repeating the authorized finish workflow and verification.
 - Treat `gi пул`, `gi pull`, and `ги пул` as explicit requests to fetch and pull
   the current branch from its configured upstream. Inspect status, branch, and
   upstream first. Resolve only obvious, low-risk conflicts where intent is clear
@@ -143,6 +150,12 @@ or:
 - Apply the configured system or project language to progress updates, final
   answers, clarifying questions, user-facing explanations, agent-created task
   titles, task descriptions, task-manager updates, plans, and checklists.
+- Start final answers and direct user-facing explanations with the concrete
+  answer or decision whenever the user asked a question or needs an outcome.
+  Lead with `Yes`, `No`, `Exactly`, `Not yet`, the main conclusion, or the
+  requested status before caveats, evidence, context, or implementation
+  details. Put nuance and supporting detail after the direct answer so the user
+  can decide whether to keep reading.
 - For task titles, descriptions, and task-manager updates, treat the first
   configured task language as the main language. If exactly one task language is
   configured, write task text only in that language. If multiple task languages
@@ -374,11 +387,15 @@ or:
   explicit confirmation and prefer backup or rename when local rules allow it.
 - Treat a first message that points to a shared instruction library as an
   instruction bootstrap, not as a request to add that library as a dependency.
-- Treat `init <source>`, `инит <source>`, `инициализируй <source>`, and
-  `инит правила <source>` as shared-instruction bootstrap/startup requests when
-  `<source>` points to a known `general-instructions` source. Never reinterpret
-  these forms as `git init`, folder creation, OpenCode setup, project creation,
-  `npm init`, or `python -m venv` unless the user explicitly names that action.
+- Treat `gi init <source>`, `init <source>`, `инит <source>`,
+  `инициализируй <source>`, and `инит правила <source>` as shared-instruction
+  bootstrap/startup requests when `<source>` points to the canonical
+  `https://github.com/Dimosfil/general-instructions.git` repo, the shorter
+  `Dimosfil/general-instructions.git` GitHub form, a Markdown link to either
+  form, a local checkout/cache, or another known `general-instructions` source.
+  Never reinterpret these forms as `git init`, git remote replacement, folder
+  creation, OpenCode setup, project creation, `npm init`, or `python -m venv`
+  unless the user explicitly names that action.
 - If the user asks to update from a shared instruction library and this project
   has no `tools/project-memory/instruction-kit.json`, treat that as first-time
   instruction bootstrap/init.

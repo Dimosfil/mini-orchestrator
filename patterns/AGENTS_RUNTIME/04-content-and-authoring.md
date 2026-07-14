@@ -36,14 +36,33 @@
   selected or active workflow state as data, show debug/progress logs only for
   the selected run, and keep completed runs compact. Follow
   `patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md`.
-- Treat `tools/` as a place for project-owned development and agent tooling:
-  scripts, adapters, bootstrap commands, deployment helpers, and redacted
-  examples or manifests. Do not use `tools/` as the default destination for
-  generated product output, selected-run artifacts, uploaded site contents,
-  screenshots, raw exports, build bundles, downloaded datasets, or one-off work
-  results. Put those in project-local artifact, evidence, output, data,
-  docs-asset, build, or release locations documented by the project, and keep
-  only small manifests or references in tooling or project memory when needed.
+- Treat `tools/` as a place for project-owned development and agent tooling
+  only: scripts, adapters, bootstrap commands, deployment helpers,
+  verification helpers, agent-memory tooling, and redacted examples or
+  manifests. Before creating or moving any file under `tools/`, classify
+  whether the file is tooling or product material. Product runtime/source
+  packages, product plugin implementations, product tests, full product
+  documentation, generated product output, selected-run artifacts, uploaded
+  site contents, screenshots, raw exports, build bundles, downloaded datasets,
+  and one-off work results must not be placed under `tools/`. Put product code
+  under the project's source/package locations, tests under the test tree,
+  product docs under `README.md`/`docs/`/runbooks, and artifacts under
+  project-local artifact, evidence, output, data, docs-asset, build, or release
+  locations documented by the project. `tools/project-memory/` may contain
+  compact implementation-driving specifications and evidence references, but
+  it must not become the only product documentation layer or a home for source,
+  tests, runtime packages, generated outputs, or bulky evidence.
+- Classify scripts by lifecycle and reuse, not by extension. A Python,
+  PowerShell, shell, or other executable created only to answer the current
+  research question, probe one environment, scrape one source, inspect one data
+  case, or run a throwaway diagnostic is one-off work, not durable tooling. Do
+  not place it in `tools/`, `tools/research/`, `tools/probes/`, or a similarly
+  named tooling subtree. Prefer an inline command; if a file is necessary, use
+  a documented ignored project scratch/temp location outside `tools/`, remove
+  it after use, and store only required outputs in the documented evidence or
+  artifact location. Promote a script into `tools/` only when it has a
+  project-owned reusable purpose, stable interface, documentation, and an
+  expected future caller.
 - Do not hard-code values that can change by deployment, user choice, runtime
   environment, host machine, service discovery, credentials, filesystem layout,
   feature flags, product names, demo data, workflow labels, generated artifact
@@ -86,6 +105,25 @@
   durable project memory when behavior or architecture changes, and escalate
   high-risk actions through the documented approval path. Follow
   `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md`.
+- Use an agent role office when specialist judgment improves the work. Select
+  the smallest useful set of professional role lenses, such as product owner,
+  tech lead, C#/.NET backend, frontend, UI/UX design, visual art, QA,
+  DevOps/release, security, or documentation, then synthesize their input into
+  one accountable plan, implementation, or review. When development begins,
+  infer and briefly propose the most useful lead role or smallest role set from
+  the project context after initial context loading; continue on an obvious
+  low-risk assumption and ask only when the role choice would materially change
+  scope, architecture, external systems, cost, data safety, or user-visible
+  behavior. Add new reusable roles only when repeated work shows a real
+  specialty gap. Follow
+  `patterns/AGENT_ROLE_OFFICE.md`.
+- Treat startup-style product engineering as delivery of a working business
+  outcome, not isolated code snippets. Agents should clarify business value,
+  deadline pressure, acceptance criteria, and risk; choose the smallest
+  reliable implementation path; apply pragmatic design principles; respect
+  C#/.NET async and concurrency boundaries; follow frontend framework
+  conventions; and communicate professionally when English is the expected
+  working language. Follow `patterns/STARTUP_PRODUCT_ENGINEERING.md`.
 - Keep the current technology stack visible in durable project memory. For
   GI-enabled projects, maintain `tools/project-memory/specs/technology-stack.md`
   or an equivalent linked stack inventory with verified languages, runtimes,
