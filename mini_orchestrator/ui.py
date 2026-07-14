@@ -1777,7 +1777,15 @@ class _OrchestratorUIHandler(BaseHTTPRequestHandler):
                             "method": "POST",
                             "path": "/api/agent-flows/{id}/compile",
                             "required": ["approval"],
-                            "optional": ["selectedStartAgentId", "maxTurnsPerNode"],
+                            "optional": [
+                                "selectedStartAgentId",
+                                "maxTurnsPerNode",
+                                "maxWorkflowSteps",
+                                "maxRetriesPerNode",
+                                "maxContextArtifacts",
+                                "maxRuntimeSeconds",
+                            ],
+                            "policy": "compiles an immutable graph manifest with bounded steps, retries, context, runtime, and loop routing",
                         },
                         "agentChainPresetsList": {
                             "method": "GET",

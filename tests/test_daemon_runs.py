@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from mini_orchestrator.agent_flows import compile_saved_agent_flow, create_agent_flow
 from mini_orchestrator import runtime_store
 from mini_orchestrator.ui import build_live_runs_payload
 from mini_orchestrator.daemon_runs import (
     build_demo_daemon_runs,
     build_local_daemon_runs,
+    resume_manifest_run,
     run_manifest_dry_run,
     run_single_card_dry_run,
     set_run_review_decision,
@@ -65,6 +68,26 @@ def sample_three_card_flow() -> dict:
         ],
         "nextAgentNumber": 4,
     }
+
+
+def sample_qa_rework_flow() -> dict:
+    flow = sample_three_card_flow()
+    qa = flow["agents"][1].copy()
+    qa["id"] = "qa"
+    qa["name"] = "QA"
+    qa["role"] = "QA"
+    qa["preset"] = "qa"
+    qa["workPackage"] = qa["workPackage"].copy()
+    qa["workPackage"]["instructions"] = "Act as QA."
+    flow["name"] = "QA Rework Flow"
+    flow["agents"].insert(2, qa)
+    flow["connections"] = [
+        {"id": "planner-executor", "fromAgentId": "planner", "toAgentId": "executor", "fromPort": "success"},
+        {"id": "executor-qa", "fromAgentId": "executor", "toAgentId": "qa", "fromPort": "success"},
+        {"id": "qa-executor", "fromAgentId": "qa", "toAgentId": "executor", "fromPort": "failure"},
+        {"id": "qa-reviewer", "fromAgentId": "qa", "toAgentId": "reviewer", "fromPort": "success"},
+    ]
+    return flow
 def test_demo_daemon_runs_are_schema_shaped():
     payload = build_demo_daemon_runs()
 
@@ -168,3 +191,107 @@ def test_three_agent_daemon_dry_run_maps_blocked_verdict(tmp_path):
     assert state["lastError"] == "Reviewer blocked the run."
     assert state["nodeStates"][-1]["agentId"] == "reviewer"
     assert state["nodeStates"][-1]["status"] == "blocked"
+
+
+def test_reviewer_needs_changes_without_rework_edge_waits_for_human_review(tmp_path):
+    flow = create_agent_flow({"flow": sample_three_card_flow()}, tmp_path)
+    manifest = compile_saved_agent_flow(flow["id"], tmp_path, {"approval": {"approved": True}})
+
+    state = run_manifest_dry_run(manifest, tmp_path, reviewer_verdict="needs_changes")
+
+    assert state["status"] == "review"
+    assert state["reviewerVerdict"] == "needs_changes"
+    assert state["workflow"]["nextAgentId"] == ""
+
+
+def test_manifest_runtime_routes_failure_through_bounded_rework_loop(tmp_path):
+    flow = create_agent_flow({"flow": sample_qa_rework_flow()}, tmp_path)
+    manifest = compile_saved_agent_flow(flow["id"], tmp_path, {"approval": {"approved": True}})
+
+    state = run_manifest_dry_run(
+        manifest,
+        tmp_path,
+        reviewer_verdict="done",
+        node_results={
+            "qa": [
+                {"status": "failure", "summary": "Defect found", "issues": [{"code": "missing-test"}]},
+                {"status": "success", "summary": "QA passed"},
+            ]
+        },
+    )
+
+    assert state["status"] == "review"
+    assert [node["agentId"] for node in state["nodeStates"]] == [
+        "planner",
+        "executor",
+        "qa",
+        "executor",
+        "qa",
+        "reviewer",
+    ]
+    assert state["nodeStates"][2]["status"] == "failed"
+    assert state["nodeStates"][4]["status"] == "done"
+    assert state["workflow"]["edgeTraversals"]["qa-executor"] == 1
+    assert state["flowArtifacts"][2]["issues"] == [{"code": "missing-test"}]
+
+    event_types = [event.get("type") for event in runtime_store.list_daemon_events(tmp_path, state["runId"])]
+    assert event_types.count("node_routed") == 5
+
+
+def test_manifest_runtime_blocks_when_rework_loop_exceeds_limit(tmp_path):
+    flow = create_agent_flow({"flow": sample_qa_rework_flow()}, tmp_path)
+    manifest = compile_saved_agent_flow(flow["id"], tmp_path, {"approval": {"approved": True}})
+
+    state = run_manifest_dry_run(
+        manifest,
+        tmp_path,
+        node_results={"qa": {"status": "failure", "summary": "Still broken"}},
+    )
+
+    assert state["status"] == "blocked"
+    assert "maxIterations=3" in state["lastError"]
+    assert state["workflow"]["edgeTraversals"]["qa-executor"] == 4
+
+
+def test_manifest_runtime_resumes_from_sqlite_checkpoint_after_interruption(tmp_path):
+    flow = create_agent_flow({"flow": sample_three_card_flow()}, tmp_path)
+    manifest = compile_saved_agent_flow(flow["id"], tmp_path, {"approval": {"approved": True}})
+
+    def interrupt_executor(profile, context):
+        node_id = profile["source"]["sourceCardId"]
+        if node_id == "executor":
+            raise RuntimeError("simulated worker exit")
+        return {"status": "success", "summary": f"{node_id} completed"}
+
+    with pytest.raises(RuntimeError, match="simulated worker exit"):
+        run_manifest_dry_run(manifest, tmp_path, stage_executor=interrupt_executor)
+
+    interrupted = runtime_store.list_json_documents(tmp_path, "daemon_runs")[0]
+    assert interrupted["status"] == "interrupted"
+    assert interrupted["workflow"]["nextAgentId"] == "executor"
+    assert interrupted["workflow"]["nodeAttempts"]["executor"] == 1
+
+    def resume_executor(profile, context):
+        node_id = profile["source"]["sourceCardId"]
+        verdict = "done" if node_id == "reviewer" else ""
+        return {
+            "status": "success",
+            "summary": f"{node_id} completed",
+            "verdict": verdict,
+            "metrics": {"inputTokens": 10, "outputTokens": 5, "durationMs": 20},
+        }
+
+    resumed = resume_manifest_run(
+        interrupted["runId"],
+        manifest,
+        tmp_path,
+        stage_executor=resume_executor,
+    )
+
+    assert resumed["status"] == "review"
+    assert resumed["workflow"]["nodeAttempts"]["executor"] == 2
+    assert [node["status"] for node in resumed["nodeStates"] if node["agentId"] == "executor"] == [
+        "interrupted",
+        "done",
+    ]
+    assert resumed["tokens"] == {"input": 20, "output": 10, "total": 30}

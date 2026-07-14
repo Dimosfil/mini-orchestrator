@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from . import runtime_store
 from .model_defaults import (
@@ -12,6 +12,7 @@ from .model_defaults import (
     DEFAULT_VISUAL_AGENT_MODEL,
     DEFAULT_VISUAL_TRANSLATION_MODEL,
 )
+from .workflow_runtime import StageResult, execute_manifest_graph
 
 
 LOCAL_DAEMON_RUN_DIR = ".mini_orchestrator/daemon-runs"
@@ -284,22 +285,22 @@ def run_manifest_dry_run(
     *,
     task: dict[str, str] | None = None,
     reviewer_verdict: str = "done",
+    node_results: dict[str, list[dict[str, Any]] | dict[str, Any]] | None = None,
+    stage_executor: Callable[[dict[str, Any], dict[str, Any]], StageResult | dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     profiles = manifest.get("profileSnapshots") if isinstance(manifest.get("profileSnapshots"), list) else []
     if not profiles:
         raise ValueError("Run manifest has no profile snapshots.")
     graph = manifest.get("graph") if isinstance(manifest.get("graph"), dict) else {}
-    execution_order = graph.get("executionOrder") if isinstance(graph.get("executionOrder"), list) else []
-    if not execution_order:
-        execution_order = [str(profile.get("source", {}).get("sourceCardId") or "") for profile in profiles]
     profile_by_card_id = {
         str(profile.get("source", {}).get("sourceCardId") or ""): profile
         for profile in profiles
         if isinstance(profile, dict)
     }
-    ordered_profiles = [profile_by_card_id[card_id] for card_id in execution_order if card_id in profile_by_card_id]
-    if len(ordered_profiles) != len(profiles):
-        raise ValueError("Run manifest graph does not cover every profile snapshot.")
+    start_agent_id = str(graph.get("startAgentId") or "")
+    start_profile = profile_by_card_id.get(start_agent_id)
+    if not isinstance(start_profile, dict):
+        raise ValueError("Run manifest graph has no valid start profile.")
 
     run_id = f"daemon-{uuid.uuid4().hex[:12]}"
     created_at = _utc_now()
@@ -309,7 +310,7 @@ def run_manifest_dry_run(
         run_id=run_id,
         task_id=str((task or {}).get("taskId") or manifest.get("manifestId") or run_id),
         sprint_id=str((task or {}).get("sprintId") or "local-daemon-dry-run"),
-        profile_snapshot_id=str(ordered_profiles[0].get("snapshotId") or manifest.get("manifestId") or run_id),
+        profile_snapshot_id=str(start_profile.get("snapshotId") or manifest.get("manifestId") or run_id),
         status="queued",
         workspace_path=workspace_path,
         thread_id=None,
@@ -326,99 +327,106 @@ def run_manifest_dry_run(
     state["manifestId"] = manifest.get("manifestId")
     state["nodeStates"] = []
     state["flowArtifacts"] = []
-    _append_event(root, run_id, {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")})
-
-    previous_artifacts: list[dict[str, str]] = []
-    for index, profile in enumerate(ordered_profiles):
-        node_id = str(profile.get("source", {}).get("sourceCardId") or profile.get("snapshotId") or f"node-{index + 1}")
-        snapshot_id = str(profile.get("snapshotId") or node_id)
-        role = str(profile.get("role") or "")
-        now = _utc_now()
-        state["status"] = "running"
-        state["currentAgent"] = node_id
-        state["lastEvent"] = f"{node_id}: started"
-        state["updatedAt"] = now
-        state["nodeStates"].append(
-            {
-                "agentId": node_id,
-                "snapshotId": snapshot_id,
-                "role": role,
-                "status": "running",
-                "startedAt": now,
-                "completedAt": None,
-            }
-        )
-        _append_event(
-            root,
-            run_id,
-            {
-                "time": now,
-                "type": "node_started",
-                "runId": run_id,
-                "agentId": node_id,
-                "snapshotId": snapshot_id,
-                "inputArtifacts": previous_artifacts,
-            },
-        )
-        output = _simulated_node_output(profile, previous_artifacts, reviewer_verdict if role == "Reviewer" else "")
-        artifact = {
-            "artifactId": f"artifact-{node_id}",
-            "agentId": node_id,
-            "role": role,
-            "summary": output["summary"],
-        }
-        if output.get("verdict"):
-            artifact["verdict"] = output["verdict"]
-        previous_artifacts = [*previous_artifacts, artifact]
-        done_at = _utc_now()
-        state["nodeStates"][-1]["status"] = "done"
-        state["nodeStates"][-1]["completedAt"] = done_at
-        state["flowArtifacts"] = previous_artifacts
-        state["lastEvent"] = f"{node_id}: completed"
-        state["updatedAt"] = done_at
-        _append_event(
-            root,
-            run_id,
-            {
-                "time": done_at,
-                "type": "node_completed",
-                "runId": run_id,
-                "agentId": node_id,
-                "snapshotId": snapshot_id,
-                "artifact": artifact,
-            },
-        )
-
-    final_verdict = _normalize_verdict(previous_artifacts[-1].get("verdict", "done") if previous_artifacts else "done")
-    final_status = {
-        "done": "review",
-        "needs_changes": "retrying",
-        "blocked": "blocked",
-        "failed": "failed",
-    }[final_verdict]
-    completed_at = _utc_now()
-    state["status"] = final_status
-    state["currentAgent"] = str(ordered_profiles[-1].get("source", {}).get("sourceCardId") or ordered_profiles[-1].get("snapshotId") or "")
-    if state.get("nodeStates") and final_status != "done":
-        state["nodeStates"][-1]["status"] = final_status
-    state["thread"] = {"threadId": f"dry-run-{run_id}", "currentTurnId": f"turn-{run_id}", "turnCount": len(ordered_profiles)}
-    state["lastEvent"] = "ready_for_human_review" if final_status == "review" else f"reviewer verdict: {final_verdict}"
-    state["lastError"] = "Reviewer blocked the run." if final_status == "blocked" else None
-    state["reviewerVerdict"] = final_verdict
-    state["updatedAt"] = completed_at
-    _append_event(
+    runtime_store.checkpoint_daemon_run(
         root,
         run_id,
-        {
-            "time": completed_at,
-            "type": "ready_for_human_review" if final_status == "review" else "run_completed",
-            "runId": run_id,
-            "status": final_status,
-            "reviewerVerdict": final_verdict,
-        },
+        state,
+        {"time": created_at, "type": "queued", "runId": run_id, "manifestId": manifest.get("manifestId")},
     )
-    _write_state(root, state)
-    return state
+    executor = stage_executor or _build_dry_run_executor(reviewer_verdict, node_results or {})
+    return _execute_manifest_state(manifest, state, root, executor, task=task)
+
+
+def resume_manifest_run(
+    run_id: str,
+    manifest: dict[str, Any],
+    root: Path,
+    *,
+    task: dict[str, str] | None = None,
+    reviewer_verdict: str = "done",
+    node_results: dict[str, list[dict[str, Any]] | dict[str, Any]] | None = None,
+    stage_executor: Callable[[dict[str, Any], dict[str, Any]], StageResult | dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    state = runtime_store.get_json_document(root, "daemon_runs", str(run_id or "").strip())
+    if not isinstance(state, dict):
+        raise ValueError(f"Daemon run state was not found: {run_id}")
+    if str(state.get("manifestId") or "") != str(manifest.get("manifestId") or ""):
+        raise ValueError("Daemon run manifest does not match the requested resume manifest.")
+    workflow = state.get("workflow") if isinstance(state.get("workflow"), dict) else {}
+    if not workflow.get("nextAgentId"):
+        raise ValueError("Daemon run has no resumable workflow checkpoint.")
+    if state.get("status") not in {"interrupted", "running", "queued", "retrying"}:
+        raise ValueError(f"Daemon run status is not resumable: {state.get('status')}")
+    executor = stage_executor or _build_dry_run_executor(reviewer_verdict, node_results or {})
+    return _execute_manifest_state(manifest, state, root, executor, task=task)
+
+
+def _execute_manifest_state(
+    manifest: dict[str, Any],
+    state: dict[str, Any],
+    root: Path,
+    executor: Callable[[dict[str, Any], dict[str, Any]], StageResult | dict[str, Any]],
+    *,
+    task: dict[str, str] | None,
+) -> Dict[str, Any]:
+    run_id = str(state.get("runId") or "")
+
+    def checkpoint(current_state: dict[str, Any], event: dict[str, Any]) -> None:
+        runtime_store.checkpoint_daemon_run(root, run_id, current_state, event)
+
+    result = execute_manifest_graph(manifest, state, executor, checkpoint=checkpoint, task=task)
+    step_count = int((result.get("workflow") or {}).get("stepCount") or 0)
+    result["thread"] = {
+        "threadId": f"dry-run-{run_id}",
+        "currentTurnId": f"turn-{run_id}-{step_count}",
+        "turnCount": step_count,
+    }
+    result["outputs"] = {
+        str(artifact.get("agentId") or ""): str(artifact.get("summary") or "")
+        for artifact in result.get("flowArtifacts", [])
+        if isinstance(artifact, dict)
+    }
+    result["stages"] = [
+        {
+            "agent": str(node.get("agentId") or ""),
+            "label": str(node.get("role") or node.get("agentId") or ""),
+            "status": str(node.get("status") or ""),
+            "statusLabel": str(node.get("status") or "").replace("_", " ").title(),
+            "startedAt": node.get("startedAt"),
+            "completedAt": node.get("completedAt"),
+            "threadId": result["thread"]["threadId"],
+            "turnCount": int(node.get("attempt") or 1),
+            "model": None,
+            "tokens": 0,
+            "lastEvent": f"attempt {node.get('attempt') or 1}",
+            "output": str((node.get("result") or {}).get("summary") or ""),
+        }
+        for node in result.get("nodeStates", [])
+        if isinstance(node, dict)
+    ]
+    _write_state(root, result)
+    return result
+
+
+def _build_dry_run_executor(
+    reviewer_verdict: str,
+    node_results: dict[str, list[dict[str, Any]] | dict[str, Any]],
+) -> Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]:
+    def execute(profile: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        node_id = str(profile.get("source", {}).get("sourceCardId") or profile.get("snapshotId") or "")
+        scripted = node_results.get(node_id)
+        if isinstance(scripted, list):
+            if not scripted:
+                raise ValueError(f"Dry-run scripted results are empty for node: {node_id}")
+            attempt_index = min(max(int(context.get("attempt") or 1) - 1, 0), len(scripted) - 1)
+            return dict(scripted[attempt_index])
+        if isinstance(scripted, dict):
+            return dict(scripted)
+        role = str(profile.get("role") or "")
+        verdict = reviewer_verdict if role == "Reviewer" else ""
+        return _simulated_node_output(profile, context.get("inputArtifacts") or [], verdict)
+
+    return execute
 
 
 def build_local_daemon_runs(root: Path) -> Dict[str, Any]:
@@ -516,15 +524,30 @@ def _append_event(root: Path, run_id: str, event: dict[str, Any]) -> None:
     runtime_store.insert_daemon_event(root, run_id, event)
 
 
-def _simulated_node_output(profile: dict[str, Any], previous_artifacts: list[dict[str, str]], verdict: str) -> dict[str, str]:
+def _simulated_node_output(
+    profile: dict[str, Any], previous_artifacts: list[dict[str, Any]], verdict: str
+) -> dict[str, Any]:
     role = str(profile.get("role") or "Agent")
     display_name = str(profile.get("displayName") or role)
     summary = f"{display_name} dry-run output"
     if previous_artifacts:
         summary += f" after {len(previous_artifacts)} artifact(s)"
-    result = {"summary": summary}
+    result: dict[str, Any] = {
+        "status": "success",
+        "summary": summary,
+        "data": {"inputArtifactCount": len(previous_artifacts)},
+        "artifacts": [],
+        "issues": [],
+        "metrics": {"inputTokens": 0, "outputTokens": 0, "durationMs": 0},
+    }
     if verdict:
-        result["verdict"] = _normalize_verdict(verdict)
+        normalized_verdict = _normalize_verdict(verdict)
+        result["verdict"] = normalized_verdict
+        if normalized_verdict == "blocked":
+            result["status"] = "blocked"
+            result["summary"] = "Reviewer blocked the run."
+        elif normalized_verdict in {"needs_changes", "failed"}:
+            result["status"] = "failure"
     return result
 
 

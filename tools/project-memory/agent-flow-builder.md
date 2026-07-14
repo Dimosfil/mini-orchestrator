@@ -155,8 +155,11 @@ until a backend save/validate/run contract is implemented.
   is intentionally not user-facing; execution belongs in the main
   dashboard/Kanban workflow where the user selects the chain preset that should
   run the task.
-- When saved flow execution is added, Live Runs must represent the configured
-  agent chain as one task card in `In Progress`. The card should show the
+- The backend compiled-manifest runtime now executes the configured graph as a
+  resumable state machine for adapter verification. Product execution remains
+  owned by the approved Dashboard Dispatcher/Symphony paths. Live Runs must
+  continue to represent the configured agent chain as one task card in
+  `In Progress`. The card should show the
   current working visual card/agent as `currentAgent` and render the configured
   stage chain inside the task card. Individual agents should not become
   separate Kanban task cards for the same user task.
@@ -219,7 +222,7 @@ until a backend save/validate/run contract is implemented.
 }
 ```
 
-## Future Backend Contract
+## Backend Contract
 
 Future backend integration should add explicit endpoints instead of treating the
 localStorage model as executable state:
@@ -229,7 +232,8 @@ localStorage model as executable state:
 - `GET /api/agent-flows/{id}`
 - `PUT /api/agent-flows/{id}`
 - `POST /api/agent-flows/{id}/validate`
-- `POST /api/agent-flows/{id}/run`
+- compiled-manifest execution remains an internal adapter contract; the retired
+  public daemon dry-run endpoint must not be restored
 - `POST /api/agents/translate-work-package`
 
 Validation should check:
@@ -243,9 +247,12 @@ Validation should check:
   QA -> executor;
 - every agent has a supported LLM, speed, and reasoning value.
 
-Execution should translate the visual graph into the configured agent chain
-preset and only fall back to the default plan -> execute -> validate lifecycle
-when no explicit executable preset is supplied.
+Execution compiles the visual graph into an immutable manifest. The canonical
+runtime follows the manifest's outcome edges, persists structured artifacts and
+atomic event checkpoints, and only falls back to the default
+plan -> execute -> validate lifecycle when no explicit executable preset is
+supplied. Dispatcher, Symphony, and future engines must adapt to this contract
+instead of owning a second workflow state model.
 
 ## Implementation Map
 

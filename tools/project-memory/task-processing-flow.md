@@ -119,6 +119,11 @@ flowchart TD
   monitors are observability only; they do not replace WorkNest as source of
   truth or terminal completion sink.
 - SQLite stores runtime state except generated runnable artifacts.
+- Compiled visual manifests have one canonical internal graph state machine.
+  It routes by structured `success` / `failure` outcomes, enforces step/retry/
+  loop/context limits, and atomically checkpoints state plus events in SQLite.
+  Dispatcher and Symphony are being kept as execution adapters around this
+  Mini-owned contract rather than independent task-lifecycle owners.
 - `test-runs/` stores generated release/demo artifacts.
 - Symphony must be running and visible before Symphony-mode tasks start. When
   its contract exposes intake and issue-result endpoints, Mini may submit the

@@ -18,6 +18,10 @@ SUPPORTED_REASONING = {"low", "medium", "high", "very_high"}
 SUPPORTED_ROLES = {"Agent", "Custom", "Executor", "Planner", "PM", "QA", "Reviewer"}
 DEFAULT_MAX_LOOP_ITERATIONS = 3
 DEFAULT_MAX_CHECKLIST_ATTEMPTS = 3
+DEFAULT_MAX_WORKFLOW_STEPS = 40
+DEFAULT_MAX_RETRIES_PER_NODE = 1
+DEFAULT_MAX_CONTEXT_ARTIFACTS = 8
+DEFAULT_MAX_RUNTIME_SECONDS = 1800
 WORK_PACKAGE_FIELDS = {
     "allowedTools",
     "constraints",
@@ -168,6 +172,16 @@ def compile_saved_agent_flow(flow_id: str, root: Path, payload: dict[str, Any]) 
             "workspaceRootPolicy": "project-root",
             "networkAccess": True,
             "maxTurnsPerNode": _positive_int(payload.get("maxTurnsPerNode"), 12),
+            "maxWorkflowSteps": _positive_int(payload.get("maxWorkflowSteps"), DEFAULT_MAX_WORKFLOW_STEPS),
+            "maxRetriesPerNode": _non_negative_int(
+                payload.get("maxRetriesPerNode"), DEFAULT_MAX_RETRIES_PER_NODE
+            ),
+            "maxContextArtifacts": _positive_int(
+                payload.get("maxContextArtifacts"), DEFAULT_MAX_CONTEXT_ARTIFACTS
+            ),
+            "maxRuntimeSeconds": _positive_int(
+                payload.get("maxRuntimeSeconds"), DEFAULT_MAX_RUNTIME_SECONDS
+            ),
         },
         "profileSnapshots": profile_snapshots,
         "graph": graph,
@@ -758,6 +772,14 @@ def _positive_int(value: Any, fallback: int) -> int:
     except (TypeError, ValueError):
         return fallback
     return parsed if parsed > 0 else fallback
+
+
+def _non_negative_int(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed >= 0 else fallback
 
 
 def _number(value: Any, fallback: int) -> int:

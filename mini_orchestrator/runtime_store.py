@@ -655,6 +655,44 @@ def insert_daemon_event(root: Path, run_id: str, event: dict[str, Any]) -> None:
         )
 
 
+def checkpoint_daemon_run(root: Path, run_id: str, state: dict[str, Any], event: dict[str, Any]) -> None:
+    """Persist a run snapshot and its transition event in one SQLite transaction."""
+
+    now = utc_now()
+    with connect(root) as conn:
+        conn.execute(
+            """
+            INSERT INTO daemon_runs(run_id, status, payload_json, created_at, updated_at, source_path)
+            VALUES (?, ?, ?, ?, ?, NULL)
+            ON CONFLICT(run_id) DO UPDATE SET
+                status = excluded.status,
+                payload_json = excluded.payload_json,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                run_id,
+                str(state.get("status") or ""),
+                json.dumps(state, ensure_ascii=False, sort_keys=True),
+                str(state.get("createdAt") or now),
+                str(state.get("updatedAt") or now),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO daemon_events(run_id, event_json, event_type, event_time, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                json.dumps(event, ensure_ascii=False, sort_keys=True),
+                str(event.get("type") or ""),
+                str(event.get("time") or ""),
+                now,
+            ),
+        )
+
+
 def replace_daemon_events(root: Path, run_id: str, events: list[dict[str, Any]]) -> None:
     now = utc_now()
     with connect(root) as conn:

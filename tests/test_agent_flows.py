@@ -260,6 +260,15 @@ def test_compile_agent_flow_creates_immutable_three_card_manifest(tmp_path) -> N
     assert manifest["profileSnapshots"][0]["source"]["sourceCardId"] == "planner"
     assert manifest["profileSnapshots"][0]["source"]["approvalId"] == "approval-test"
     assert manifest["profileSnapshots"][1]["runtimePolicy"]["sandboxMode"] == "workspace-write"
+    assert manifest["runtimePolicy"] == {
+        "workspaceRootPolicy": "project-root",
+        "networkAccess": True,
+        "maxTurnsPerNode": 12,
+        "maxWorkflowSteps": 40,
+        "maxRetriesPerNode": 1,
+        "maxContextArtifacts": 8,
+        "maxRuntimeSeconds": 1800,
+    }
     assert "path" in manifest
 
     changed = sample_flow("Changed Later")

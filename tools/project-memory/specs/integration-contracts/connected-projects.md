@@ -186,6 +186,41 @@ project scope, privacy rules, and explicit user request.
   Orchestrator remains the owner of task cards, approval manifests, chain preset
   order, Dispatcher/Symphony routing, and human review.
 
+## crewAIInc/crewAI
+
+- Purpose: open-source multi-agent framework with role-based Crews and
+  event-driven Flows.
+- Business or architectural role: researched on 2026-07-14 as an architecture
+  reference for structured agent results, deterministic flow routing, bounded
+  delegation, checkpointing, and optional execution adapters. It is not the
+  Mini Orchestrator lifecycle owner.
+- Local folder: none recorded.
+- Canonical Git/package/docs URLs:
+  `https://github.com/crewAIInc/crewAI`,
+  `https://docs.crewai.com/`.
+- Service ID or runtime endpoints: none configured locally.
+- Owner or source of truth: upstream `crewAIInc/crewAI` repository and official
+  documentation.
+- Data/API contract: no active integration contract. Any future adapter must
+  accept an approved Mini compiled manifest or bounded node work package and
+  return the Mini structured stage-result contract documented in
+  `tools/project-memory/specs/executable-workflow-runtime.md`.
+- Setup, sync, build, test, or update commands: no local installation is
+  approved or required. Verify current upstream Python compatibility before a
+  spike; the research snapshot required Python `>=3.10,<3.14`.
+- Version, branch, or update cadence: research snapshot checked 2026-07-14;
+  recheck official sources before implementation.
+- Privacy, secret, license, and access boundaries: do not pass project secrets,
+  private runtime history, unrestricted tools, or durable project memory into a
+  Crew. Keep tool allowlists, context limits, approval, and persistence under
+  Mini Orchestrator control.
+- Status and caveats: researched architecture source only, not an installed
+  dependency. The useful concepts were adapted into the project-owned graph
+  runtime instead of copying the framework or adopting its control plane.
+- Reason this dependency still exists: preserves the decision to use CrewAI
+  only as a possible bounded execution adapter while Mini owns task cards,
+  routing, checkpoints, budgets, and Human Review.
+
 ## D:\AI\AiAnalytics\token-lens
 
 - Purpose: local analytics application for token-usage inspection across agent

@@ -18,6 +18,32 @@ For each migration, include:
 Keep entries concise and evidence-backed. Do not store secrets, credentials,
 private user data, generated logs, or local-only runtime state.
 
+## 2026-07-14: Canonical Executable Workflow State Machine
+
+- Reason: CrewAI architecture research highlighted the missing runtime layer
+  between Mini's already-compiled visual graph and the flat internal manifest
+  dry-run order. The project needed deterministic routing and recovery without
+  handing lifecycle ownership to another framework.
+- Previous architecture: compiled manifests stored graph edges and bounded-loop
+  metadata, but the internal runner flattened them to `executionOrder`; stage
+  outputs were summary strings and state/event writes were separate.
+- New architecture: `workflow_runtime.py` executes the immutable graph by
+  structured `success` / `failure` outcomes, explicit conditional routes,
+  bounded retries/loops/steps/runtime/context, versioned artifacts, metrics,
+  and a resumable next-node pointer. SQLite checkpoints persist the run snapshot
+  and transition event atomically.
+- Affected files or modules: `mini_orchestrator/workflow_runtime.py`,
+  `agent_flows.py`, `daemon_runs.py`, `runtime_store.py`, the service contract,
+  focused tests, README, and executable-workflow project memory.
+- Compatibility notes: existing linear manifests continue to run in the same
+  order. The retired public daemon dry-run endpoint remains retired; approved
+  Dashboard Dispatcher/Symphony product entrypoints are unchanged.
+- Verification performed: package compile, the full `tests/` suite, focused
+  graph/recovery tests, dispatcher tests, and `git diff --check`.
+- Rollback or follow-up notes: migrate Dispatcher and Symphony node execution
+  adapters incrementally to the canonical state machine. Do not restore a
+  second mutable lifecycle model or add CrewAI as the task owner.
+
 ## 2026-06-21: Instruction Boundary Update For Generic Orchestration
 
 - Reason: GI migrations `2026.06.21.2` through `2026.06.21.6` add reusable

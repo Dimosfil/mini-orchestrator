@@ -174,6 +174,14 @@ Symphony workflow is started from the main dashboard. Live Runs renders the
 approved workflow state: each task card shows status, last event, output
 summary, selected chain, and reviewer verdict when present.
 
+The package also contains a canonical compiled-manifest state machine used for
+runtime verification and adapter migration. It follows real `success` and
+`failure` edges, emits structured stage artifacts, bounds retries/rework loops,
+limits downstream artifact context, and checkpoints every transition to SQLite
+for resume after worker interruption. This does not restore the retired public
+manifest dry-run endpoint: product execution still starts through the approved
+Dispatcher or Symphony dashboard path.
+
 The WorkNest lifecycle bridge resolves the configured task manager through
 config-service at use time, reads the WorkNest contract before state-changing
 calls, and only exposes the documented external-agent operations:
