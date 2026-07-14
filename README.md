@@ -158,6 +158,12 @@ through `/api/agent-flows`. Saved backend flows carry `id`, `version`,
 `createdAt`, `updatedAt`, and validation metadata; they are not executable until
 later validation and compile steps approve them.
 
+<p align="center">
+  <img src="docs/images/agent-builder-workflow.png" alt="Mini Orchestrator visual agent workflow builder" width="100%">
+</p>
+
+<p align="center"><em>A visual multi-agent workflow connecting planner, project manager, executor, QA, and reviewer roles.</em></p>
+
 The builder also includes an approval manifest panel. The user reviews the task
 summary, selected flow, agent order, model/reasoning/access settings, workspace
 policy, and first prompt summary, then explicitly checks approval before the UI
