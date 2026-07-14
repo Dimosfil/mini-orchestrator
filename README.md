@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/mini-orchestrator-banner.png" alt="Mini Orchestrator - AI-Agent Workflow Lab" width="100%">
+</p>
+
 # Mini Orchestrator
 
 Mini Orchestrator is a small local workspace for experimenting with
